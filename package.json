@@ -36,12 +36,13 @@
     "typescript": "~5.9.2"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "node backend/server.js",
+    "expo:start": "expo start",
     "server": "node backend/server.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "dev": "echo Frontend: http://localhost:8081 && echo Backend: http://localhost:3000/api && concurrently \"npm run server\" \"expo start --port 8081\""
+    "dev": "concurrently \"npm run server\" \"expo start --port 8081\""
   },
   "private": true
 }
