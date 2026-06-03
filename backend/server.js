@@ -37,7 +37,8 @@ app.use(cors({
 app.use(express.json({ limit: "20mb" }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'Couchraill API running', timestamp: new Date().toISOString() });
+  console.log('HEALTH_CHECK_HIT');
+  return res.status(200).json({ success: true, message: 'Couchraill API running' });
 });
 
 // Initialize DB if not exists
@@ -3970,4 +3971,14 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend server running on port ${PORT}`);
   console.log(`process.env.PORT = ${process.env.PORT}`);
   console.log(`Health: http://0.0.0.0:${PORT}/api/health`);
+
+  try {
+    console.log('REGISTERED_ROUTES_START');
+    app._router.stack
+      .filter(r => r.route)
+      .forEach(r => console.log(Object.keys(r.route.methods).join(',').toUpperCase(), r.route.path));
+    console.log('REGISTERED_ROUTES_END');
+  } catch(e) {
+    console.log('ROUTE_LIST_ERROR', e.message);
+  }
 });
