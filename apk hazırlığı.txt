@@ -1,0 +1,51 @@
+APK hazırlığı için projeyi canlı backend kullanımına hazırla.
+
+Kontrol et:
+
+1. Frontend içinde geçen tüm API adreslerini bul:
+
+* localhost
+* 127.0.0.1
+* 192.168.x.x
+* 10.0.2.2
+* port 3000 geçen yerler
+
+2. Bunları tek bir merkezi config dosyasına taşı.
+
+Örnek:
+`src/config/api.ts`
+veya mevcut yapıya uygun bir config dosyası.
+
+3. API base URL tek yerden yönetilsin:
+
+```ts
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+```
+
+4. Tüm login, register, profile, mesaj, takip, dürt, engelle, bildirim ve ilan endpointleri bu `API_BASE_URL` değerini kullansın.
+
+5. Kod içinde sabit yazılmış localhost API adresi kalmasın.
+
+6. APK build için `.env.production` mantığı hazır olsun:
+
+```env
+EXPO_PUBLIC_API_URL=https://CANLI_BACKEND_ADRESI/api
+```
+
+7. Geliştirme için local kullanım bozulmasın:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.102:3000/api
+```
+
+8. Backend tarafında CORS ayarları canlı frontend/mobile isteklerine izin verecek şekilde hazırlanmalı.
+
+9. Değişikliklerden sonra şunları raporla:
+
+* Kaç yerde localhost vardı?
+* Hangi dosyalar düzeltildi?
+* API base URL artık nereden yönetiliyor?
+* APK için hangi env değişkeni kullanılacak?
+
+Henüz APK build alma. Sadece canlı backend/API URL hazırlığını yap.
