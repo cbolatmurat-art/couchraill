@@ -37,7 +37,7 @@ app.use(cors({
 app.use(express.json({ limit: "20mb" }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true });
+  res.json({ success: true, message: 'Couchraill API running', timestamp: new Date().toISOString() });
 });
 
 // Initialize DB if not exists
