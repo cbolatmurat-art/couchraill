@@ -28,7 +28,7 @@ export default function AdminLoginScreen() {
     setLoading(true);
 
     try {
-      const res = await fetch('http://192.168.1.102:3000/api/admin/login', {
+      const res = await fetch(`${API_BASE_URL}/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

@@ -44,7 +44,7 @@ backend/.env
 /ios
 /android
 
-# Backend database (runtime data, not source)
+# Backend database (auto-created at runtime, do not commit large data files)
 backend/db.json
 
 # Build outputs
