@@ -19,7 +19,7 @@ console.log("RESEND_API_KEY_EXISTS:", !!process.env.RESEND_API_KEY);
 const resendClient = (process.env.EMAIL_PROVIDER !== 'brevo' && process.env.RESEND_API_KEY) ? new Resend(process.env.RESEND_API_KEY.trim()) : null;
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -3968,4 +3968,6 @@ app.post('/api/messages/:id/reaction', (req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend server running on port ${PORT}`);
+  console.log(`process.env.PORT = ${process.env.PORT}`);
+  console.log(`Health: http://0.0.0.0:${PORT}/api/health`);
 });

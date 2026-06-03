@@ -4,5 +4,3 @@ buildCommand = "cd backend && npm install"
 
 [deploy]
 startCommand = "node backend/server.js"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 30
