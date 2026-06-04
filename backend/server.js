@@ -30,13 +30,6 @@ const io = new Server(server, {
 });
 const DB_FILE = path.join(__dirname, 'db.json');
 
-app.use(cors({
-  origin: "*",
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-}));
-app.use(express.json({ limit: "20mb" }));
-
 // Root and health routes — MUST be before all middleware for Railway
 app.get("/", (req, res) => {
   res.status(200).send("Couchraill backend is running");
@@ -46,6 +39,13 @@ app.get("/api/health", (req, res) => {
   console.log("HEALTH_CHECK_HIT");
   res.status(200).json({ success: true, message: "Couchraill API running" });
 });
+
+app.use(cors({
+  origin: "*",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+}));
+app.use(express.json({ limit: "20mb" }));
 
 // Initialize DB if not exists
 if (!fs.existsSync(DB_FILE)) {
@@ -3974,8 +3974,32 @@ app.post('/api/messages/:id/reaction', (req, res) => {
 });
 
 // Use http server (not app.listen) to support Socket.IO
-const PORT = process.env.PORT || 8080;
+const rawPort = process.env.PORT;
+const PORT = rawPort ? parseInt(String(rawPort).trim(), 10) : 8080;
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend server running on port ${PORT}`);
-  console.log(`process.env.PORT = ${process.env.PORT}`);
+  console.log(`process.env.PORT = ${rawPort}`);
+  console.log('SERVER_LISTENING_OK');
+});
+
+process.on('exit', (code) => {
+  console.log('PROCESS_EXIT', code);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM_RECEIVED');
+  // If we receive SIGTERM, we log it. We don't exit immediately to let Railway kill it or let us see the logs.
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT_RECEIVED');
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT_EXCEPTION', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('UNHANDLED_REJECTION', err);
 });
