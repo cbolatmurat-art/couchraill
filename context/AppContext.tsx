@@ -772,8 +772,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
 
       return { success: false, error: apiResult.message || apiResult.error || 'Kayıt başarısız.' };
-    } catch (e) {
-      return { success: false, error: 'Kayıt sırasında hata oluştu.' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Kayıt sırasında hata oluştu.' };
     }
   };
 

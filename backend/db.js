@@ -3,9 +3,12 @@ require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
-let dbUrl = process.env.DATABASE_URL;
+let dbUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL || process.env.POSTGRES_URL || process.env.DB_URL;
 if (!dbUrl && process.env.PGHOST) {
   dbUrl = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/${process.env.PGDATABASE}`;
+}
+if (!dbUrl && process.env.PG_HOST) {
+  dbUrl = `postgresql://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:${process.env.PG_PORT}/${process.env.PG_DATABASE}`;
 }
 if (!dbUrl) {
   dbUrl = 'postgresql://postgres:postgres@localhost:5432/misafirimol';
