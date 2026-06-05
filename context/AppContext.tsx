@@ -350,6 +350,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             if (apiUserResult && apiUserResult.user) {
               setCurrentUser(apiUserResult.user);
               await fetchUserData(sessionData.userId);
+            }
+          } else {
+            await clearAuthStorage();
+          }
+        } else {
+          await clearAuthStorage();
         }
         console.log("SESSION_CHECK_DONE");
       } catch (e) {
