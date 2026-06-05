@@ -3,8 +3,16 @@ require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
+let dbUrl = process.env.DATABASE_URL;
+if (!dbUrl && process.env.PGHOST) {
+  dbUrl = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/${process.env.PGDATABASE}`;
+}
+if (!dbUrl) {
+  dbUrl = 'postgresql://postgres:postgres@localhost:5432/misafirimol';
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/misafirimol',
+  connectionString: dbUrl,
   ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
