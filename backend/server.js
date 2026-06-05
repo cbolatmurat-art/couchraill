@@ -733,161 +733,155 @@ app.get('/api/feed', async (req, res) => {
 });
 
 // ---- LISTING LIKES AND COMMENTS ----
-app.post('/api/listings/:listingId/like', (req, res) => {
-  const { listingId } = req.params;
-  const { userId } = req.body;
-  
-  if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
-  
-  const db = readDB();
-  const listing = db.listings.find(l => l.id === listingId);
-  if (!listing) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+app.post('/api/listings/:listingId/like', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+    
+    const { rows: listings } = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
+    if (listings.length === 0) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    const listing = listings[0];
+    const ownerId = listing.hostId || listing.ownerId;
 
-  // Engelleme kontrolü
-  const ownerId = listing.hostId || listing.ownerId;
-  const blockedMe = (db.blocked_users || []).some(b => b.blockedId === userId && b.blockerId === ownerId);
-  const blockedByMe = (db.blocked_users || []).some(b => b.blockerId === userId && b.blockedId === ownerId);
-  
-  if (blockedMe || blockedByMe) {
-    return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+    const { rows: blocks } = await query(`
+      SELECT 1 FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [userId, ownerId]);
+    
+    if (blocks.length > 0) {
+      return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+    }
+
+    const { rows: existingLikes } = await query('SELECT 1 FROM listing_likes WHERE "listingId" = $1 AND "userId" = $2', [listingId, userId]);
+    if (existingLikes.length > 0) {
+      return res.json({ success: true, message: 'Zaten beğenildi' });
+    }
+
+    const newLikeId = `ll${Date.now()}`;
+    await query('INSERT INTO listing_likes (id, "listingId", "userId") VALUES ($1, $2, $3)', [newLikeId, listingId, userId]);
+
+    if (ownerId && ownerId !== userId) {
+      const { rows: likers } = await query('SELECT name FROM users WHERE id = $1', [userId]);
+      const likerName = likers[0] ? likers[0].name : 'Birisi';
+      const notifId = `n${Date.now()}_${Math.random()}`;
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [notifId, ownerId, 'listing_like', 'İlanın beğenildi', `${likerName} ilanını beğendi.`, listingId, 'listing']);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[LIKE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
   }
-
-  // Already liked?
-  const existingLike = (db.listing_likes || []).find(l => l.listingId === listingId && l.userId === userId);
-  if (existingLike) {
-    return res.json({ success: true, message: 'Zaten beğenildi' });
-  }
-
-  const newLike = {
-    id: `ll${Date.now()}`,
-    listingId,
-    userId,
-    createdAt: new Date().toISOString()
-  };
-
-  db.listing_likes = db.listing_likes || [];
-  db.listing_likes.push(newLike);
-
-  // Bildirim gönder (sadece kendine değilse)
-  if (ownerId && ownerId !== userId) {
-    const liker = db.users.find(u => u.id === userId);
-    createNotification(db, {
-      userId: ownerId,
-      type: 'listing_like',
-      title: 'İlanın beğenildi',
-      message: `${liker ? liker.name : 'Birisi'} ilanını beğendi.`,
-      relatedId: listingId,
-      relatedType: 'listing'
-    });
-  }
-
-  writeDB(db);
-  res.json({ success: true });
 });
 
-app.delete('/api/listings/:listingId/like', (req, res) => {
-  const { listingId } = req.params;
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
-  
-  const db = readDB();
-  db.listing_likes = (db.listing_likes || []).filter(l => !(l.listingId === listingId && l.userId === userId));
-  writeDB(db);
-  res.json({ success: true });
+app.delete('/api/listings/:listingId/like', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+    await query('DELETE FROM listing_likes WHERE "listingId" = $1 AND "userId" = $2', [listingId, userId]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
 });
 
-app.get('/api/listings/:listingId/comments', (req, res) => {
-  const { listingId } = req.params;
-  const db = readDB();
-  
-  const comments = (db.listing_comments || []).filter(c => c.listingId === listingId);
-  
-  // Attach user details
-  const populatedComments = comments.map(c => {
-    const user = db.users.find(u => u.id === c.userId) || {};
-    return {
-      ...c,
+app.get('/api/listings/:listingId/comments', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    
+    const { rows: comments } = await query(`
+      SELECT c.*, u.id as "user_id", u.name as "user_name", u.username as "user_username", u."profileImage" as "user_profileImage"
+      FROM listing_comments c
+      LEFT JOIN users u ON c."userId" = u.id
+      WHERE c."listingId" = $1
+      ORDER BY c."createdAt" DESC
+    `, [listingId]);
+    
+    const populatedComments = comments.map(c => ({
+      id: c.id,
+      listingId: c.listingId,
+      userId: c.userId,
+      content: c.content,
+      text: c.content, // Fallback for old clients
+      createdAt: c.createdAt,
       user: {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        profileImage: user.profileImage
+        id: c.user_id,
+        name: c.user_name,
+        username: c.user_username,
+        profileImage: c.user_profileImage
       }
-    };
-  });
-  
-  // Sort newest first
-  populatedComments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  
-  res.json({ success: true, comments: populatedComments });
+    }));
+    
+    res.json({ success: true, comments: populatedComments });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
 });
 
-app.post('/api/listings/:listingId/comments', (req, res) => {
-  const { listingId } = req.params;
-  const { userId, text } = req.body;
-  
-  if (!userId || !text || text.trim().length === 0) {
-    return res.status(400).json({ success: false, error: 'Kullanıcı ve yorum metni gerekli.' });
-  }
-  
-  if (text.length > 500) {
-    return res.status(400).json({ success: false, error: 'Yorum çok uzun.' });
-  }
+app.post('/api/listings/:listingId/comments', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId, text } = req.body;
+    
+    if (!userId || !text || text.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Kullanıcı ve yorum metni gerekli.' });
+    }
+    if (text.length > 500) {
+      return res.status(400).json({ success: false, error: 'Yorum çok uzun.' });
+    }
 
-  const db = readDB();
-  const listing = db.listings.find(l => l.id === listingId);
-  if (!listing) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    const { rows: listings } = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
+    if (listings.length === 0) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    const listing = listings[0];
+    const ownerId = listing.hostId || listing.ownerId;
 
-  // Engelleme kontrolü
-  const ownerId = listing.hostId || listing.ownerId;
-  const blockedMe = (db.blocked_users || []).some(b => b.blockedId === userId && b.blockerId === ownerId);
-  const blockedByMe = (db.blocked_users || []).some(b => b.blockerId === userId && b.blockedId === ownerId);
-  
-  if (blockedMe || blockedByMe) {
-    return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
-  }
+    const { rows: blocks } = await query(`
+      SELECT 1 FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [userId, ownerId]);
+    
+    if (blocks.length > 0) {
+      return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+    }
 
-  const newComment = {
-    id: `lc${Date.now()}`,
-    listingId,
-    userId,
-    text: text.trim(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
+    const newCommentId = `lc${Date.now()}`;
+    await query(`
+      INSERT INTO listing_comments (id, "listingId", "userId", content)
+      VALUES ($1, $2, $3, $4)
+    `, [newCommentId, listingId, userId, text.trim()]);
 
-  db.listing_comments = db.listing_comments || [];
-  db.listing_comments.push(newComment);
+    const { rows: users } = await query('SELECT id, name, username, "profileImage" FROM users WHERE id = $1', [userId]);
+    const user = users[0] || {};
 
-  // Bildirim gönder
-  if (ownerId && ownerId !== userId) {
-    const commenter = db.users.find(u => u.id === userId);
-    createNotification(db, {
-      userId: ownerId,
-      type: 'listing_comment',
-      title: 'İlanına yorum yapıldı',
-      message: `${commenter ? commenter.name : 'Birisi'} ilanına yorum yaptı.`,
-      relatedId: listingId,
-      relatedType: 'listing'
+    if (ownerId && ownerId !== userId) {
+      const notifId = `n${Date.now()}_${Math.random()}`;
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [notifId, ownerId, 'listing_comment', 'İlanına yorum yapıldı', `${user.name || 'Birisi'} ilanına yorum yaptı.`, listingId, 'listing']);
+    }
+
+    res.json({ 
+      success: true, 
+      comment: {
+        id: newCommentId,
+        listingId,
+        userId,
+        text: text.trim(),
+        content: text.trim(),
+        createdAt: new Date().toISOString(),
+        user
+      } 
     });
+  } catch (error) {
+    console.error('[COMMENT_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
   }
-
-  writeDB(db);
-  
-  // Return the created comment with user info
-  const user = db.users.find(u => u.id === userId) || {};
-  res.json({ 
-    success: true, 
-    comment: {
-      ...newComment,
-      user: {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        profileImage: user.profileImage
-      }
-    } 
-  });
 });
 
 // ---- DEBUG ----
