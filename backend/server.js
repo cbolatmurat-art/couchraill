@@ -779,7 +779,7 @@ app.get('/api/feed', async (req, res) => {
     res.json({ success: true, isFollowingAnyone: followingIds.length > 0, items: populatedFeed });
   } catch (err) {
     console.error('[FEED_ERROR]', err);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası.', debug: err.message, detail: err.detail || null });
   }
 });
 
