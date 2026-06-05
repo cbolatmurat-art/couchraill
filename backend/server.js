@@ -39,7 +39,8 @@ app.get("/", (req, res) => {
 
 app.get("/api/health", (req, res) => {
   console.log("HEALTH_CHECK_HIT");
-  res.status(200).json({ success: true, message: "Couchraill API running" });
+  const { isPgMem } = require('./db');
+  res.status(200).json({ success: true, message: "Couchraill API running", dbMode: isPgMem ? "pg-mem (NO DATABASE_URL)" : "PostgreSQL" });
 });
 
 app.use(cors({
@@ -707,32 +708,39 @@ app.get('/api/feed', async (req, res) => {
     const { rows: followingRows } = await query('SELECT "followingUserId" FROM follows WHERE "followerUserId" = $1', [userId]);
     const followingIds = followingRows.map(f => f.followingUserId);
 
-    // Get active listings
+    // Get active listings (pg-mem compatible: no correlated subqueries)
     const { rows: listings } = await query(`
       SELECT l.*, 'listing' as type,
-        (SELECT COUNT(*) FROM listing_likes WHERE "listingId" = l.id) as "likeCount",
-        (SELECT COUNT(*) FROM listing_comments WHERE "listingId" = l.id) as "commentCount",
-        EXISTS(SELECT 1 FROM listing_likes WHERE "listingId" = l.id AND "userId" = $1) as "isLikedByMe",
+        COALESCE(ll.like_count, 0) as "likeCount",
+        COALESCE(lc.comment_count, 0) as "commentCount",
+        CASE WHEN mll."userId" IS NOT NULL THEN true ELSE false END as "isLikedByMe",
         u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
         u."identityVerified", u.verified, u."emailVerified", u."phoneVerified"
       FROM listings l
       LEFT JOIN users u ON l."hostId" = u.id OR l."ownerId" = u.id
-      WHERE l.active = true AND l.status != 'removed' AND l."deletedAt" IS NULL AND l."isTest" = false
-      AND NOT (u.id = ANY($2::text[]))
+      LEFT JOIN (SELECT "listingId", COUNT(*) as like_count FROM listing_likes GROUP BY "listingId") ll ON ll."listingId" = l.id
+      LEFT JOIN (SELECT "listingId", COUNT(*) as comment_count FROM listing_comments GROUP BY "listingId") lc ON lc."listingId" = l.id
+      LEFT JOIN listing_likes mll ON mll."listingId" = l.id AND mll."userId" = $1
+      WHERE l.active = true AND l."deletedAt" IS NULL AND l."isTest" = false
+      AND (l.status IS NULL OR l.status != 'removed')
+      AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
     `, [userId, blockedArr]);
 
-    // Get active posts
+    // Get active posts (pg-mem compatible: no correlated subqueries)
     const { rows: posts } = await query(`
       SELECT p.*, 'post' as type,
-        (SELECT COUNT(*) FROM post_likes WHERE "postId" = p.id) as "likeCount",
-        (SELECT COUNT(*) FROM post_comments WHERE "postId" = p.id) as "commentCount",
-        EXISTS(SELECT 1 FROM post_likes WHERE "postId" = p.id AND "userId" = $1) as "isLikedByMe",
+        COALESCE(pl.like_count, 0) as "likeCount",
+        COALESCE(pc.comment_count, 0) as "commentCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "isLikedByMe",
         u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
         u."identityVerified", u.verified, u."emailVerified", u."phoneVerified"
       FROM posts p
       LEFT JOIN users u ON p."userId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
       WHERE p."isActive" = true AND p."isTest" = false
-      AND NOT (u.id = ANY($2::text[]))
+      AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
     `, [userId, blockedArr]);
 
     let allFeedItems = [...listings, ...posts];

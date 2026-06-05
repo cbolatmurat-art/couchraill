@@ -59,6 +59,7 @@ const initDB = async () => {
     }
   }
 
+
   try {
     await client.query('BEGIN');
 
@@ -352,6 +353,7 @@ const initDB = async () => {
 
 module.exports = {
   get pool() { return pool; },
+  get isPgMem() { return isPgMem; },
   initDB,
   query: (text, params) => pool.query(text, params),
 };
