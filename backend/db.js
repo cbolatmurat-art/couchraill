@@ -10,17 +10,55 @@ if (!dbUrl && process.env.PGHOST) {
 if (!dbUrl && process.env.PG_HOST) {
   dbUrl = `postgresql://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:${process.env.PG_PORT}/${process.env.PG_DATABASE}`;
 }
-if (!dbUrl) {
-  dbUrl = 'postgresql://postgres:postgres@localhost:5432/misafirimol';
+
+let pool;
+let isPgMem = false;
+
+if (dbUrl) {
+  pool = new Pool({
+    connectionString: dbUrl,
+    ssl: isProduction ? { rejectUnauthorized: false } : false
+  });
+} else {
+  // If no DB URL is provided, default to localhost for connection attempt
+  dbUrl = 'postgresql://postgres:postgres@127.0.0.1:5432/misafirimol';
+  pool = new Pool({
+    connectionString: dbUrl,
+    ssl: isProduction ? { rejectUnauthorized: false } : false
+  });
 }
 
-const pool = new Pool({
-  connectionString: dbUrl,
-  ssl: isProduction ? { rejectUnauthorized: false } : false
-});
+const setupPgMemFallback = () => {
+  console.log('⚠️ [DB WARNING] Real PostgreSQL connection failed or missing. Falling back to in-memory PostgreSQL (pg-mem) for local testing.');
+  const { newDb } = require('pg-mem');
+  const db = newDb();
+  
+  // Register necessary custom functions if needed
+  db.public.registerFunction({
+    name: 'lower',
+    args: [db.public.getType('varchar')],
+    returns: db.public.getType('varchar'),
+    implementation: (str) => str.toLowerCase()
+  });
+
+  const MockPool = db.adapters.createPg().Pool;
+  pool = new MockPool();
+  isPgMem = true;
+};
 
 const initDB = async () => {
-  const client = await pool.connect();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (e) {
+    if (e.code === 'ECONNREFUSED' || e.message.includes('password authentication failed') || e.code === 'ENOTFOUND') {
+      setupPgMemFallback();
+      client = await pool.connect(); // Connect to the mock pool
+    } else {
+      throw e;
+    }
+  }
+
   try {
     await client.query('BEGIN');
 
@@ -313,7 +351,7 @@ const initDB = async () => {
 };
 
 module.exports = {
-  pool,
+  get pool() { return pool; },
   initDB,
   query: (text, params) => pool.query(text, params),
 };

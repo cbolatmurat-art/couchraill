@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { Alert, DeviceEventEmitter, AppState, AppStateStatus, Animated, Pressable, StyleSheet, View, Text } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { User, AccommodationRequest, Message, Conversation, Listing, AppNotification, Review } from '../data/MockData';
 import { API_BASE_URL } from '../constants/config';
 import { Colors } from '../constants/Colors';
@@ -95,7 +96,7 @@ export const clearAuthStorage = async () => {
     'emailVerified',
     'phoneVerified'
   ]);
-  if (typeof window !== 'undefined') {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
     if (window.sessionStorage) {
       window.sessionStorage.clear();
     }

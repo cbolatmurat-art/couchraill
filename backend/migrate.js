@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { pool, initDB, query } = require('./db');
+const dbModule = require('./db');
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
@@ -22,7 +22,7 @@ const migrateData = async () => {
 
   const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 
-  const client = await pool.connect();
+  const client = await dbModule.pool.connect();
   try {
     await client.query('BEGIN');
 
