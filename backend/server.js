@@ -15,8 +15,6 @@ if (process.env.BREVO_API_KEY) {
 }
 
 const app = express();
-
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -24,6 +22,13 @@ const io = new Server(server, {
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"]
   }
 });
+
+const { pool, query, initDB } = require('./db');
+const { migrateData } = require('./migrate');
+
+// Initialize PostgreSQL and Migrate existing data if needed
+initDB().then(() => migrateData()).catch(console.error);
+
 const DB_FILE = path.join(__dirname, 'db.json');
 
 // Root and health routes — MUST be before all middleware for Railway
@@ -76,7 +81,7 @@ const readDB = () => {
 const writeDB = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 const saveDb = writeDB;
 
-const generateUniqueUsername = (name, db) => {
+const generateUniqueUsername = async (name) => {
   const trMap = {
     'ç': 'c', 'ğ': 'g', 'ı': 'i', 'i': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
     'Ç': 'c', 'Ğ': 'g', 'I': 'i', 'İ': 'i', 'Ö': 'o', 'Ş': 's', 'Ü': 'u'
@@ -91,35 +96,14 @@ const generateUniqueUsername = (name, db) => {
 
   let username = base;
   let counter = 2;
-  const existingUsers = db.users || [];
-  while (existingUsers.some(u => u.username === username)) {
+  while (true) {
+    const { rows } = await query('SELECT id FROM users WHERE username = $1', [username]);
+    if (rows.length === 0) break;
     username = `${base}${counter}`;
     counter++;
   }
   return username;
 };
-
-// Migration for existing users
-(function backfillUsernames() {
-  try {
-    const db = readDB();
-    let modified = false;
-    if (db.users) {
-      db.users.forEach(u => {
-        if (!u.username) {
-          u.username = generateUniqueUsername(u.name || u.email || 'user', db);
-          modified = true;
-        }
-      });
-    }
-    if (modified) {
-      writeDB(db);
-      console.log('[MIGRATION] Backfilled usernames for existing users.');
-    }
-  } catch (err) {
-    console.log('[MIGRATION] Error backfilling usernames:', err.message);
-  }
-})();
 
 const activeUsers = new Map(); // userId -> socket.id
 
@@ -343,54 +327,56 @@ app.get('/api/debug/users-by-email', (req, res) => {
 });
 
 // ---- AUTH & USERS ----
-app.post('/api/auth/register', (req, res) => {
-  const { email, password, name, phone, userType, city } = req.body;
-  const db = readDB();
-  
-  if (db.users.find(u => u.email === email)) {
-    return res.status(400).json({ error: 'Bu e-posta adresi zaten kullanılıyor.' });
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name, phone, userType, city } = req.body;
+    
+    const { rows: existingRows } = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingRows.length > 0) {
+      return res.status(400).json({ error: 'Bu e-posta adresi zaten kullanılıyor.' });
+    }
+
+    const username = await generateUniqueUsername(name);
+    const newId = `u${Date.now()}`;
+    const joinedDate = new Date().toISOString().split('T')[0];
+
+    await query(`
+      INSERT INTO users (
+        id, email, password, name, username, phone, "userType", city,
+        verified, "joinedDate", "profileImage", "phoneVerified", "emailVerified", "identityVerificationStatus"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `, [
+      newId, email, password, name, username, phone, userType, city,
+      false, joinedDate, null, false, false, 'unverified'
+    ]);
+
+    res.json({ success: true, user: { id: newId, name, email, userType, profileImage: null } });
+  } catch (error) {
+    console.error('[REGISTER_ERROR]', error);
+    res.status(500).json({ error: 'Kayıt olurken bir hata oluştu.' });
   }
-
-  const newUser = {
-    id: `u${Date.now()}`,
-    email,
-    password, // Storing plaintext password for simple prototype
-    name,
-    username: generateUniqueUsername(name, db),
-    phone,
-    userType,
-    city,
-    verified: false,
-    joinedDate: new Date().toISOString().split('T')[0],
-    profileImage: null,
-    phoneVerified: false,
-    emailVerified: false,
-    identityVerificationStatus: 'unverified'
-  };
-
-  db.users.push(newUser);
-  writeDB(db);
-  res.json({ success: true, user: { id: newUser.id, name: newUser.name, email: newUser.email, userType: newUser.userType, profileImage: newUser.profileImage } });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(401).json({ success: false, message: 'E-posta veya şifre boş olamaz.' });
     }
-    const db = readDB();
     const normalizedEmail = String(email).trim().toLowerCase();
 
-    const activeUser = db.users.find(u => 
-      u.email && u.email.trim().toLowerCase() === normalizedEmail && 
-      u.isDeleted !== true && u.active !== false
-    );
-    
-    const deletedDuplicateCount = db.users.filter(u => 
-      u.email && u.email.trim().toLowerCase() === normalizedEmail && 
-      (u.isDeleted === true || u.active === false)
-    ).length;
+    const { rows: activeUsers } = await query(`
+      SELECT * FROM users 
+      WHERE LOWER(email) = $1 AND "isDeleted" = false AND active = true
+    `, [normalizedEmail]);
+
+    const activeUser = activeUsers[0];
+
+    const { rows: deletedRows } = await query(`
+      SELECT id FROM users 
+      WHERE LOWER(email) = $1 AND ("isDeleted" = true OR active = false)
+    `, [normalizedEmail]);
+    const deletedDuplicateCount = deletedRows.length;
 
     console.log(`[LOGIN_ATTEMPT] email: ${normalizedEmail}, activeUserFound: ${!!activeUser}, deletedDuplicateCount: ${deletedDuplicateCount}`);
 
@@ -403,7 +389,9 @@ app.post('/api/auth/login', (req, res) => {
       return res.json({ success: true, user: activeUser });
     }
 
-    const isDeletedBlocklist = db.deletedUsers?.some(d => d.email === normalizedEmail);
+    const { rows: blocklistRows } = await query(`SELECT * FROM deleted_users WHERE LOWER(email) = $1`, [normalizedEmail]);
+    const isDeletedBlocklist = blocklistRows.length > 0;
+
     if (deletedDuplicateCount > 0 || isDeletedBlocklist) {
       console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> deleted/inactive account`);
       return res.status(401).json({ success: false, deleted: true, message: 'Bu hesap silinmiş veya pasif durumda.' });
@@ -417,59 +405,70 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-app.get('/api/auth/me', (req, res) => {
-  const { userId } = req.query; // Simple session check via query
-  const db = readDB();
-  const user = db.users.find(u => u.id === userId);
-  const deletedUsers = db.deletedUsers || [];
-  const isDeleted = deletedUsers.some(d => d.userId === userId) || (user && (user.isDeleted === true || user.active === false));
-  
-  if (!user || isDeleted) {
-    return res.status(401).json({ error: 'Oturum geçersiz. Lütfen tekrar giriş yapın.', deleted: true });
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const { userId } = req.query; 
+    const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = users[0];
+    
+    const { rows: deletedRows } = await query('SELECT * FROM deleted_users WHERE "userId" = $1', [userId]);
+    const isDeleted = deletedRows.length > 0 || (user && (user.isDeleted === true || user.active === false));
+    
+    if (!user || isDeleted) {
+      return res.status(401).json({ error: 'Oturum geçersiz. Lütfen tekrar giriş yapın.', deleted: true });
+    }
+    
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('[AUTH_ME_ERROR]', error);
+    return res.status(500).json({ error: 'Sunucu hatası' });
   }
-  
-  res.json({ success: true, user });
 });
 
 // Check if a userId has been deleted by admin (used during offline session restore)
-app.post('/api/auth/deleted-check', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ deleted: false });
-  const db = readDB();
-  const user = db.users.find(u => u.id === userId);
-  const deletedUsers = db.deletedUsers || [];
-  const isDeleted = deletedUsers.some(d => d.userId === userId) || !user || user.isDeleted === true || user.active === false;
-  
-  if (isDeleted) {
-      return res.status(401).json({ deleted: true, error: 'Oturum geçersiz. Lütfen tekrar giriş yapın.' });
+app.post('/api/auth/deleted-check', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ deleted: false });
+    
+    const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = users[0];
+    
+    const { rows: deletedRows } = await query('SELECT * FROM deleted_users WHERE "userId" = $1', [userId]);
+    const isDeleted = deletedRows.length > 0 || !user || user.isDeleted === true || user.active === false;
+    
+    if (isDeleted) {
+        return res.status(401).json({ deleted: true, error: 'Oturum geçersiz. Lütfen tekrar giriş yapın.' });
+    }
+    res.json({ deleted: false });
+  } catch (error) {
+    console.error('[DELETED_CHECK_ERROR]', error);
+    res.status(500).json({ deleted: false });
   }
-  res.json({ deleted: false });
 });
 
 app.get("/api/users/search", async (req, res) => {
   try {
     const q = String(req.query.q || "").trim().toLowerCase();
-
     if (!q) {
       return res.json({ success: true, users: [] });
     }
 
-    const db = readDB();
-    const users = db.users || [];
+    const { rows: deletedRows } = await query('SELECT "userId" FROM deleted_users');
+    const deletedIds = deletedRows.map(d => d.userId);
 
-    const results = users.filter(user => {
-      const isDeleted = (db.deletedUsers || []).some(d => d.userId === user.id) || user.isDeleted === true || user.active === false;
-      if (isDeleted) return false;
+    const { rows: users } = await query(`
+      SELECT * FROM users 
+      WHERE (LOWER(name) LIKE $1 OR LOWER("fullName") LIKE $1 OR LOWER(username) LIKE $1)
+      AND "isDeleted" = false AND active = true
+    `, [`%${q}%`]);
 
-      const name = String(user.name || user.fullName || "").toLowerCase();
-      const username = String(user.username || "").toLowerCase();
-      return name.includes(q) || username.includes(q);
-    });
+    const results = users.filter(u => !deletedIds.includes(u.id));
 
     return res.json({
       success: true,
       users: results.map(user => ({
-        id: user.id || user._id,
+        id: user.id,
         name: user.name || user.fullName,
         username: user.username,
         avatar: user.avatar || user.profileImage,
@@ -483,95 +482,127 @@ app.get("/api/users/search", async (req, res) => {
   }
 });
 
-app.put('/api/users/profile', (req, res) => {
-  const { userId, updates, currentPassword } = req.body;
-  const db = readDB();
-  const userIndex = db.users.findIndex(u => u.id === userId);
-  
-  if (userIndex === -1) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.', message: 'Kullanıcı bulunamadı.' });
-  
-  const user = db.users[userIndex];
-  
-  if (updates.password && user.password !== currentPassword) {
-    return res.status(400).json({ success: false, error: 'Mevcut şifreniz yanlış.', message: 'Mevcut şifreniz yanlış.' });
-  }
-
-  if (updates.username !== undefined) {
-    const rawUsername = updates.username.trim().toLowerCase();
-    if (rawUsername.length < 3) {
-      return res.status(400).json({ success: false, error: 'Kullanıcı adı en az 3 karakter olmalı.', message: 'Kullanıcı adı en az 3 karakter olmalı.' });
+app.put('/api/users/profile', async (req, res) => {
+  try {
+    const { userId, updates, currentPassword } = req.body;
+    
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = rows[0];
+    
+    if (!user) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.', message: 'Kullanıcı bulunamadı.' });
+    
+    if (updates.password && user.password !== currentPassword) {
+      return res.status(400).json({ success: false, error: 'Mevcut şifreniz yanlış.', message: 'Mevcut şifreniz yanlış.' });
     }
-    if (!/^[a-z0-9._]+$/.test(rawUsername)) {
-      return res.status(400).json({ success: false, error: 'Kullanıcı adı sadece küçük harf, rakam, nokta ve alt çizgi içerebilir.', message: 'Kullanıcı adı sadece küçük harf, rakam, nokta ve alt çizgi içerebilir.' });
+
+    if (updates.username !== undefined) {
+      const rawUsername = updates.username.trim().toLowerCase();
+      if (rawUsername.length < 3) {
+        return res.status(400).json({ success: false, error: 'Kullanıcı adı en az 3 karakter olmalı.', message: 'Kullanıcı adı en az 3 karakter olmalı.' });
+      }
+      if (!/^[a-z0-9._]+$/.test(rawUsername)) {
+        return res.status(400).json({ success: false, error: 'Kullanıcı adı sadece küçük harf, rakam, nokta ve alt çizgi içerebilir.', message: 'Kullanıcı adı sadece küçük harf, rakam, nokta ve alt çizgi içerebilir.' });
+      }
+      const { rows: conflicts } = await query('SELECT id FROM users WHERE username = $1 AND id != $2', [rawUsername, userId]);
+      if (conflicts.length > 0) {
+        return res.status(400).json({ success: false, error: 'Bu kullanıcı adı zaten alınmış.', message: 'Bu kullanıcı adı zaten alınmış.' });
+      }
+      updates.username = rawUsername;
     }
-    const usernameConflict = db.users.find(u => u.username === rawUsername && u.id !== userId);
-    if (usernameConflict) {
-      return res.status(400).json({ success: false, error: 'Bu kullanıcı adı zaten alınmış.', message: 'Bu kullanıcı adı zaten alınmış.' });
+
+    if (updates.email && updates.email.trim().toLowerCase() !== user.email?.trim().toLowerCase()) {
+      const normalizedNewEmail = updates.email.trim().toLowerCase();
+
+      const { rows: activeConflicts } = await query(`
+        SELECT * FROM users 
+        WHERE LOWER(email) = $1 AND id != $2 AND "isDeleted" = false AND active = true
+      `, [normalizedNewEmail, userId]);
+
+      if (activeConflicts.length > 0) {
+        const existingUser = activeConflicts[0];
+        if (!existingUser.password || !existingUser.name || !existingUser.userType) {
+          console.log(`[PROFILE_UPDATE] Auto-removing corrupted record id=${existingUser.id} email=${existingUser.email}`);
+          await query('DELETE FROM users WHERE id = $1', [existingUser.id]);
+        } else {
+          return res.status(409).json({
+            success: false,
+            error: 'Bu e-posta aktif bir kullanıcı tarafından kullanılıyor.',
+            message: 'Bu e-posta aktif bir kullanıcı tarafından kullanılıyor.',
+            conflictUser: {
+              id: existingUser.id,
+              email: existingUser.email,
+              hasPassword: !!existingUser.password
+            }
+          });
+        }
+      }
+
+      const { rows: deletedConflicts } = await query(`
+        SELECT * FROM users 
+        WHERE LOWER(email) = $1 AND id != $2 AND ("isDeleted" = true OR active = false)
+      `, [normalizedNewEmail, userId]);
+
+      for (const du of deletedConflicts) {
+        await query(`
+          UPDATE users 
+          SET "originalEmail" = email, email = $1 
+          WHERE id = $2
+        `, [`deleted_${du.id}_${du.email}`, du.id]);
+      }
+
+      await query('DELETE FROM deleted_users WHERE LOWER(email) = $1', [normalizedNewEmail]);
+
+      updates.emailVerified = false;
     }
-    updates.username = rawUsername;
-  }
 
-  if (updates.email && updates.email.trim().toLowerCase() !== user.email?.trim().toLowerCase()) {
-    const normalizedNewEmail = updates.email.trim().toLowerCase();
+    if (updates.phone && updates.phone.trim() !== user.phone?.trim()) {
+      updates.phoneVerified = false;
+    }
 
-    // Find active conflicts
-    const activeConflicts = db.users.filter(u =>
-      u.email?.trim().toLowerCase() === normalizedNewEmail &&
-      u.id !== userId &&
-      u.isDeleted !== true &&
-      u.active !== false
-    );
+    const setKeys = [];
+    const setValues = [];
+    let paramIndex = 1;
 
-    if (activeConflicts.length > 0) {
-      const existingUser = activeConflicts[0];
-      // Broken record (no password) — does not block the update, but report it
-      if (!existingUser.password || !existingUser.name || !existingUser.userType) {
-        console.log(`[PROFILE_UPDATE] Auto-removing corrupted record id=${existingUser.id} email=${existingUser.email}`);
-        db.users = db.users.filter(u => u.id !== existingUser.id);
-      } else {
-        return res.status(409).json({
-          success: false,
-          error: 'Bu e-posta aktif bir kullanıcı tarafından kullanılıyor.',
-          message: 'Bu e-posta aktif bir kullanıcı tarafından kullanılıyor.',
-          conflictUser: {
-            id: existingUser.id,
-            email: existingUser.email,
-            hasPassword: !!existingUser.password
-          }
-        });
+    const pgKeyMap = {
+      profileImage: '"profileImage"',
+      userType: '"userType"',
+      emailVerified: '"emailVerified"',
+      phoneVerified: '"phoneVerified"',
+      fullName: '"fullName"',
+      livingCity: '"livingCity"',
+      avatar: 'avatar',
+      city: 'city',
+      name: 'name',
+      phone: 'phone',
+      email: 'email',
+      password: 'password',
+      username: 'username'
+    };
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (pgKeyMap[key]) {
+        setKeys.push(`${pgKeyMap[key]} = $${paramIndex}`);
+        setValues.push(value);
+        paramIndex++;
       }
     }
 
-    // Find deleted conflicts and rename their emails to free up the address
-    const deletedConflicts = db.users.filter(u =>
-      u.email?.trim().toLowerCase() === normalizedNewEmail &&
-      u.id !== userId &&
-      (u.isDeleted === true || u.active === false)
-    );
-
-    deletedConflicts.forEach(du => {
-      du.originalEmail = du.email;
-      du.email = `deleted_${du.id}_${du.email}`;
-    });
-
-    if (db.deletedUsers) {
-      db.deletedUsers = db.deletedUsers.filter(d => d.email !== normalizedNewEmail);
+    if (setKeys.length > 0) {
+      setValues.push(userId);
+      await query(`
+        UPDATE users 
+        SET ${setKeys.join(', ')} 
+        WHERE id = $${paramIndex}
+      `, setValues);
     }
 
-    updates.emailVerified = false; // Reset verification on email change
+    const { rows: updatedRows } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+
+    res.json({ success: true, user: updatedRows[0], message: 'Profil güncellendi.' });
+  } catch (error) {
+    console.error('[PROFILE_UPDATE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Güncelleme sırasında hata oluştu.' });
   }
-
-  if (updates.phone && updates.phone.trim() !== user.phone?.trim()) {
-    updates.phoneVerified = false; // Reset verification on phone change
-  }
-
-  // Re-read userIndex in case we removed a corrupted record above
-  const freshIndex = db.users.findIndex(u => u.id === userId);
-  if (freshIndex === -1) return res.status(500).json({ success: false, error: 'Güncelleme sırasında hata oluştu.', message: 'Güncelleme sırasında hata oluştu.' });
-
-  db.users[freshIndex] = { ...db.users[freshIndex], ...updates };
-  writeDB(db);
-  res.json({ success: true, user: db.users[freshIndex], message: 'Profil güncellendi.' });
 });
 
 // ---- LISTINGS ----
@@ -592,109 +623,105 @@ const isRealItem = (db, item, type) => {
   return true;
 };
 
-app.get('/api/listings', (req, res) => {
-  const db = readDB();
-  res.json(db.listings.filter(l => l.active !== false && isRealItem(db, l, 'listing')));
+app.get('/api/listings', async (req, res) => {
+  try {
+    const { rows } = await query(`SELECT * FROM listings WHERE active = true AND "isTest" = false AND "deletedAt" IS NULL`);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.get('/api/listings/my/:userId', (req, res) => {
-  const db = readDB();
-  res.json(db.listings.filter(l => l.hostId === req.params.userId && l.active !== false));
+app.get('/api/listings/my/:userId', async (req, res) => {
+  try {
+    const { rows } = await query(`SELECT * FROM listings WHERE "hostId" = $1 AND active = true AND "deletedAt" IS NULL`, [req.params.userId]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.get('/api/feed', (req, res) => {
+app.get('/api/feed', async (req, res) => {
   try {
     const { userId } = req.query;
-    if (!userId) {
-      return res.status(400).json({ success: false, error: 'UserId eksik.' });
-    }
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
 
-    const db = readDB();
-    const currentUser = db.users.find(u => u.id === userId) || {};
+    const { rows: currentUserRows } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    const currentUser = currentUserRows[0] || {};
 
-    // 1. Get blocked users
-    const blocked_users = db.blocked_users || [];
-    const blockedMe = blocked_users.filter(b => b.blockedId === userId).map(b => b.blockerId);
-    const blockedByMe = blocked_users.filter(b => b.blockerId === userId).map(b => b.blockedId);
-    const blockedIds = new Set([...blockedMe, ...blockedByMe]);
+    const { rows: blockedRows } = await query('SELECT * FROM blocked_users WHERE "blockerId" = $1 OR "blockedId" = $1', [userId]);
+    const blockedIds = blockedRows.map(b => b.blockerId === userId ? b.blockedId : b.blockerId);
+    const blockedArr = blockedIds.length > 0 ? blockedIds : ['___none___'];
 
-    // 2. Get follows
-    const followingIds = (db.follows || []).filter(f => f.followerUserId === userId).map(f => f.followingUserId);
-    const validFollowingIds = new Set(followingIds.filter(id => !blockedIds.has(id)));
+    const { rows: followingRows } = await query('SELECT "followingUserId" FROM follows WHERE "followerUserId" = $1', [userId]);
+    const followingIds = followingRows.map(f => f.followingUserId);
 
-    // 3. Get ALL active listings and posts (excluding blocked users)
-    const allActiveListings = (db.listings || []).filter(l => 
-      !blockedIds.has(l.hostId) && 
-      l.active !== false && 
-      l.status !== 'removed' && 
-      !l.deletedAt &&
-      isRealItem(db, l, 'listing')
-    ).map(l => ({ ...l, type: 'listing' }));
+    // Get active listings
+    const { rows: listings } = await query(`
+      SELECT l.*, 'listing' as type,
+        (SELECT COUNT(*) FROM listing_likes WHERE "listingId" = l.id) as "likeCount",
+        (SELECT COUNT(*) FROM listing_comments WHERE "listingId" = l.id) as "commentCount",
+        EXISTS(SELECT 1 FROM listing_likes WHERE "listingId" = l.id AND "userId" = $1) as "isLikedByMe",
+        u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
+        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified"
+      FROM listings l
+      LEFT JOIN users u ON l."hostId" = u.id OR l."ownerId" = u.id
+      WHERE l.active = true AND l.status != 'removed' AND l."deletedAt" IS NULL AND l."isTest" = false
+      AND NOT (u.id = ANY($2::text[]))
+    `, [userId, blockedArr]);
 
-    const allActivePosts = (db.posts || []).filter(p =>
-      !blockedIds.has(p.userId) &&
-      p.isActive !== false &&
-      isRealItem(db, p, 'post')
-    ).map(p => ({ ...p, type: p.type || 'post' }));
+    // Get active posts
+    const { rows: posts } = await query(`
+      SELECT p.*, 'post' as type,
+        (SELECT COUNT(*) FROM post_likes WHERE "postId" = p.id) as "likeCount",
+        (SELECT COUNT(*) FROM post_comments WHERE "postId" = p.id) as "commentCount",
+        EXISTS(SELECT 1 FROM post_likes WHERE "postId" = p.id AND "userId" = $1) as "isLikedByMe",
+        u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
+        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified"
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id
+      WHERE p."isActive" = true AND p."isTest" = false
+      AND NOT (u.id = ANY($2::text[]))
+    `, [userId, blockedArr]);
 
-    const allFeedItems = [...allActiveListings, ...allActivePosts];
+    let allFeedItems = [...listings, ...posts];
 
-    // 4. Attach owner details and calculate score
+    // Score calculation
     const populatedFeed = allFeedItems.map(item => {
       const ownerId = item.type === 'listing' ? (item.hostId || item.ownerId) : item.userId;
-      const owner = db.users.find(u => u.id === ownerId) || {};
-      
-      const isIdVerified = owner.identityVerified === true || owner.identityVerificationStatus === 'verified' || owner.verified === true;
-      const isFullyVerified = isIdVerified && owner.emailVerified === true && owner.phoneVerified === true;
-      
-      let likeCount = 0;
-      let commentCount = 0;
-      let isLikedByMe = false;
+      const isIdVerified = item.identityVerified || item.verified;
+      const isFullyVerified = isIdVerified && item.emailVerified && item.phoneVerified;
 
-      if (item.type === 'listing') {
-        likeCount = (db.listing_likes || []).filter(like => like.listingId === item.id).length;
-        commentCount = (db.listing_comments || []).filter(comment => comment.listingId === item.id).length;
-        isLikedByMe = (db.listing_likes || []).some(like => like.listingId === item.id && like.userId === userId);
-      } else if (item.type === 'post') {
-        likeCount = (db.post_likes || []).filter(like => like.postId === item.id).length;
-        commentCount = (db.post_comments || []).filter(comment => comment.postId === item.id).length;
-        isLikedByMe = (db.post_likes || []).some(like => like.postId === item.id && like.userId === userId);
-      }
+      let score = new Date(item.createdAt).getTime() / (1000 * 60 * 60);
+      const isSameCity = currentUser.city && item.owner_city && currentUser.city.toLowerCase() === item.owner_city.toLowerCase();
+      const isFollowed = followingIds.includes(ownerId);
+      const isProfileComplete = isFullyVerified || (item.owner_profileImage && item.owner_name && item.owner_city);
 
-      // Calculate score for ranking
-      let score = new Date(item.createdAt).getTime() / (1000 * 60 * 60); // Base score: hours since epoch
-      
-      const isSameCity = currentUser.city && owner.city && currentUser.city.toLowerCase() === owner.city.toLowerCase();
-      const isFollowed = validFollowingIds.has(ownerId);
-      const isProfileComplete = isFullyVerified || (owner.profileImage && owner.name && owner.city);
-
-      if (isSameCity) score += 72; // +3 days boost for same city
-      if (isFollowed) score += 48; // +2 days boost for followed users
-      if (isProfileComplete) score += 24; // +1 day boost for complete profiles
+      if (isSameCity) score += 72;
+      if (isFollowed) score += 48;
+      if (isProfileComplete) score += 24;
 
       return {
         ...item,
-        likeCount,
-        commentCount,
-        isLikedByMe,
-        isFollowed,
         score,
+        likeCount: parseInt(item.likeCount),
+        commentCount: parseInt(item.commentCount),
+        isLikedByMe: item.isLikedByMe,
+        isFollowed,
         owner: {
-          id: owner.id,
-          name: owner.name,
-          username: owner.username,
-          profileImage: owner.profileImage,
-          isFullyVerified,
-          city: owner.city
+          id: ownerId,
+          name: item.owner_name,
+          username: item.owner_username,
+          profileImage: item.owner_profileImage,
+          city: item.owner_city,
+          identityVerified: isIdVerified,
+          isFullyVerified
         }
       };
     });
 
-    // 5. Sort by score desc, then by createdAt desc
     populatedFeed.sort((a, b) => {
-      if (b.score !== a.score) {
-        return b.score - a.score;
-      }
+      if (b.score !== a.score) return b.score - a.score;
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
