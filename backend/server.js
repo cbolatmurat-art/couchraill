@@ -331,9 +331,24 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, name, phone, userType, city } = req.body;
     
-    const { rows: existingRows } = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (!email || !password || !name || !phone) {
+      return res.status(400).json({ success: false, error: 'Zorunlu alanlar eksik.', message: 'Zorunlu alanlar eksik.' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedPhone = String(phone).trim();
+
+    const { rows: existingRows } = await query(
+      'SELECT id, email, phone FROM users WHERE LOWER(email) = $1 OR phone = $2', 
+      [normalizedEmail, normalizedPhone]
+    );
+    
     if (existingRows.length > 0) {
-      return res.status(400).json({ error: 'Bu e-posta adresi zaten kullanılıyor.' });
+      const conflict = existingRows[0];
+      if (conflict.email && conflict.email.toLowerCase() === normalizedEmail) {
+        return res.status(409).json({ success: false, error: 'Bu e-posta adresi zaten kullanılıyor.', message: 'Bu e-posta adresi zaten kullanılıyor.' });
+      }
+      return res.status(409).json({ success: false, error: 'Bu telefon numarası zaten kullanılıyor.', message: 'Bu telefon numarası zaten kullanılıyor.' });
     }
 
     const username = await generateUniqueUsername(name);
@@ -343,17 +358,28 @@ app.post('/api/auth/register', async (req, res) => {
     await query(`
       INSERT INTO users (
         id, email, password, name, username, phone, "userType", city,
-        verified, "joinedDate", "profileImage", "phoneVerified", "emailVerified", "identityVerificationStatus"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        verified, "joinedDate", "profileImage", "phoneVerified", "emailVerified", "identityVerificationStatus",
+        active, "isDeleted", "fullName"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `, [
-      newId, email, password, name, username, phone, userType, city,
-      false, joinedDate, null, false, false, 'unverified'
+      newId, normalizedEmail, password, name, username, normalizedPhone, userType || 'seeker', city || '',
+      false, joinedDate, null, false, false, 'unverified',
+      true, false, name
     ]);
 
-    res.json({ success: true, user: { id: newId, name, email, userType, profileImage: null } });
+    res.json({ 
+      success: true, 
+      user: { id: newId, name, email: normalizedEmail, userType, profileImage: null },
+      message: 'Kayıt başarıyla oluşturuldu.'
+    });
   } catch (error) {
     console.error('[REGISTER_ERROR]', error);
-    res.status(500).json({ error: 'Kayıt olurken bir hata oluştu.' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Kayıt olurken bir hata oluştu.', 
+      message: 'Kayıt olurken bir hata oluştu.',
+      details: error.message 
+    });
   }
 });
 
