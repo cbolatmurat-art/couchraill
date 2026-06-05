@@ -373,12 +373,19 @@ app.post('/api/auth/register', async (req, res) => {
       message: 'Kayıt başarıyla oluşturuldu.'
     });
   } catch (error) {
-    console.error('[REGISTER_ERROR]', error);
+    console.error('[REGISTER_ERROR]', {
+      body: req.body,
+      userType: req.body.userType,
+      email: req.body.email,
+      phone: req.body.phone,
+      sqlMessage: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ 
       success: false, 
-      error: 'Kayıt olurken bir hata oluştu.', 
-      message: 'Kayıt olurken bir hata oluştu.',
-      details: error.message 
+      error: 'REGISTER_FAILED', 
+      message: error.message,
+      details: error.stack 
     });
   }
 });
