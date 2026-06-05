@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { Input } from '../../components/Input';
@@ -12,6 +13,7 @@ export default function SearchScreen() {
   const { requests } = useAppContext();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const insets = useSafeAreaInsets();
 
   // Sadece bekleyen talepleri göster, arama sorgusuna göre filtrele
   const filteredRequests = requests.filter(r => 
@@ -21,7 +23,7 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <Input 
           placeholder="Hangi şehirde ev arıyorsunuz veya misafir kabul ediyorsunuz?" 
           value={searchQuery}

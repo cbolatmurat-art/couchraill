@@ -3,7 +3,6 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
-const { Resend } = require('resend');
 const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
@@ -14,9 +13,6 @@ if (process.env.BREVO_API_KEY) {
   const trimmedKey = process.env.BREVO_API_KEY.trim();
   console.log("BREVO_API_KEY_PREFIX:", trimmedKey.substring(0, 8));
 }
-console.log("RESEND_API_KEY_EXISTS:", !!process.env.RESEND_API_KEY);
-
-const resendClient = (process.env.EMAIL_PROVIDER !== 'brevo' && process.env.RESEND_API_KEY) ? new Resend(process.env.RESEND_API_KEY.trim()) : null;
 
 const app = express();
 
@@ -344,36 +340,6 @@ app.get('/api/debug/users-by-email', (req, res) => {
     hasPassword: !!u.password, createdAt: u.createdAt, updatedAt: u.updatedAt
   }));
   res.json({ count: matches.length, users: matches });
-});
-
-app.get('/api/debug/resend-test', async (req, res) => {
-  const { to } = req.query;
-  if (!to) return res.status(400).json({ error: 'to query param required' });
-
-  if (!process.env.RESEND_API_KEY) {
-    return res.status(400).json({ error: 'RESEND_API_KEY is missing in .env' });
-  }
-
-  if (!resendClient) {
-    return res.status(400).json({ error: 'Resend client failed to initialize' });
-  }
-
-  try {
-    const { data, error } = await resendClient.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-      to: [to],
-      subject: 'Resend Test',
-      text: 'This is a test email from the debug endpoint.'
-    });
-
-    if (error) {
-      return res.status(500).json({ success: false, error: error.message, fullError: error });
-    }
-
-    res.json({ success: true, data });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message, fullError: error });
-  }
 });
 
 // ---- AUTH & USERS ----
@@ -2550,40 +2516,13 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
         detail: error.message
       });
     }
-  } else if (resendClient) {
-    try {
-      const { data, error } = await resendClient.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-        to: email,
-        subject: "E-posta Doğrulama Kodu",
-        html: `
-          <h2>E-posta Doğrulama</h2>
-          <p>Doğrulama kodunuz:</p>
-          <h1>${code}</h1>
-        `
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      console.log(`[EMAIL_VERIFICATION_SENT] id: ${data.id}`);
-      return res.json({ success: true, message: "Doğrulama kodu gönderildi." });
-    } catch (error) {
-      console.error("RESEND_ERROR:", error);
-      
-      return res.status(500).json({
-        success: false,
-        message: "Kod gönderilemedi",
-        detail: error.message
-      });
-    }
   } else {
-    console.log("EMAIL_CODE:", email, code);
-    return res.status(500).json({
-      success: false,
-      message: "Kod gönderilemedi",
-      detail: "RESEND_API_KEY is missing"
+    // Sadece logla (Brevo ayarlı değilse veya local debug ise)
+    console.log("EMAIL_CODE_FALLBACK:", email, code);
+    return res.json({
+      success: true,
+      message: "Doğrulama kodu oluşturuldu (console).",
+      devCode: code
     });
   }
 });
