@@ -28,11 +28,11 @@ const initDB = async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(255) PRIMARY KEY,
-        email VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
         password VARCHAR(255),
         name VARCHAR(255),
         username VARCHAR(255),
-        phone VARCHAR(255),
+        phone VARCHAR(255) UNIQUE,
         "userType" VARCHAR(50),
         city VARCHAR(255),
         "profileImage" TEXT,
@@ -298,6 +298,9 @@ const initDB = async () => {
         "deletedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
+    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
 
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');

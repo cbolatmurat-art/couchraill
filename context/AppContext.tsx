@@ -350,56 +350,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             if (apiUserResult && apiUserResult.user) {
               setCurrentUser(apiUserResult.user);
               await fetchUserData(sessionData.userId);
-            } else if (apiUserResult === null) {
-              // Network unavailable — try local fallback but check deletedUsers blocklist
-              try {
-                // Fetch deletedUsers from backend if possible
-                let deletedEmails: string[] = [];
-                try {
-                  const delRes = await fetch(`${API_BASE_URL}/auth/deleted-check`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: sessionData.userId })
-                  });
-                  if (delRes.ok) {
-                    const delData = await delRes.json();
-                    if (delData.deleted) {
-                      await clearAuthStorage();
-                      setCurrentUser(null);
-                      return;
-                    }
-                  } else if (delRes.status === 401 || delRes.status === 403) {
-                    await clearAuthStorage();
-                    setCurrentUser(null);
-                    return;
-                  }
-                } catch (_) {}
-
-                const usersRaw = await AsyncStorage.getItem(USERS_STORAGE_KEY);
-                if (usersRaw) {
-                  let localUsers: User[] = [];
-                  try {
-                    localUsers = JSON.parse(usersRaw);
-                  } catch (e) {
-                    console.warn("Invalid users JSON");
-                  }
-                  const localUser = localUsers.find(u => u.id === sessionData?.userId);
-                  if (localUser) {
-                    setCurrentUser(localUser);
-                    await fetchUserData(localUser.id);
-                  } else {
-                    await clearAuthStorage();
-                  }
-                } else {
-                  await clearAuthStorage();
-                }
-              } catch (_) {
-                await clearAuthStorage();
-              }
-            }
-          } else {
-            await clearAuthStorage();
-          }
         }
         console.log("SESSION_CHECK_DONE");
       } catch (e) {
@@ -746,32 +696,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (apiResult && apiResult.success) {
         return { success: true };
       }
-      
-      // Fallback: Kayıt ol API başarısızsa yerel storage'a kaydet
-      if (!apiResult || apiResult.error === undefined) {
-        const usersRaw = await AsyncStorage.getItem(USERS_STORAGE_KEY);
-        const users: User[] = usersRaw ? JSON.parse(usersRaw) : [];
-        
-        if (users.find(u => u.email.toLowerCase() === userData.email.toLowerCase())) {
-          return { success: false, error: 'Bu e-posta adresi yerel veritabanında zaten kullanılıyor.' };
-        }
 
-        const baseUsername = (userData.name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const newUser: User = {
-          ...userData,
-          id: `u${Date.now()}`,
-          username: `${baseUsername}${Math.floor(1000 + Math.random() * 9000)}`,
-          verified: false,
-          joinedDate: new Date().toISOString().split('T')[0],
-        };
-        
-        const updatedUsers = [...users, newUser];
-        await AsyncStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updatedUsers));
-        
-        return { success: true };
-      }
-
-      return { success: false, error: apiResult.message || apiResult.error || 'Kayıt başarısız.' };
+      return { success: false, error: apiResult?.message || apiResult?.error || 'Kayıt başarısız.' };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Kayıt sırasında hata oluştu.' };
     }

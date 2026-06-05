@@ -5,6 +5,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 console.log("EMAIL_PROVIDER:", process.env.EMAIL_PROVIDER);
@@ -354,6 +355,9 @@ app.post('/api/auth/register', async (req, res) => {
     const username = await generateUniqueUsername(name);
     const newId = `u${Date.now()}`;
     const joinedDate = new Date().toISOString().split('T')[0];
+    
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     await query(`
       INSERT INTO users (
@@ -362,7 +366,7 @@ app.post('/api/auth/register', async (req, res) => {
         active, "isDeleted", "fullName"
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `, [
-      newId, normalizedEmail, password, name, username, normalizedPhone, userType || 'seeker', city || '',
+      newId, normalizedEmail, hashedPassword, name, username, normalizedPhone, userType || 'seeker', city || '',
       false, joinedDate, null, false, false, 'unverified',
       true, false, name
     ]);
@@ -414,10 +418,24 @@ app.post('/api/auth/login', async (req, res) => {
     console.log(`[LOGIN_ATTEMPT] email: ${normalizedEmail}, activeUserFound: ${!!activeUser}, deletedDuplicateCount: ${deletedDuplicateCount}`);
 
     if (activeUser) {
-      if (!activeUser.password || String(activeUser.password) !== String(password)) {
-        console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> password mismatch or missing password`);
+      if (!activeUser.password) {
+        console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> missing password hash`);
         return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
       }
+
+      // Check if the password is plain text (legacy) or bcrypt hash
+      let isMatch = false;
+      if (activeUser.password.startsWith('$2a$') || activeUser.password.startsWith('$2b$')) {
+        isMatch = await bcrypt.compare(password, activeUser.password);
+      } else {
+        isMatch = String(activeUser.password) === String(password);
+      }
+
+      if (!isMatch) {
+        console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> password mismatch`);
+        return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
+      }
+      
       console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> success`);
       return res.json({ success: true, user: activeUser });
     }
