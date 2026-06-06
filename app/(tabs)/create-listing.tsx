@@ -179,7 +179,7 @@ export default function CreateListingScreen() {
           showToast("İlan paylaşıldı.", "success");
           setTimeout(() => router.back(), 1500);
         } else {
-          setErrorMsg(data.error || data.message || 'İlan paylaşılamadı.');
+          setErrorMsg((data.error ? data.error + (data.details ? ' - ' + data.details : '') : null) || data.message || 'İlan paylaşılamadı.');
         }
       }
     } catch (error) {

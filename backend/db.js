@@ -158,23 +158,7 @@ const initDB = async () => {
       )
     `);
     
-    // Safety ALTER TABLE for existing DB
-    try {
-      await client.query(`
-        ALTER TABLE listings 
-        ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS location VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false,
-        ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER,
-        ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS text TEXT;
-      `);
-    } catch (err) {
-      console.warn('[DB WARNING] Could not alter listings table for new columns:', err.message);
-    }
+    // Removed ALTER TABLE from inside the transaction to avoid aborting it.
 
     // Requests
     await client.query(`
@@ -397,6 +381,26 @@ const initDB = async () => {
 
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');
+    
+    // Safety ALTER TABLE for existing DB (Outside transaction)
+    const alters = [
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255)`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS location VARCHAR(255)`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255)`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255)`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS text TEXT`
+    ];
+    for (const alt of alters) {
+      try {
+        await client.query(alt);
+      } catch (e) {
+        console.warn(`[DB WARNING] Could not execute: ${alt}`, e.message);
+      }
+    }
     
     // Sync listings from db.json into postgres
     try {
