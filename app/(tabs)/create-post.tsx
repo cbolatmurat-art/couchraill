@@ -113,12 +113,14 @@ export default function CreatePostScreen() {
 
     if (isWeb) {
       console.log("geolocation:", navigator.geolocation);
-      console.log("isSecureContext:", window.isSecureContext);
       
-      if (window.isSecureContext === false && window.location.hostname !== 'localhost') {
-        setLoadingLocation(false);
-        setLocationError("Konum izni için HTTPS gerekir. Bu adres güvenli bağlantı olmadığı için tarayıcı konumu engelliyor.");
-        return;
+      if (typeof window !== 'undefined') {
+        console.log("isSecureContext:", window.isSecureContext);
+        if (window.isSecureContext === false && window.location.hostname !== 'localhost') {
+          setLoadingLocation(false);
+          setLocationError("Konum izni için HTTPS gerekir. Bu adres güvenli bağlantı olmadığı için tarayıcı konumu engelliyor.");
+          return;
+        }
       }
 
       if (typeof navigator === 'undefined' || !navigator.geolocation) {

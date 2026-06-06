@@ -7,6 +7,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
+import { AlertHelper } from '../utils/AlertHelper';
 
 export default function PrivacyScreen() {
   const { currentUser, deleteAccount, deleteVerificationData } = useAppContext();
@@ -44,42 +45,26 @@ export default function PrivacyScreen() {
       try {
         const res = await deleteVerificationData();
         if (res.success) {
-          if (Platform.OS === 'web') {
-            window.alert('Kimlik verileriniz ve yüklenen görseller sistemden tamamen kalıcı olarak silindi.');
-          } else {
-            Alert.alert('Başarılı', 'Kimlik verileriniz ve yüklenen görseller sistemden tamamen kalıcı olarak silindi.');
-          }
+          AlertHelper.alert('Başarılı', 'Kimlik verileriniz ve yüklenen görseller sistemden tamamen kalıcı olarak silindi.');
         } else {
-          if (Platform.OS === 'web') {
-            window.alert(res.error || 'Veri silme hatası oluştu.');
-          } else {
-            Alert.alert('Hata', res.error || 'Veri silme hatası oluştu.');
-          }
+          AlertHelper.alert('Hata', res.error || 'Veri silme hatası oluştu.');
         }
       } catch (err: any) {
-        if (Platform.OS === 'web') {
-          window.alert(err.message || 'Sistem hatası oluştu.');
-        } else {
-          Alert.alert('Hata', err.message || 'Sistem hatası oluştu.');
-        }
+        AlertHelper.alert('Hata', err.message || 'Sistem hatası oluştu.');
       } finally {
         setIsDeletingData(false);
       }
     };
 
-    if (Platform.OS === 'web') {
-      const confirm = window.confirm('Kimlik verilerinizi (ön yüz, arka yüz, selfie fotoğraflarınızı) silmek istediğinize emin misiniz? Bu işlem sonucunda doğrulama rozetiniz kaldırılacaktır.');
-      if (confirm) executeDelete();
-    } else {
-      Alert.alert(
-        'Emin misiniz?',
-        'Kimlik verilerinizi (ön yüz, arka yüz, selfie fotoğraflarınızı) silmek istediğinize emin misiniz? Bu işlem sonucunda doğrulama rozetiniz kaldırılacaktır.',
-        [
-          { text: 'İptal', style: 'cancel' },
-          { text: 'Evet, Sil', style: 'destructive', onPress: executeDelete }
-        ]
-      );
-    }
+    AlertHelper.confirm(
+      'Emin misiniz?',
+      'Kimlik verilerinizi (ön yüz, arka yüz, selfie fotoğraflarınızı) silmek istediğinize emin misiniz? Bu işlem sonucunda doğrulama rozetiniz kaldırılacaktır.',
+      executeDelete,
+      undefined,
+      'Evet, Sil',
+      'İptal',
+      true
+    );
   };
 
   // 3. Hesabı Sil
@@ -89,59 +74,37 @@ export default function PrivacyScreen() {
       try {
         const res = await deleteAccount();
         if (res.success) {
-          if (Platform.OS === 'web') {
-            window.alert('Hesabınız ve tüm verileriniz başarıyla silinmiştir.');
-          } else {
-            Alert.alert('Başarılı', 'Hesabınız ve tüm verileriniz başarıyla silinmiştir.');
-          }
+          AlertHelper.alert('Başarılı', 'Hesabınız ve tüm verileriniz başarıyla silinmiştir.');
           router.replace('/(auth)/login');
         } else {
-          if (Platform.OS === 'web') {
-            window.alert(res.error || 'Hesap silme işlemi başarısız.');
-          } else {
-            Alert.alert('Hata', res.error || 'Hesap silme işlemi başarısız.');
-          }
+          AlertHelper.alert('Hata', res.error || 'Hesap silme işlemi başarısız.');
         }
       } catch (err: any) {
-        if (Platform.OS === 'web') {
-          window.alert(err.message || 'Sistem hatası oluştu.');
-        } else {
-          Alert.alert('Hata', err.message || 'Sistem hatası oluştu.');
-        }
+        AlertHelper.alert('Hata', err.message || 'Sistem hatası oluştu.');
       } finally {
         setIsDeletingAccount(false);
       }
     };
 
-    if (Platform.OS === 'web') {
-      const confirm1 = window.confirm('Hesabınızı kalıcı olarak silmek istediğinize emin misiniz?');
-      if (confirm1) {
-        const confirm2 = window.confirm('UYARI: Tüm ilanlarınız, talepleriniz, mesajlarınız ve profil bilgileriniz geri döndürülemeyecek şekilde silinecektir. Devam etmek istiyor musunuz?');
-        if (confirm2) executeDelete();
-      }
-    } else {
-      Alert.alert(
-        'Hesabınızı Silin',
-        'Hesabınızı ve tüm ilişkili verilerinizi kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
-        [
-          { text: 'Vazgeç', style: 'cancel' },
-          { 
-            text: 'Evet, Sil', 
-            style: 'destructive', 
-            onPress: () => {
-              Alert.alert(
-                'Son Onay',
-                'Tüm verileriniz tamamen yok edilecek. Devam edilsin mi?',
-                [
-                  { text: 'Vazgeç', style: 'cancel' },
-                  { text: 'Evet, Tamamen Sil', style: 'destructive', onPress: executeDelete }
-                ]
-              );
-            }
-          }
-        ]
-      );
-    }
+    AlertHelper.confirm(
+      'Hesabınızı Silin',
+      'Hesabınızı ve tüm ilişkili verilerinizi kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
+      () => {
+        AlertHelper.confirm(
+          'Son Onay',
+          'Tüm verileriniz tamamen yok edilecek. Devam edilsin mi?',
+          executeDelete,
+          undefined,
+          'Evet, Tamamen Sil',
+          'Vazgeç',
+          true
+        );
+      },
+      undefined,
+      'Evet, Sil',
+      'Vazgeç',
+      true
+    );
   };
 
   const formattedJson = JSON.stringify({

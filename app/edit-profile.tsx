@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { API_BASE_URL } from '../constants/config';
 import { CityPicker } from '../components/CityPicker';
+import { AlertHelper } from '../utils/AlertHelper';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -391,7 +392,7 @@ export default function EditProfileScreen() {
 
       if (result.success) {
         setSuccessMsg((result as any).message || 'Profil bilgileriniz güncellendi.');
-        Alert.alert('Başarılı', (result as any).message || 'Profil bilgileriniz güncellendi.');
+        AlertHelper.alert('Başarılı', (result as any).message || 'Profil bilgileriniz güncellendi.');
         setTimeout(() => {
           if (router.canGoBack()) {
             router.back();
@@ -407,11 +408,7 @@ export default function EditProfileScreen() {
           errMsg.includes('silinmi') ||
           errMsg.includes('tekrar giri')
         ) {
-          if (Platform.OS === 'web') {
-            window.alert('Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
-          } else {
-            Alert.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
-          }
+          AlertHelper.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
           router.replace('/(auth)/login');
           return;
         }
@@ -449,11 +446,7 @@ export default function EditProfileScreen() {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     
     if (permissionResult.granted === false) {
-      if (Platform.OS === 'web') {
-        window.alert("Kamera erişimine izin vermelisiniz.");
-      } else {
-        Alert.alert("Kamera İzni Gerekli", "Fotoğraf çekmek için kamera erişimine izin vermelisiniz.");
-      }
+      AlertHelper.alert("Kamera İzni Gerekli", "Fotoğraf çekmek için kamera erişimine izin vermelisiniz.");
       return;
     }
 
@@ -473,20 +466,15 @@ export default function EditProfileScreen() {
 
   const removePhotoConfirm = () => {
     setIsImageModalVisible(false);
-    if (Platform.OS === 'web') {
-      if (window.confirm("Profil fotoğrafı kaldırılsın mı?")) {
-        setProfileImage(null);
-      }
-    } else {
-      Alert.alert(
-        "Profil fotoğrafı kaldırılsın mı?",
-        "Bu işlem geri alınamaz.",
-        [
-          { text: "İptal", style: "cancel" },
-          { text: "Kaldır", style: "destructive", onPress: () => setProfileImage(null) }
-        ]
-      );
-    }
+    AlertHelper.confirm(
+      "Profil fotoğrafı kaldırılsın mı?",
+      "Bu işlem geri alınamaz.",
+      () => setProfileImage(null),
+      undefined,
+      "Kaldır",
+      "İptal",
+      true
+    );
   };
 
   return (

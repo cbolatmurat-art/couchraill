@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '../context/AppContext';
 import { API_BASE_URL } from '../constants/config';
+import { AlertHelper } from '../utils/AlertHelper';
 
 // ---------------------------------------------------------------------------
 // Synchronous localStorage helper (web) / async fallback (native)
@@ -249,27 +250,24 @@ export default function AdminScreen() {
   };
 
   const deleteUser = async (id: string) => {
-    // Alert.alert doesn't work on web — use window.confirm as fallback
-    const confirmed = isWeb
-      ? window.confirm('Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')
-      : await new Promise<boolean>(resolve =>
-          Alert.alert(
-            'Emin misiniz?',
-            'Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
-            [
-              { text: 'İptal', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Sil', style: 'destructive', onPress: () => resolve(true) }
-            ]
-          )
-        );
+    const confirmed = await new Promise<boolean>(resolve => {
+      AlertHelper.confirm(
+        'Emin misiniz?',
+        'Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
+        () => resolve(true),
+        () => resolve(false),
+        'Sil',
+        'İptal',
+        true
+      );
+    });
 
     if (!confirmed) return;
 
     // Resolve the token — prefer state, fall back to localStorage on web
     const token = adminToken || (isWeb ? localGet('misafirimol_adminToken') : null);
     if (!token) {
-      if (isWeb) window.alert('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
-      else Alert.alert('Hata', 'Oturum bulunamadı.');
+      AlertHelper.alert('Hata', 'Oturum bulunamadı. Lütfen tekrar giriş yapın.');
       return;
     }
 
@@ -284,18 +282,15 @@ export default function AdminScreen() {
       if (res.ok) {
         // Remove immediately from local state for instant feedback
         setUsersList(prev => prev.filter(u => u.id !== id));
-        if (isWeb) window.alert('Kullanıcı başarıyla silindi.');
-        else Alert.alert('Başarılı', 'Kullanıcı silindi.');
+        AlertHelper.alert('Başarılı', 'Kullanıcı başarıyla silindi.');
       } else {
         const err = await res.json().catch(() => null);
         const msg = err?.error || err?.message || 'Silme işlemi başarısız oldu.';
-        if (isWeb) window.alert(msg);
-        else Alert.alert('Hata', msg);
+        AlertHelper.alert('Hata', msg);
       }
     } catch (e) {
       const msg = 'Sunucu bağlantı hatası.';
-      if (isWeb) window.alert(msg);
-      else Alert.alert('Hata', msg);
+      AlertHelper.alert('Hata', msg);
     } finally {
       setDeletingUserId(null);
     }
@@ -339,8 +334,7 @@ export default function AdminScreen() {
         setAddUserType('guest');
         setAddUserError('');
         fetchUsers();
-        if (isWeb) window.alert('Kullanıcı başarıyla oluşturuldu.');
-        else Alert.alert('Başarılı', 'Kullanıcı oluşturuldu.');
+        AlertHelper.alert('Başarılı', 'Kullanıcı başarıyla oluşturuldu.');
       } else {
         setAddUserError(data?.error || data?.message || 'Kullanıcı oluşturulamadı.');
       }

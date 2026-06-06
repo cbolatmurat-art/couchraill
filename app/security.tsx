@@ -9,6 +9,7 @@ import { Input } from '../components/Input';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
 import * as ImagePicker from 'expo-image-picker';
+import { AlertHelper } from '../utils/AlertHelper';
 
 export default function SecurityScreen() {
   const { currentUser, updateProfile, submitVerificationRequest } = useAppContext();
@@ -107,11 +108,7 @@ export default function SecurityScreen() {
   const requestMediaPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      if (Platform.OS === 'web') {
-        window.alert('Resim yüklemek için galeri iznine ihtiyacımız var.');
-      } else {
-        Alert.alert('İzin Gerekli', 'Resim yüklemek için galeri iznine ihtiyacımız var.');
-      }
+      AlertHelper.alert('İzin Gerekli', 'Resim yüklemek için galeri iznine ihtiyacımız var.');
       return false;
     }
     return true;
@@ -120,11 +117,7 @@ export default function SecurityScreen() {
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      if (Platform.OS === 'web') {
-        window.alert('Fotoğraf çekmek için kamera iznine ihtiyacımız var.');
-      } else {
-        Alert.alert('İzin Gerekli', 'Fotoğraf çekmek için kamera iznine ihtiyacımız var.');
-      }
+      AlertHelper.alert('İzin Gerekli', 'Fotoğraf çekmek için kamera iznine ihtiyacımız var.');
       return false;
     }
     return true;

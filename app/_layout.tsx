@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import CustomSplashScreen from '../components/CustomSplashScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -17,13 +18,13 @@ function RootLayoutContent() {
   const { isReady } = useAppContext();
 
   useEffect(() => {
-    if (isReady) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [isReady]);
+    // React Native yüklendiğinde varsayılan Expo splash ekranını hemen gizle
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   if (!isReady) {
-    return null;
+    // Uygulama hazır olana kadar özel animasyonlu yükleme ekranını göster
+    return <CustomSplashScreen />;
   }
 
   return (
@@ -93,9 +94,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
          try {
            router.replace('/(auth)/login');
          } catch (e) {
-           if (typeof window !== 'undefined') {
-             window.location.href = '/login';
-           }
+           console.warn('Router navigation failed in ErrorBoundary', e);
          }
          retry();
       }} />

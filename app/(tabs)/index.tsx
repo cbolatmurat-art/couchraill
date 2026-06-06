@@ -336,7 +336,7 @@ export default function FeedScreen() {
         <View style={styles.emptyState}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.danger} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyText}>{errorMsg}</Text>
-          <Button title="Tekrar Dene" variant="outline" onPress={onRefresh} style={{ marginTop: 16 }} />
+          <Button title="Tekrar Dene" variant="outline" onPress={fetchFeed} style={{ marginTop: 16 }} />
         </View>
       );
     }
