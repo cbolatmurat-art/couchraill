@@ -1043,7 +1043,7 @@ app.post('/api/listings', async (req, res) => {
     res.json({ success: true, listing: newListing });
   } catch (error) {
     console.error('[POST_LISTING_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası: İlan oluşturulamadı.' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: İlan oluşturulamadı.', details: error.message });
   }
 });
 
