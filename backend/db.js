@@ -15,6 +15,7 @@ let pool;
 let isPgMem = false;
 
 if (dbUrl) {
+  console.log(`[DB INIT] Target DB URL detected. First 20 chars: ${dbUrl.substring(0, 20)}...`);
   pool = new Pool({
     connectionString: dbUrl,
     ssl: isProduction ? { rejectUnauthorized: false } : false
@@ -51,6 +52,7 @@ const initDB = async () => {
   try {
     client = await pool.connect();
   } catch (e) {
+    console.error(`[DB ERROR] PostgreSQL Connection Failed. Error code: ${e.code}, Message: ${e.message}`);
     if (e.code === 'ECONNREFUSED' || e.message.includes('password authentication failed') || e.code === 'ENOTFOUND') {
       setupPgMemFallback();
       client = await pool.connect(); // Connect to the mock pool

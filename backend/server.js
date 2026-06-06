@@ -40,7 +40,7 @@ app.get("/", (req, res) => {
 app.get("/api/health", (req, res) => {
   console.log("HEALTH_CHECK_HIT");
   const { isPgMem } = require('./db');
-  res.status(200).json({ success: true, message: "Couchraill API running", dbMode: isPgMem ? "pg-mem (NO DATABASE_URL)" : "PostgreSQL" });
+  res.status(200).json({ success: true, message: "Couchraill API running", dbMode: isPgMem ? "pg-mem (Fallback Mode)" : "PostgreSQL" });
 });
 
 app.use(cors({

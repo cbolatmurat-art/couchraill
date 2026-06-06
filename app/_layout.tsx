@@ -1,34 +1,43 @@
-import 'react-native-gesture-handler';
-import { Stack, ErrorBoundaryProps, router } from 'expo-router';
-import { View, Text, Button } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppProvider, useAppContext, clearAuthStorage } from '../context/AppContext';
-import { Colors } from '../constants/Colors';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundaryProps, router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { Button, Text, View } from 'react-native';
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CustomSplashScreen from '../components/CustomSplashScreen';
+import { Colors } from '../constants/Colors';
+import { AppProvider, clearAuthStorage, useAppContext } from '../context/AppContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 function RootLayoutContent() {
   const { isReady } = useAppContext();
+  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
 
   useEffect(() => {
     // React Native yüklendiğinde varsayılan Expo splash ekranını hemen gizle
-    SplashScreen.hideAsync().catch(() => {});
+    SplashScreen.hideAsync().catch(() => { });
+
+    // Animasyonun en az 1.5 saniye (1500ms) görünmesini garanti et
+    const timer = setTimeout(() => {
+      setMinSplashTimeElapsed(true);
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, []);
 
-  if (!isReady) {
-    // Uygulama hazır olana kadar özel animasyonlu yükleme ekranını göster
+  const showCustomSplash = !isReady || !minSplashTimeElapsed;
+
+  if (showCustomSplash) {
+    // Uygulama hazır olana VE en az 1.5 saniye geçene kadar özel animasyonlu yükleme ekranını göster
     return <CustomSplashScreen />;
   }
 
   return (
-    <Stack screenOptions={{ 
+    <Stack screenOptions={{
       headerStyle: { backgroundColor: Colors.background },
       headerShadowVisible: false,
       headerTitleStyle: { color: Colors.text },
@@ -36,15 +45,15 @@ function RootLayoutContent() {
     }}>
       {/* Ana karşılama ekranı */}
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      
+
       {/* Giriş ekranı */}
       <Stack.Screen name="(auth)/login" options={{ title: 'Giriş Yap', headerShown: false }} />
       <Stack.Screen name="(auth)/role-selection" options={{ title: 'Hesap Tipi Seçimi', headerShadowVisible: false }} />
       <Stack.Screen name="(auth)/register" options={{ title: 'Kayıt Ol', headerShadowVisible: false }} />
-      
+
       {/* Ana tab bar navigasyonu */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      
+
       {/* Modallar / Stack Ekranları */}
       <Stack.Screen name="city-select" options={{ presentation: 'modal', title: 'Şehir Seç' }} />
       <Stack.Screen name="create-request" options={{ presentation: 'modal', title: 'Ev Arama Talebi Oluştur' }} />
@@ -56,7 +65,7 @@ function RootLayoutContent() {
       <Stack.Screen name="edit-profile" options={{ presentation: 'modal', title: 'Profili Düzenle' }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="reset-password" options={{ title: 'Şifre Sıfırla', headerShown: false }} />
-      
+
       {/* Legal & Policy Screens */}
       <Stack.Screen name="legal/kvkk" options={{ title: 'Gizlilik' }} />
       <Stack.Screen name="legal/privacy" options={{ title: 'Gizlilik' }} />
@@ -86,17 +95,17 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       </Text>
       <Text style={{ color: 'red', marginBottom: 20, textAlign: 'center' }}>{error.message}</Text>
       <Button title="Oturumu Temizle" onPress={async () => {
-         await clearAuthStorage();
-         if (typeof window !== 'undefined') {
-           window.localStorage.clear();
-           window.sessionStorage.clear();
-         }
-         try {
-           router.replace('/(auth)/login');
-         } catch (e) {
-           console.warn('Router navigation failed in ErrorBoundary', e);
-         }
-         retry();
+        await clearAuthStorage();
+        if (typeof window !== 'undefined') {
+          window.localStorage.clear();
+          window.sessionStorage.clear();
+        }
+        try {
+          router.replace('/(auth)/login');
+        } catch (e) {
+          console.warn('Router navigation failed in ErrorBoundary', e);
+        }
+        retry();
       }} />
     </View>
   );
