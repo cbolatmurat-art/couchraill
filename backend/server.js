@@ -734,7 +734,7 @@ app.get('/api/feed', async (req, res) => {
         COALESCE(lc.comment_count, 0) as "commentCount",
         CASE WHEN mll."userId" IS NOT NULL THEN true ELSE false END as "isLikedByMe",
         u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
-        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified"
+        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified", u."userType" as "owner_userType"
       FROM listings l
       LEFT JOIN users u ON l."hostId" = u.id OR l."ownerId" = u.id
       LEFT JOIN (SELECT "listingId", COUNT(*) as like_count FROM listing_likes GROUP BY "listingId") ll ON ll."listingId" = l.id
@@ -752,7 +752,7 @@ app.get('/api/feed', async (req, res) => {
         COALESCE(pc.comment_count, 0) as "commentCount",
         CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "isLikedByMe",
         u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
-        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified"
+        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified", u."userType" as "owner_userType"
       FROM posts p
       LEFT JOIN users u ON p."userId" = u.id
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
@@ -792,6 +792,7 @@ app.get('/api/feed', async (req, res) => {
           username: item.owner_username,
           profileImage: item.owner_profileImage,
           city: item.owner_city,
+          userType: item.owner_userType,
           identityVerified: isIdVerified,
           isFullyVerified
         }
@@ -978,141 +979,109 @@ app.get('/api/debug/all-listings', (req, res) => {
   })));
 });
 
-app.post('/api/listings', (req, res) => {
-  const { hostId, userId, userName, userEmail, userPhone, city, district, neighborhood, location, title, description, price, availableFrom, availableTo, images, guestStayDuration, isTimedListing, listingDurationDays, expiresAt } = req.body;
-  const db = readDB();
-
-  console.log("CREATE_LISTING_BODY", req.body);
-  
-  console.log('CREATE_LISTING_REQUEST', JSON.stringify({
-    userId: hostId,
-    userType: 'host',
-    title,
-    city,
-    location: district, // or whatever location was historically
-    rawBody: req.body
-  }, null, 2));
-  
-  const newListing = {
-    id: `l${Date.now()}`,
-    hostId,
-    ownerId: hostId, // Explicit mapping requested by user
-    ownerType: 'host', // Explicit mapping requested by user
-    userName,
-    userEmail,
-    userPhone,
-    city,
-    district,
-    neighborhood: neighborhood || '',
-    location: location || district || '',
-    title,
-    description,
-    price,
-    availableFrom,
-    availableTo,
-    images: images || [],
-    guestStayDuration: guestStayDuration || '',
-    isTimedListing: Boolean(isTimedListing),
-    listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
-    expiresAt: isTimedListing ? expiresAt : null,
-    createdAt: new Date().toISOString(),
-    active: true,
-    status: 'active',
-    deletedAt: null
-  };
-
-  newListing.isTimedListing = Boolean(req.body.isTimedListing);
-  newListing.listingDurationDays = req.body.isTimedListing ? Number(req.body.listingDurationDays) : null;
-  newListing.expiresAt = req.body.isTimedListing ? req.body.expiresAt : null;
-
-  console.log("CREATE_LISTING_FINAL_OBJECT", newListing);
-
-  db.listings.unshift(newListing);
-  writeDB(db);
-
-  console.log('CREATE_LISTING_SAVED', JSON.stringify({
-    listingId: newListing.id,
-    ownerId: newListing.hostId,
-    city: newListing.city,
-    location: newListing.district,
-    active: newListing.active,
-    status: newListing.status || 'active',
-    deletedAt: newListing.deletedAt || null,
-    isTimedListing: newListing.isTimedListing,
-    listingDurationDays: newListing.listingDurationDays,
-    expiresAt: newListing.expiresAt
-  }, null, 2));
-
-  res.json({ success: true, listing: newListing });
+app.get('/api/listings', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM listings WHERE active = true AND "deletedAt" IS NULL');
+    res.json(rows);
+  } catch (error) {
+    console.error('[GET_ALL_LISTINGS_ERROR]', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.delete('/api/listings/:id', (req, res) => {
-  const { userId } = req.body;
-  
-  console.log('REMOVE_LISTING_REQUEST', JSON.stringify({
-    userId,
-    listingId: req.params.id
-  }, null, 2));
+app.post('/api/listings', async (req, res) => {
+  try {
+    const { hostId, userId, userName, userEmail, userPhone, city, district, neighborhood, location, title, description, price, availableFrom, availableTo, images, guestStayDuration, isTimedListing, listingDurationDays, expiresAt, type } = req.body;
+    
+    console.log("CREATE_LISTING_BODY", req.body);
+    
+    const ownerId = hostId || userId;
+    if (!ownerId) {
+      return res.status(400).json({ success: false, error: 'hostId veya userId eksik.' });
+    }
 
-  const db = readDB();
-  const listingIndex = db.listings.findIndex(l => l.id === req.params.id);
-  
-  if (listingIndex > -1) {
-    const beforeActive = db.listings[listingIndex].active;
-    const isOwner = db.listings[listingIndex].hostId === userId;
+    const newListingId = `l${Date.now()}`;
+    const now = new Date().toISOString();
+    const finalExpiresAt = isTimedListing && expiresAt ? expiresAt : null;
+    const finalType = type || 'host_listing';
+    
+    const { rows } = await query(`
+      INSERT INTO listings (
+        id, "hostId", "ownerId", type, title, description, city, district, neighborhood, location,
+        images, "guestStayDuration", "isTimedListing", "listingDurationDays", "expiresAt",
+        "createdAt", active, status, "ownerName", "userName"
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15,
+        $16, $17, $18, $19, $20
+      ) RETURNING *
+    `, [
+      newListingId, ownerId, ownerId, finalType, title, description, city, district, neighborhood || '', location || district || '',
+      JSON.stringify(images || []), guestStayDuration || '', Boolean(isTimedListing), isTimedListing ? Number(listingDurationDays) : null, finalExpiresAt,
+      now, true, 'active', userName || null, userName || null
+    ]);
+
+    const newListing = rows[0];
+
+    try {
+      const db = readDB();
+      if (!db.listings) db.listings = [];
+      db.listings.unshift(newListing);
+      writeDB(db);
+      console.log('CREATE_LISTING_SAVED_DBJSON', newListing.id);
+    } catch (dbErr) {
+      console.error('Failed to save to db.json:', dbErr);
+    }
+
+    console.log('CREATE_LISTING_SAVED_PG', JSON.stringify({
+      listingId: newListing.id,
+      ownerId: newListing.hostId,
+      city: newListing.city,
+      isTimedListing: newListing.isTimedListing
+    }, null, 2));
+
+    res.json({ success: true, listing: newListing });
+  } catch (error) {
+    console.error('[POST_LISTING_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: İlan oluşturulamadı.' });
+  }
+});
+
+app.delete('/api/listings/:id', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const listingId = req.params.id;
+    
+    console.log('REMOVE_LISTING_REQUEST_PG', JSON.stringify({ userId, listingId }));
+
+    const { rows: listings } = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    }
+
+    const listing = listings[0];
+    const isOwner = listing.hostId === userId || listing.ownerId === userId;
 
     if (!isOwner) {
-      console.log('REMOVE_LISTING_RESULT', JSON.stringify({
-        found: true,
-        isOwner: false,
-        beforeActive,
-        afterActive: beforeActive,
-        status: db.listings[listingIndex].status,
-        deletedAt: db.listings[listingIndex].deletedAt
-      }, null, 2));
       return res.status(403).json({ success: false, error: 'Bu ilanı kaldırma yetkiniz yok.' });
     }
     
-    db.listings[listingIndex].active = false;
-    db.listings[listingIndex].status = 'removed';
-    db.listings[listingIndex].deletedAt = new Date().toISOString();
-    
-    // Notify guests with pending/accepted requests
-    const relatedRequests = db.requests.filter(r => r.listingId === req.params.id && (r.status === 'pending' || r.status === 'accepted'));
-    relatedRequests.forEach(r => {
-      createNotification(db, {
-        userId: r.userId,
-        type: 'listing_removed',
-        title: 'İlan Kaldırıldı',
-        message: 'Talep gönderdiğiniz bir ilan ev sahibi tarafından kaldırıldı.',
-        relatedId: req.params.id,
-        relatedType: 'listing'
-      });
-      // Optionally mark request as cancelled/rejected here, but plan didn't explicitly demand it
-    });
+    const now = new Date().toISOString();
+    await query(`
+      UPDATE listings 
+      SET active = false, status = 'removed', "deletedAt" = $1 
+      WHERE id = $2
+    `, [now, listingId]);
 
-    writeDB(db);
+    // Note: Request rejection logic for pending/accepted requests can be implemented via PostgreSQL here if needed.
+    // For now, setting the listing to inactive will naturally hide it.
 
-    console.log('REMOVE_LISTING_RESULT', JSON.stringify({
-      found: true,
-      isOwner: true,
-      beforeActive,
-      afterActive: false,
-      status: 'removed',
-      deletedAt: db.listings[listingIndex].deletedAt
-    }, null, 2));
-
+    console.log('REMOVE_LISTING_SUCCESS_PG', listingId);
     res.json({ success: true, message: 'İlan kaldırıldı.' });
-  } else {
-    console.log('REMOVE_LISTING_RESULT', JSON.stringify({
-      found: false,
-      isOwner: false,
-      beforeActive: null,
-      afterActive: null,
-      status: null,
-      deletedAt: null
-    }, null, 2));
-    res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+  } catch (error) {
+    console.error('[DELETE_LISTING_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: İlan kaldırılamadı.' });
   }
 });
 

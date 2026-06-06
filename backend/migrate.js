@@ -35,10 +35,25 @@ const migrateData = async () => {
     }
 
     console.log('[MIGRATE] Starting migration from db.json to PostgreSQL...');
-
     // 1. Users
     if (data.users) {
+      const migratedEmails = new Set();
+      const migratedPhones = new Set();
+      let migratedUsersCount = 0;
+
       for (const u of data.users) {
+        if (u.email && migratedEmails.has(u.email.toLowerCase())) {
+          console.warn(`[MIGRATE] Skipping user ${u.id} due to duplicate email: ${u.email}`);
+          continue;
+        }
+        if (u.phone && migratedPhones.has(u.phone)) {
+          console.warn(`[MIGRATE] Skipping user ${u.id} due to duplicate phone: ${u.phone}`);
+          continue;
+        }
+
+        if (u.email) migratedEmails.add(u.email.toLowerCase());
+        if (u.phone) migratedPhones.add(u.phone);
+
         await client.query(`
           INSERT INTO users (
             id, email, password, name, username, phone, "userType", city, "profileImage",
@@ -54,8 +69,9 @@ const migrateData = async () => {
           safeDate(u.updatedAt) || new Date().toISOString(), u.originalEmail || null, u.pushToken || null,
           u.identityVerified || false, safeDate(u.lastSeen) || null, u.isOnline || false, u.avatar || null, u.fullName || null, u.livingCity || null
         ]);
+        migratedUsersCount++;
       }
-      console.log(`[MIGRATE] Migrated ${data.users.length} users.`);
+      console.log(`[MIGRATE] Migrated ${migratedUsersCount} users (skipped ${data.users.length - migratedUsersCount} duplicates).`);
     }
 
     // 2. Listings
@@ -162,20 +178,32 @@ const migrateData = async () => {
     // Others (Follows, Blocks, Likes, Comments etc. can be added here if needed, but basic entities are covered)
     // We will do Follows and Blocks since they are important for feed
     if (data.follows) {
+      const migratedFollows = new Set();
       for (const f of data.follows) {
+        const key = `${f.followerUserId}_${f.followingUserId}`;
+        if (!f.followerUserId || !f.followingUserId || migratedFollows.has(key)) continue;
+        migratedFollows.add(key);
+
         await client.query(`
           INSERT INTO follows ("followerUserId", "followingUserId", "createdAt")
-          VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
+          VALUES ($1, $2, $3)
         `, [f.followerUserId, f.followingUserId, safeDate(f.createdAt) || new Date().toISOString()]);
       }
     }
     
     if (data.blocked_users) {
+      const migratedBlocks = new Set();
       for (const b of data.blocked_users) {
+        const blockerId = b.blockerId || b.blockerUserId;
+        const blockedId = b.blockedId || b.blockedUserId;
+        const key = `${blockerId}_${blockedId}`;
+        if (!blockerId || !blockedId || migratedBlocks.has(key)) continue;
+        migratedBlocks.add(key);
+
         await client.query(`
           INSERT INTO blocked_users ("blockerId", "blockedId", "createdAt")
-          VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
-        `, [b.blockerId, b.blockedId, safeDate(b.createdAt) || new Date().toISOString()]);
+          VALUES ($1, $2, $3)
+        `, [blockerId, blockedId, safeDate(b.createdAt) || new Date().toISOString()]);
       }
     }
 

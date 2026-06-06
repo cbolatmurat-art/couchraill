@@ -12,7 +12,7 @@ import { API_BASE_URL } from '../../constants/config';
 import { DeviceEventEmitter } from 'react-native';
 
 export default function CreateListingScreen() {
-  const { currentUser, refreshData } = useAppContext();
+  const { currentUser, refreshData, setListings, fetchListingsAndRequests } = useAppContext();
   const router = useRouter();
 
   if (currentUser?.userType !== 'host') {
@@ -87,6 +87,18 @@ export default function CreateListingScreen() {
         });
 
         if (response.ok) {
+          if (setListings) {
+            setListings(prev => {
+              const updated = prev.map(l => l.id === editId ? { ...l, ...putPayload } : l);
+              import('@react-native-async-storage/async-storage').then(module => {
+                 module.default.setItem('misafirimol_houseListings', JSON.stringify(updated));
+              });
+              return updated;
+            });
+          }
+          if (fetchListingsAndRequests) {
+            fetchListingsAndRequests();
+          }
           DeviceEventEmitter.emit('refresh_user_posts');
           DeviceEventEmitter.emit('refresh_request_index');
           showToast("İlan güncellendi.", "success");
@@ -101,7 +113,7 @@ export default function CreateListingScreen() {
           : null;
 
         const basePayload = {
-          type: "listing",
+          type: "host_listing",
           title,
           city,
           district,
@@ -144,15 +156,25 @@ export default function CreateListingScreen() {
         }
         
         // Success control as requested
-        const isSuccess = response.ok === true || response.status === 200 || response.status === 201 || data.success === true || !!data.listing || !!data.data;
+        const isSuccess = response.ok && (data.success === true || !!data.listing || !!data.data);
 
         if (isSuccess) {
           console.log("SAVED_LISTING", data.listing || data.data || data);
+          const newListing = data.listing || data.data || listingData;
+          if (setListings && newListing) {
+            setListings(prev => {
+              const updated = [newListing, ...prev];
+              import('@react-native-async-storage/async-storage').then(module => {
+                 module.default.setItem('misafirimol_houseListings', JSON.stringify(updated));
+              });
+              return updated;
+            });
+          }
+          if (fetchListingsAndRequests) {
+            fetchListingsAndRequests();
+          }
           DeviceEventEmitter.emit('refresh_user_posts');
           DeviceEventEmitter.emit('refresh_request_index');
-          if (refreshData) {
-            refreshData();
-          }
           
           showToast("İlan paylaşıldı.", "success");
           setTimeout(() => router.back(), 1500);

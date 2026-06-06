@@ -57,7 +57,7 @@ export default function MyListingsScreen() {
     }
   };
 
-  const myListings = listings.filter(l => l.hostId === currentUser.id);
+  const myListings = listings.filter(l => l.ownerId === currentUser.id || l.userId === currentUser.id || l.hostId === currentUser.id);
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>

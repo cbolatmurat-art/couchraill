@@ -36,7 +36,9 @@ interface AppContextType {
   updateRequestStatus: (requestId: string, status: 'accepted' | 'rejected') => void;
   
   listings: Listing[];
+  setListings: React.Dispatch<React.SetStateAction<Listing[]>>;
   createListing: (listing: Omit<Listing, 'id' | 'hostId' | 'createdAt'>) => Promise<void>;
+  fetchListingsAndRequests: () => Promise<void>;
   
   conversations: Conversation[];
   messages: Message[];
@@ -134,8 +136,15 @@ async function safeFetch(url: string, options: RequestInit = {}) {
       } catch(e) {}
       
       if (!isBlockError) {
-        DeviceEventEmitter.emit('auth_error');
-        const err = new Error("AUTH_ERROR");
+        let genericErrorMsg = "Yetkilendirme Hatası (401/403)";
+        try {
+          const cloned = res.clone();
+          const d = await cloned.json();
+          if (d?.error) genericErrorMsg = d.error;
+          else if (d?.message) genericErrorMsg = d.message;
+        } catch(e) {}
+        
+        const err = new Error(genericErrorMsg);
         (err as any).status = res.status;
         throw err;
       } else {
@@ -1669,7 +1678,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setAuthLoading,
       currentUser, login, register, logout, updateProfile, updateUserCity, submitVerificationRequest, deleteAccount, deleteVerificationData,
       requests, createRequest, updateRequestStatus,
-      listings, createListing,
+      listings, setListings, createListing, fetchListingsAndRequests,
       conversations, messages, unreadMessageCount,
       activeConversationId, setActiveConversationId,
       typingStatuses, sendTypingStatus,

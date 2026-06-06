@@ -330,7 +330,6 @@ export default function FeedScreen() {
       );
     }
 
-    
     if (errorMsg) {
       return (
         <View style={styles.emptyState}>
@@ -341,12 +340,22 @@ export default function FeedScreen() {
       );
     }
 
-    if (!isFollowingAnyone) {
+    if (activeTab === 'hosts') {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="home-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Henüz ev sahibi ilanı yok.</Text>
+          <Text style={styles.emptyText}>Ev sahipleri misafir kabul durumunu paylaştığında burada görünecek.</Text>
+        </View>
+      );
+    }
+
+    if (!isFollowingAnyone && activeTab === 'community') {
       return (
         <View style={styles.emptyState}>
           <Ionicons name="people-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Henüz kimseyi takip etmiyorsun.</Text>
-          <Text style={styles.emptyText}>Kullanıcıları takip ettiğinde ilanları burada görünecek.</Text>
+          <Text style={styles.emptyText}>Kullanıcıları takip ettiğinde paylaşımları burada görünecek.</Text>
         </View>
       );
     }
@@ -390,7 +399,7 @@ export default function FeedScreen() {
   };
 
   const displayFeed = isGuest ? feed.filter((item: any) => {
-    if (item.type !== 'listing' && item.contentType !== 'listing') return false;
+    if (item.type !== 'listing' && item.contentType !== 'listing' && item.type !== 'host_listing') return false;
     
     const owner = item.owner || item.user || {};
     const ownerType = String(owner.userType || "").toLowerCase().trim();
@@ -450,6 +459,7 @@ export default function FeedScreen() {
           
           const isListing =
             itemType === "listing" ||
+            itemType === "host_listing" ||
             item.isListing === true;
 
           const isEvent =

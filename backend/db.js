@@ -101,7 +101,7 @@ const initDB = async () => {
         password VARCHAR(255),
         name VARCHAR(255),
         username VARCHAR(255),
-        phone VARCHAR(255) UNIQUE,
+        phone VARCHAR(255),
         "userType" VARCHAR(50),
         city VARCHAR(255),
         "profileImage" TEXT,
@@ -136,9 +136,15 @@ const initDB = async () => {
         description TEXT,
         city VARCHAR(255),
         district VARCHAR(255),
+        neighborhood VARCHAR(255),
+        location VARCHAR(255),
         address TEXT,
         images JSONB DEFAULT '[]',
         "guestsCount" INTEGER,
+        "guestStayDuration" VARCHAR(255),
+        "isTimedListing" BOOLEAN DEFAULT false,
+        "listingDurationDays" INTEGER,
+        "expiresAt" TIMESTAMP,
         rules JSONB DEFAULT '[]',
         amenities JSONB DEFAULT '[]',
         status VARCHAR(50),
@@ -151,6 +157,21 @@ const initDB = async () => {
         text TEXT
       )
     `);
+    
+    // Safety ALTER TABLE for existing DB
+    try {
+      await client.query(`
+        ALTER TABLE listings 
+        ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS location VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER,
+        ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP;
+      `);
+    } catch (err) {
+      console.warn('[DB WARNING] Could not alter listings table for new columns:', err.message);
+    }
 
     // Requests
     await client.query(`
@@ -373,6 +394,41 @@ const initDB = async () => {
 
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');
+    
+    // Sync listings from db.json into postgres
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dbPath = path.join(__dirname, 'db.json');
+      if (fs.existsSync(dbPath)) {
+        const dbData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+        if (dbData.listings && Array.isArray(dbData.listings)) {
+          for (const listing of dbData.listings) {
+            const { rows } = await pool.query('SELECT id FROM listings WHERE id = $1', [listing.id]);
+            if (rows.length === 0) {
+              await pool.query(`
+                INSERT INTO listings (
+                  id, "hostId", "ownerId", type, title, description, city, district, neighborhood, location,
+                  images, "guestStayDuration", "isTimedListing", "listingDurationDays", "expiresAt",
+                  "createdAt", active, status, "ownerName", "userName"
+                ) VALUES (
+                  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                  $11, $12, $13, $14, $15,
+                  $16, $17, $18, $19, $20
+                )
+              `, [
+                listing.id, listing.hostId || listing.ownerId, listing.ownerId || listing.hostId, listing.type || 'listing', listing.title, listing.description, listing.city, listing.district, listing.neighborhood || '', listing.location || listing.district || '',
+                JSON.stringify(listing.images || []), listing.guestStayDuration || '', Boolean(listing.isTimedListing), listing.isTimedListing ? Number(listing.listingDurationDays) : null, listing.expiresAt || null,
+                listing.createdAt || new Date().toISOString(), listing.active !== false, listing.status || 'active', listing.ownerName || null, listing.userName || null
+              ]);
+            }
+          }
+          console.log(`[DB] Synced listings from db.json to PostgreSQL.`);
+        }
+      }
+    } catch (e) {
+      console.error('[DB] Error syncing listings to PostgreSQL:', e);
+    }
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[DB] Error initializing PostgreSQL tables:', e);
