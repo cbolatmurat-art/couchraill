@@ -167,7 +167,10 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255),
         ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false,
         ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER,
-        ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP;
+        ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS text TEXT;
       `);
     } catch (err) {
       console.warn('[DB WARNING] Could not alter listings table for new columns:', err.message);
