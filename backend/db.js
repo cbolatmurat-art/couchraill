@@ -1,6 +1,24 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+console.log('--- DEBUG ENV START ---');
+console.log('1. CWD (Çalışma Dizini):', process.cwd());
+console.log('2. RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
+console.log('3. NODE_ENV:', process.env.NODE_ENV);
+console.log('4. DATABASE Kelimesi İçeren Değişkenler:', Object.keys(process.env).filter(k => k.includes("DATABASE") || k.includes("PG") || k.includes("DB")));
+console.log('5. DATABASE_URL var mı?:', process.env.DATABASE_URL !== undefined ? 'EVET' : 'HAYIR');
+console.log('6. DATABASE_URL veri tipi:', typeof process.env.DATABASE_URL);
+
+if (process.env.DATABASE_URL) {
+  try {
+    const parsed = new URL(process.env.DATABASE_URL);
+    console.log(`7. URL Parse Başarılı. Host: ${parsed.host}, Protocol: ${parsed.protocol}`);
+  } catch (e) {
+    console.log(`7. URL PARSE HATASI: URL geçerli formatta değil! Gelen Değer uzunluğu: ${String(process.env.DATABASE_URL).length}`);
+  }
+}
+console.log('--- DEBUG ENV END ---');
+
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
 let dbUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL || process.env.POSTGRES_URL || process.env.DB_URL;
