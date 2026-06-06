@@ -1047,6 +1047,27 @@ app.post('/api/listings', async (req, res) => {
   }
 });
 
+app.get('/api/migrate-db', async (req, res) => {
+  const { query } = require('./db');
+  try {
+    await query(`
+      ALTER TABLE listings 
+      ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS location VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER,
+      ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS text TEXT;
+    `);
+    res.json({ success: true, message: 'Migration applied' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, stack: err.stack });
+  }
+});
+
 app.delete('/api/listings/:id', async (req, res) => {
   try {
     const { userId } = req.body;
