@@ -14,19 +14,27 @@ if (!dbUrl && process.env.PG_HOST) {
 let pool;
 let isPgMem = false;
 
-if (dbUrl) {
-  pool = new Pool({
-    connectionString: dbUrl,
-    ssl: isProduction ? { rejectUnauthorized: false } : false
-  });
-} else {
-  // If no DB URL is provided, default to localhost for connection attempt
+if (!dbUrl) {
+  if (isProduction) {
+    console.error('[DB FATAL] NO DATABASE_URL PROVIDED IN PRODUCTION. Crashing intentionally so Railway detects failure.');
+    process.exit(1);
+  }
+  // If no DB URL is provided in local dev, default to localhost for connection attempt
   dbUrl = 'postgresql://postgres:postgres@127.0.0.1:5432/misafirimol';
-  pool = new Pool({
-    connectionString: dbUrl,
-    ssl: isProduction ? { rejectUnauthorized: false } : false
-  });
 }
+
+try {
+  const urlObj = new URL(dbUrl);
+  urlObj.password = '***';
+  console.log(`[DB INIT] Target DB URL detected: ${urlObj.toString()}`);
+} catch (e) {
+  console.log(`[DB INIT] Target DB URL detected: (unparseable URL format)`);
+}
+
+pool = new Pool({
+  connectionString: dbUrl,
+  ssl: isProduction ? { rejectUnauthorized: false } : false
+});
 
 const setupPgMemFallback = () => {
   console.log('⚠️ [DB WARNING] Real PostgreSQL connection failed or missing. Falling back to in-memory PostgreSQL (pg-mem) for local testing.');
