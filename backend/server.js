@@ -8,6 +8,8 @@ const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
+const BUILD_ID = Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6);
+
 console.log("EMAIL_PROVIDER:", process.env.EMAIL_PROVIDER);
 console.log("BREVO_API_KEY_EXISTS:", !!process.env.BREVO_API_KEY);
 if (process.env.BREVO_API_KEY) {
@@ -28,7 +30,12 @@ const { pool, query, initDB } = require('./db');
 const { migrateData } = require('./migrate');
 
 // Initialize PostgreSQL and Migrate existing data if needed
-initDB().then(() => migrateData()).catch(console.error);
+initDB()
+  .then(() => {
+    console.log(`[STARTUP] API Started. BuildID: ${process.env.RAILWAY_DEPLOYMENT_ID || BUILD_ID}`);
+    return migrateData();
+  })
+  .catch(console.error);
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
@@ -40,7 +47,14 @@ app.get("/", (req, res) => {
 app.get("/api/health", (req, res) => {
   console.log("HEALTH_CHECK_HIT");
   const { isPgMem } = require('./db');
-  res.status(200).json({ success: true, message: "Couchraill API running", dbMode: isPgMem ? "pg-mem (Fallback Mode)" : "PostgreSQL" });
+  res.status(200).json({ 
+    success: true, 
+    message: "Couchraill API running", 
+    dbMode: isPgMem ? "pg-mem (NO DATABASE_URL)" : "PostgreSQL",
+    buildId: process.env.RAILWAY_DEPLOYMENT_ID || BUILD_ID,
+    uptime: process.uptime(),
+    deploymentMarker: "DEBUG_MARKER_V1"
+  });
 });
 
 app.use(cors({
@@ -339,6 +353,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const normalizedPhone = String(phone).trim();
+    
+    const { isPgMem } = require('./db');
+    console.log(`[REGISTER_HIT] email: ${normalizedEmail}, dbMode: ${isPgMem ? 'pg-mem' : 'PostgreSQL'}`);
 
     const { rows: existingRows } = await query(
       'SELECT id, email, phone FROM users WHERE LOWER(email) = $1 OR phone = $2', 
@@ -371,6 +388,8 @@ app.post('/api/auth/register', async (req, res) => {
       false, joinedDate, null, false, false, 'unverified',
       true, false, name
     ]);
+
+    console.log(`[REGISTER_SUCCESS] inserted user id: ${newId}, email: ${normalizedEmail}`);
 
     res.json({ 
       success: true, 
