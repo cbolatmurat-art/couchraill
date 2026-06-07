@@ -2959,6 +2959,8 @@ app.get('/api/users/:id/public', async (req, res) => {
       phoneVerified: user.phoneVerified,
       userType: user.userType,
       about: user.about || null,
+      isOnline: user.isOnline || false,
+      lastSeen: user.lastSeen || user.updatedAt || user.createdAt || null,
       ratingAverage,
       ratingCount,
       recentReviews,

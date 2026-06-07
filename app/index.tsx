@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
@@ -11,11 +11,13 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const { currentUser } = useAppContext();
 
-  useEffect(() => {
-    if (currentUser) {
-      router.replace('/(tabs)');
-    }
-  }, [currentUser]);
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser) {
+        router.replace('/(tabs)');
+      }
+    }, [currentUser])
+  );
 
   return (
     <SafeAreaView style={styles.container}>

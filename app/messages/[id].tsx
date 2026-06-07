@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -23,7 +23,8 @@ export default function ChatScreen() {
     typingStatuses,
     sendTypingStatus,
     getBlockStatus,
-    addMessageReaction
+    addMessageReaction,
+    getPublicProfile
   } = useAppContext();
   
   const [text, setText] = useState(initialMessage || '');
@@ -31,11 +32,30 @@ export default function ChatScreen() {
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
   const [longPressedMessage, setLongPressedMessage] = useState<Message | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [localOtherUserStatus, setLocalOtherUserStatus] = useState<{ isOnline: boolean, lastSeen: string | null }>({ isOnline: false, lastSeen: null });
   
   const insets = useSafeAreaInsets();
   
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      });
+      const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardHeight(0);
+      });
+
+      return () => {
+        showSubscription.remove();
+        hideSubscription.remove();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -61,14 +81,14 @@ export default function ChatScreen() {
   const conversation = conversations.find(c => c.id === id);
   if (!conversation) {
     return (
-      <SafeAreaView style={styles.container} edges={['right', 'bottom', 'left']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: Colors.cardBackground }]} edges={['top', 'right', 'left']}>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={styles.header}>
           <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/messages')} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
         </View>
-        <View style={styles.errorContainer}>
+        <View style={[styles.errorContainer, { backgroundColor: Colors.background }]}>
           <Text style={styles.errorText}>Sohbet bulunamadı.</Text>
         </View>
       </SafeAreaView>
@@ -89,6 +109,31 @@ export default function ChatScreen() {
     };
     fetchBlock();
   }, [otherUserId]);
+
+  useEffect(() => {
+    if (conversation?.otherUserStatus) {
+      setLocalOtherUserStatus(conversation.otherUserStatus);
+    }
+  }, [conversation?.otherUserStatus]);
+
+  useEffect(() => {
+    if (!id || !currentUser || !otherUserId) return;
+    const fetchOtherUserStatus = async () => {
+      const res = await getPublicProfile(otherUserId);
+      if (res && res.success && res.profile) {
+        setLocalOtherUserStatus({
+          isOnline: res.profile.isOnline || false,
+          lastSeen: res.profile.lastSeen || null
+        });
+      }
+    };
+    
+    // Initial fetch
+    fetchOtherUserStatus();
+    
+    const interval = setInterval(fetchOtherUserStatus, 10000);
+    return () => clearInterval(interval);
+  }, [id, currentUser, otherUserId]);
 
   const messages = getMessagesForConversation(id);
 
@@ -160,14 +205,20 @@ export default function ChatScreen() {
     }
   };
 
-  const formatLastSeen = (timestamp?: string) => {
-    if (!timestamp) return 'Çevrimdışı';
+  const formatLastSeen = (timestamp?: string | null) => {
+    if (!timestamp) return 'Son görülme: bilinmiyor';
     try {
       const date = new Date(timestamp);
-      const today = new Date();
-      const isToday = date.getDate() === today.getDate() &&
-                      date.getMonth() === today.getMonth() &&
-                      date.getFullYear() === today.getFullYear();
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) return 'Son görülme: az önce';
+      if (diffMins < 60) return `Son görülme: ${diffMins} dk önce`;
+      
+      const isToday = date.getDate() === now.getDate() &&
+                      date.getMonth() === now.getMonth() &&
+                      date.getFullYear() === now.getFullYear();
       
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
@@ -181,7 +232,7 @@ export default function ChatScreen() {
         return `Son görülme: ${day}.${month} ${timeStr}`;
       }
     } catch (e) {
-      return 'Çevrimdışı';
+      return 'Son görülme: bilinmiyor';
     }
   };
 
@@ -323,52 +374,56 @@ export default function ChatScreen() {
     return <MessageItem item={item} isHighlighted={isHighlighted} originalMessageExists={originalMessageExists} />;
   };
 
-  const otherUserStatus = conversation.otherUserStatus || { isOnline: false, lastSeen: null };
   const isOtherUserTyping = typingStatuses[id]?.[otherUserId] || false;
 
   return (
-    <SafeAreaView style={styles.container} edges={['right', 'bottom', 'left']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: Colors.cardBackground }]} edges={['top', 'right', 'left']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/messages')} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.headerInfo}
-          onPress={() => router.push(`/user/${otherUserId}`)}
-        >
-          <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
-          </View>
-          <View>
-            <Text style={styles.headerName}>{otherUserName}</Text>
-            {isOtherUserTyping ? (
-              <Text style={styles.typingStatus}>Yazıyor...</Text>
-            ) : otherUserStatus.isOnline ? (
-              <View style={styles.onlineContainer}>
-                <View style={styles.onlineDot} />
-                <Text style={styles.onlineStatus}>Çevrimiçi</Text>
-              </View>
-            ) : (
-              <Text style={styles.offlineStatus}>
-                {formatLastSeen(otherUserStatus.lastSeen)}
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
-
+      
       <KeyboardAvoidingView 
-        style={styles.chatContainer} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/messages')} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerInfo}
+            onPress={() => router.push(`/user/${otherUserId}`)}
+          >
+            <View style={styles.headerAvatar}>
+              <Text style={styles.headerAvatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View>
+              <Text style={styles.headerName}>{otherUserName}</Text>
+              {isOtherUserTyping ? (
+                <Text style={styles.typingStatus}>Yazıyor...</Text>
+              ) : localOtherUserStatus.isOnline ? (
+                <View style={styles.onlineContainer}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.onlineStatus}>Çevrimiçi</Text>
+                </View>
+              ) : (
+                <Text style={styles.offlineStatus}>
+                  {formatLastSeen(localOtherUserStatus.lastSeen)}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.chatContainer, { backgroundColor: Colors.background }]}>
+
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={item => item.id}
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
+          keyboardShouldPersistTaps="handled"
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
@@ -383,7 +438,7 @@ export default function ChatScreen() {
             <Text style={styles.blockedText}>Bu kullanıcıyla mesajlaşamazsınız.</Text>
           </View>
         ) : (
-          <View style={styles.inputWrapper}>
+          <View style={[styles.inputWrapper, { paddingBottom: Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight + 10 : 0 }]}>
             {replyingToMessage && (
             <View style={styles.replyPreviewContainer}>
               {console.log("REPLY_BAR_SELECTED:", replyingToMessage)}
@@ -419,6 +474,7 @@ export default function ChatScreen() {
             </View>
           </View>
         )}
+        </View>
       </KeyboardAvoidingView>
 
       <Modal
