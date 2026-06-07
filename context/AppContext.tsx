@@ -1173,6 +1173,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (apiResult.conversation) {
          setConversations(prev => prev.map(c => c.id === conversationId ? apiResult.conversation : c));
       }
+
+      // Restore the conversation if it was hidden
+      unhideConversationForCurrentUser(conversationId);
     } else {
       const conv = conversations.find(c => c.id === conversationId);
       if (!conv) return;
@@ -1361,6 +1364,42 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       console.error("hideConversationForCurrentUser error:", error);
       return { success: false, error: error.message || 'Sohbet silinemedi' };
+    }
+  };
+
+  const unhideConversationForCurrentUser = async (conversationId: string) => {
+    try {
+      if (!currentUser?.id || !conversationId) return;
+
+      const deletedKey = `deleted_conversations_${currentUser.id}`;
+      
+      // Update local AsyncStorage and React State instantly
+      try {
+        const raw = await AsyncStorage.getItem(deletedKey);
+        const ids = raw ? JSON.parse(raw) : [];
+        if (ids.includes(conversationId)) {
+          const nextIds = ids.filter((id: string) => id !== conversationId);
+          await AsyncStorage.setItem(deletedKey, JSON.stringify(nextIds));
+        }
+        setLocalHiddenConversations(prev => prev.filter(id => id !== conversationId));
+      } catch (e) {
+        console.error("AsyncStorage unhide error:", e);
+      }
+
+      // Try saving to backend profile silently
+      const hiddenConversations = Array.isArray(currentUser.hiddenConversations)
+        ? currentUser.hiddenConversations
+        : [];
+
+      if (hiddenConversations.includes(conversationId)) {
+        const updatedHiddenConversations = hiddenConversations.filter(id => id !== conversationId);
+        updateProfile({
+          hiddenConversations: updatedHiddenConversations
+        }).catch(e => console.error("updateProfile background error:", e));
+      }
+
+    } catch (error: any) {
+      console.error("unhideConversationForCurrentUser error:", error);
     }
   };
 

@@ -646,6 +646,10 @@ app.put('/api/users/profile', async (req, res) => {
       updates.phoneVerified = false;
     }
 
+    if (updates.name) {
+      updates.fullName = updates.name;
+    }
+
     const setKeys = [];
     const setValues = [];
     let paramIndex = 1;
@@ -1894,7 +1898,7 @@ app.delete('/api/users/me/verification-data', (req, res) => {
 });
 
 // ---- CONVERSATIONS & MESSAGES ----
-app.get('/api/conversations/:userId', (req, res) => {
+app.get('/api/conversations/:userId', async (req, res) => {
   const { userId } = req.params;
   const db = readDB();
   if (!userId) return res.json([]);
@@ -1903,17 +1907,29 @@ app.get('/api/conversations/:userId', (req, res) => {
     .filter(c => c.participantIds.includes(userId))
     .sort((a, b) => new Date(b.lastMessageAt || b.createdAt) - new Date(a.lastMessageAt || a.createdAt));
     
-  const populated = userConversations.map(c => {
+  const populated = await Promise.all(userConversations.map(async c => {
     const otherUserId = c.participantIds.find(id => id !== userId);
-    const otherUser = db.users.find(u => u.id === otherUserId);
+    const otherUser = await findUserByAnyIdentifier(otherUserId, db);
+    const currentUserInfo = await findUserByAnyIdentifier(userId, db);
+    
     return {
       ...c,
+      participantNames: {
+        ...(c.participantNames || {}),
+        [otherUserId]: otherUser ? (otherUser.name || otherUser.fullName || otherUser.username) : 'Bilinmeyen Kullanıcı',
+        [userId]: currentUserInfo ? (currentUserInfo.name || currentUserInfo.fullName || currentUserInfo.username) : 'Bilinmeyen Kullanıcı'
+      },
+      participantProfiles: {
+        ...(c.participantProfiles || {}),
+        [otherUserId]: otherUser ? (otherUser.profileImage || otherUser.avatar || null) : null,
+        [userId]: currentUserInfo ? (currentUserInfo.profileImage || currentUserInfo.avatar || null) : null
+      },
       otherUserStatus: otherUser ? {
         isOnline: otherUser.isOnline || false,
         lastSeen: otherUser.lastSeen || null
       } : { isOnline: false, lastSeen: null }
     };
-  });
+  }));
     
   res.json(populated);
 });
