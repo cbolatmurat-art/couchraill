@@ -48,13 +48,8 @@ interface VerificationRequest {
   userPhone: string;
 }
 
-// Mock Data for Dashboard
-const MOCK_COMPLAINTS = [
-  { id: '1', type: 'Kullanıcı Şikayeti', target: '@cbolatmurat', reporter: '@ali_veli', reason: 'Sahte Profil', desc: 'Profil fotoğrafı ve bilgileri tamamen başka birine ait.', date: '2026-06-07 14:20', status: 'pending', priority: 'Yüksek' },
-  { id: '2', type: 'İlan Şikayeti', target: 'Merkezde Kiralık Oda', reporter: '@ayse_yilmaz', reason: 'Yanıltıcı İçerik', desc: 'İlan açıklaması ile resimler uyuşmuyor, evi gittim gördüm çok kötüydü.', date: '2026-06-06 09:15', status: 'investigating', priority: 'Orta' },
-  { id: '3', type: 'Gönderi Şikayeti', target: 'Post ID: #84920', reporter: '@mehmet_k', reason: 'Uygunsuz Dil', desc: 'Gönderide küfür ve hakaret içerikli kelimeler var.', date: '2026-06-05 18:30', status: 'resolved', priority: 'Düşük' },
-  { id: '4', type: 'Mesaj Şikayeti', target: 'Sohbet: @cbolatmurat', reporter: '@zeynep_s', reason: 'Taciz', desc: 'Sürekli rahatsız edici mesajlar atıyor.', date: '2026-06-07 10:05', status: 'pending', priority: 'Yüksek' },
-];
+// Empty Data for Dashboard
+const MOCK_COMPLAINTS: any[] = [];
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -290,12 +285,12 @@ export default function AdminScreen() {
       <View style={styles.gridContainer}>
         <View style={styles.metricCard}>
           <View style={styles.metricIconBox}><Ionicons name="people" size={24} color="#4F46E5" /></View>
-          <Text style={styles.metricValue}>12,458</Text>
+          <Text style={styles.metricValue}>0</Text>
           <Text style={styles.metricLabel}>Toplam Kullanıcı</Text>
         </View>
         <View style={styles.metricCard}>
           <View style={[styles.metricIconBox, { backgroundColor: '#FEF2F2' }]}><Ionicons name="warning" size={24} color="#EF4444" /></View>
-          <Text style={styles.metricValue}>34</Text>
+          <Text style={styles.metricValue}>0</Text>
           <Text style={styles.metricLabel}>Bekleyen Şikayetler</Text>
         </View>
         <View style={styles.metricCard}>
@@ -305,18 +300,18 @@ export default function AdminScreen() {
         </View>
         <View style={styles.metricCard}>
           <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}><Ionicons name="home" size={24} color="#10B981" /></View>
-          <Text style={styles.metricValue}>856</Text>
+          <Text style={styles.metricValue}>0</Text>
           <Text style={styles.metricLabel}>Aktif İlanlar</Text>
         </View>
         <View style={styles.metricCard}>
           <View style={[styles.metricIconBox, { backgroundColor: '#F3E8FF' }]}><Ionicons name="newspaper" size={24} color="#8B5CF6" /></View>
-          <Text style={styles.metricValue}>142</Text>
-          <Text style={styles.metricLabel}>Bugünkü Gönderiler</Text>
+          <Text style={styles.metricValue}>0</Text>
+          <Text style={styles.metricLabel}>Gönderi Sayısı</Text>
         </View>
         <View style={styles.metricCard}>
           <View style={[styles.metricIconBox, { backgroundColor: '#ECFEFF' }]}><Ionicons name="calendar" size={24} color="#06B6D4" /></View>
-          <Text style={styles.metricValue}>18</Text>
-          <Text style={styles.metricLabel}>Bugünkü Etkinlikler</Text>
+          <Text style={styles.metricValue}>0</Text>
+          <Text style={styles.metricLabel}>Etkinlik Sayısı</Text>
         </View>
       </View>
     </ScrollView>
@@ -350,7 +345,8 @@ export default function AdminScreen() {
           {filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="shield-checkmark" size={48} color="#CBD5E1" />
-              <Text style={styles.emptyStateText}>Bu kategoride şikayet bulunmuyor.</Text>
+              <Text style={styles.emptyStateText}>Henüz şikayet bulunmuyor.</Text>
+              <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>Yeni şikayetler burada görünecek.</Text>
             </View>
           ) : (
             filtered.map(c => (
@@ -414,7 +410,7 @@ export default function AdminScreen() {
         ) : requests.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="document-text" size={48} color="#CBD5E1" />
-            <Text style={styles.emptyStateText}>Bekleyen başvuru bulunmuyor.</Text>
+            <Text style={styles.emptyStateText}>Bekleyen kimlik doğrulama bulunmuyor.</Text>
           </View>
         ) : (
           requests.map(req => {
@@ -488,11 +484,11 @@ export default function AdminScreen() {
     </View>
   );
 
-  const renderPlaceholder = (title: string, icon: keyof typeof Ionicons.glyphMap) => (
+  const renderPlaceholder = (title: string, icon: keyof typeof Ionicons.glyphMap, emptyMessage: string) => (
     <View style={styles.placeholderContainer}>
       <Ionicons name={icon} size={64} color="#E2E8F0" />
       <Text style={styles.placeholderTitle}>{title}</Text>
-      <Text style={styles.placeholderDesc}>Bu bölüm henüz yapım aşamasındadır. Daha sonra API entegrasyonu ile listelenecektir.</Text>
+      <Text style={styles.placeholderDesc}>{emptyMessage}</Text>
     </View>
   );
 
@@ -514,7 +510,7 @@ export default function AdminScreen() {
         <View style={[styles.sidebar, !isDesktop && styles.sidebarMobile]}>
           <View style={styles.sidebarHeader}>
             <Ionicons name="shield-checkmark" size={28} color="#4F46E5" />
-            <Text style={styles.sidebarTitle}>MisafirimOl Admin</Text>
+            <Text style={styles.sidebarTitle}>Yönetim Paneli</Text>
             {!isDesktop && (
               <Pressable onPress={() => setSidebarOpen(false)} style={{ marginLeft: 'auto' }}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
@@ -553,13 +549,6 @@ export default function AdminScreen() {
             </Pressable>
           )}
           <View style={{ flex: 1 }} />
-          <View style={styles.headerProfile}>
-            <View style={styles.headerAvatar}><Text style={styles.headerAvatarText}>A</Text></View>
-            <View style={isWeb && width < 600 ? { display: 'none' } : {}}>
-              <Text style={styles.headerName}>Admin User</Text>
-              <Text style={styles.headerRole}>Süper Yönetici</Text>
-            </View>
-          </View>
         </View>
 
         {/* Dynamic Content */}
@@ -567,11 +556,11 @@ export default function AdminScreen() {
           {activeTab === 'overview' && renderOverview()}
           {activeTab === 'moderation' && renderModeration()}
           {activeTab === 'verifications' && renderVerifications()}
-          {activeTab === 'listings' && renderPlaceholder('İlan Yönetimi', 'home')}
-          {activeTab === 'posts' && renderPlaceholder('Gönderi Yönetimi', 'newspaper')}
-          {activeTab === 'events' && renderPlaceholder('Etkinlik Yönetimi', 'calendar')}
-          {activeTab === 'notifications' && renderPlaceholder('Bildirim Merkezi', 'notifications')}
-          {activeTab === 'settings' && renderPlaceholder('Sistem Ayarları', 'settings')}
+          {activeTab === 'listings' && renderPlaceholder('İlanlar', 'home', 'Henüz ilan bulunmuyor.')}
+          {activeTab === 'posts' && renderPlaceholder('Gönderiler', 'newspaper', 'Henüz gönderi bulunmuyor.')}
+          {activeTab === 'events' && renderPlaceholder('Etkinlikler', 'calendar', 'Henüz etkinlik bulunmuyor.')}
+          {activeTab === 'notifications' && renderPlaceholder('Bildirimler', 'notifications', 'Henüz bildirim bulunmuyor.')}
+          {activeTab === 'settings' && renderPlaceholder('Ayarlar', 'settings', 'Henüz ayar bulunmuyor.')}
         </View>
       </View>
 
