@@ -4167,6 +4167,38 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
+app.delete('/api/events/:eventId', async (req, res) => {
+  const { eventId } = req.params;
+  const { userId } = req.body;
+  
+  if (!eventId || !userId) {
+    return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
+  }
+
+  try {
+    let resolvedUserId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) resolvedUserId = uRows[0].id;
+
+    const { rows: eventRows } = await query(`SELECT * FROM posts WHERE id = $1 AND type = 'event' LIMIT 1`, [eventId]);
+    if (eventRows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Etkinlik bulunamadı.' });
+    }
+
+    const event = eventRows[0];
+    if (event.userId !== resolvedUserId && event.authorId !== resolvedUserId) {
+      return res.status(403).json({ success: false, error: 'Bu etkinliği silme yetkin yok.' });
+    }
+
+    await query(`UPDATE posts SET "isActive" = false, status = 'deleted' WHERE id = $1`, [eventId]);
+    
+    return res.json({ success: true, message: 'Etkinlik başarıyla silindi.', deletedId: eventId });
+  } catch (error) {
+    console.error('[DELETE_EVENT_ERROR]', error.message);
+    return res.status(500).json({ success: false, error: 'Sunucu hatası: Etkinlik silinemedi.' });
+  }
+});
+
 app.get('/api/events/user/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.query?.currentUserId;
