@@ -65,6 +65,8 @@ function RootLayoutContent() {
       <Stack.Screen name="edit-profile" options={{ presentation: 'modal', title: 'Profili Düzenle' }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="reset-password" options={{ title: 'Şifre Sıfırla', headerShown: false }} />
+      <Stack.Screen name="admin" options={{ headerShown: false }} />
+      <Stack.Screen name="admin-login" options={{ headerShown: false }} />
 
       {/* Legal & Policy Screens */}
       <Stack.Screen name="legal/kvkk" options={{ title: 'Gizlilik' }} />
