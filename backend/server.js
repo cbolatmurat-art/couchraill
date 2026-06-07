@@ -3561,7 +3561,7 @@ app.get('/api/social/friends/:userId', async (req, res) => {
 
   try {
     const { rows: friendUsers } = await query(`
-      SELECT u.id, u.name, u.username, u."lastName", u."profileImage", u."userType"
+      SELECT u.id, u.name, u.username, u."profileImage", u."userType"
       FROM users u
       INNER JOIN follows f1 ON f1."followingUserId" = u.id AND f1."followerUserId" = $1
       INNER JOIN follows f2 ON f2."followerUserId" = u.id AND f2."followingUserId" = $1

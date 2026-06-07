@@ -75,31 +75,42 @@ export default function CreatePostScreen() {
 
     const processCoordinates = async (latitude: number, longitude: number) => {
       try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-        
-        if (!response.ok) {
-          console.warn(`Reverse geocode API error: ${response.status}`);
-          setLocationResults([
-            { city: `Konumlar yüklenemedi, lütfen tekrar deneyin`, latitude, longitude }
-          ]);
-          setLoadingLocation(false);
-          return;
+        // Use Expo's native reverse geocoding first (more reliable, no internet API limits)
+        let nativeGeocode = [];
+        try {
+          nativeGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+        } catch (e) {
+          console.warn("Native reverse geocode failed, falling back to nominatim", e);
         }
-        
-        const data = await response.json();
-        console.log("REVERSE GEOCODE:", data);
 
-        const address = data.address || {};
         const options = [];
-        
-        const cityName = address.city || address.town || address.village || address.province || address.state || '';
-        const districtName = address.suburb || address.county || address.district || '';
-        
-        if (address.road) options.push({ neighborhood: address.road, district: districtName, city: cityName, latitude, longitude });
-        if (address.neighbourhood || address.quarter) options.push({ neighborhood: address.neighbourhood || address.quarter, district: districtName, city: cityName, latitude, longitude });
-        if (districtName) options.push({ district: districtName, city: cityName, latitude, longitude });
-        if (cityName) options.push({ city: cityName, latitude, longitude });
-        if (address.state && address.state !== cityName) options.push({ city: address.state, latitude, longitude });
+
+        if (nativeGeocode && nativeGeocode.length > 0) {
+          const loc = nativeGeocode[0];
+          const cityName = loc.city || loc.subregion || loc.region || '';
+          const districtName = loc.district || loc.city || loc.subregion || '';
+          const neighborhood = loc.street || loc.name || '';
+          
+          if (neighborhood) options.push({ neighborhood, district: districtName, city: cityName, latitude, longitude });
+          if (districtName) options.push({ district: districtName, city: cityName, latitude, longitude });
+          if (cityName) options.push({ city: cityName, latitude, longitude });
+        } else {
+          // Fallback to nominatim if native fails
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+          if (response.ok) {
+            const data = await response.json();
+            const address = data.address || {};
+            
+            const cityName = address.city || address.town || address.village || address.province || address.state || '';
+            const districtName = address.suburb || address.county || address.district || '';
+            
+            if (address.road) options.push({ neighborhood: address.road, district: districtName, city: cityName, latitude, longitude });
+            if (address.neighbourhood || address.quarter) options.push({ neighborhood: address.neighbourhood || address.quarter, district: districtName, city: cityName, latitude, longitude });
+            if (districtName) options.push({ district: districtName, city: cityName, latitude, longitude });
+            if (cityName) options.push({ city: cityName, latitude, longitude });
+            if (address.state && address.state !== cityName) options.push({ city: address.state, latitude, longitude });
+          }
+        }
         
         const uniqueOptions = Array.from(new Set(options.map(a => JSON.stringify(a))))
           .map(id => JSON.parse(id))

@@ -199,7 +199,7 @@ async function safeFetch(url: string, options: RequestInit = {}, retries = 1): P
     }
     
     // For other Uncaught API errors, log and return null instead of crashing the UI
-    console.error(`[UNCAUGHT API EXCEPTION] URL: ${url} | ERROR:`, e.message);
+    console.warn(`[UNCAUGHT API EXCEPTION] URL: ${url} | ERROR:`, e.message);
     return null;
   }
 }
