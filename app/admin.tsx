@@ -76,8 +76,14 @@ export default function AdminScreen() {
   const [rejectionTargetId, setRejectionTargetId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
+  // Reports state
+  const [reports, setReports] = useState<any[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState('');
+  const [reportTypeFilter, setReportTypeFilter] = useState('all'); // all, post, listing, event, other
+
   // Moderation state
-  const [modTab, setModTab] = useState('all');
+  const [modTab, setModTab] = useState('all'); // all, pending, resolved, etc.
   const [selectedComplaint, setSelectedComplaint] = useState<any | null>(null);
 
   const clearAdminSession = async () => {
@@ -202,6 +208,32 @@ export default function AdminScreen() {
     }
   };
 
+  const fetchReports = async (token?: string, type?: string) => {
+    const activeToken = token || adminToken;
+    if (!activeToken) return;
+
+    setReportsLoading(true);
+    setReportsError('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/reports?type=${type || reportTypeFilter}`, {
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (!res.ok) throw new Error('Şikayetler alınamadı.');
+      const data = await res.json();
+      setReports(data.reports || []);
+    } catch (e: any) {
+      setReportsError(e?.message || 'Sunucu bağlantı hatası.');
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthorized && activeTab === 'complaints') {
+      fetchReports(undefined, reportTypeFilter);
+    }
+  }, [activeTab, reportTypeFilter, isAuthorized]);
+
   const handleApprove = async (id: string) => {
     setActionLoadingId(id);
     try {
@@ -290,7 +322,7 @@ export default function AdminScreen() {
         </View>
         <View style={styles.metricCard}>
           <View style={[styles.metricIconBox, { backgroundColor: '#FEF2F2' }]}><Ionicons name="warning" size={24} color="#EF4444" /></View>
-          <Text style={styles.metricValue}>0</Text>
+          <Text style={styles.metricValue}>{reports.filter(r => r.status === 'pending').length}</Text>
           <Text style={styles.metricLabel}>Bekleyen Şikayetler</Text>
         </View>
         <View style={styles.metricCard}>
@@ -318,71 +350,97 @@ export default function AdminScreen() {
   );
 
   const renderModeration = () => {
-    const tabs = [
+    const statusTabs = [
       { id: 'all', label: 'Tümü' },
       { id: 'pending', label: 'Bekleyenler' },
-      { id: 'investigating', label: 'İnceleniyor' },
       { id: 'resolved', label: 'Çözüldü' },
       { id: 'rejected', label: 'Reddedildi' },
     ];
 
-    const filtered = modTab === 'all' ? MOCK_COMPLAINTS : MOCK_COMPLAINTS.filter(c => c.status === modTab);
+    const typeTabs = [
+      { id: 'all', label: 'Tüm İçerikler' },
+      { id: 'post', label: 'Gönderiler' },
+      { id: 'listing', label: 'İlanlar' },
+      { id: 'event', label: 'Etkinlikler' },
+      { id: 'other', label: 'Diğer' },
+    ];
+
+    const filtered = reports.filter(c => modTab === 'all' || c.status === modTab);
 
     return (
       <View style={{ flex: 1 }}>
         <View style={styles.pageHeaderSticky}>
-          <Text style={styles.pageTitle}>Şikayet Talepleri / Moderasyon Merkezi</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.pageTitle}>Şikayet Talepleri / Moderasyon Merkezi</Text>
+            <Pressable onPress={() => fetchReports()} style={styles.refreshIconBtn} disabled={reportsLoading}>
+              <Ionicons name="refresh" size={20} color="#4F46E5" />
+            </Pressable>
+          </View>
           <View style={styles.modTabsRow}>
-            {tabs.map(t => (
+            {statusTabs.map(t => (
               <Pressable key={t.id} style={[styles.modTab, modTab === t.id && styles.modTabActive]} onPress={() => setModTab(t.id)}>
                 <Text style={[styles.modTabText, modTab === t.id && styles.modTabTextActive]}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={[styles.modTabsRow, { marginTop: 8, borderBottomWidth: 0 }]}>
+            {typeTabs.map(t => (
+              <Pressable key={t.id} style={[styles.modTab, reportTypeFilter === t.id && styles.modTabActive]} onPress={() => setReportTypeFilter(t.id)}>
+                <Text style={[styles.modTabText, reportTypeFilter === t.id && styles.modTabTextActive]}>{t.label}</Text>
               </Pressable>
             ))}
           </View>
         </View>
         
         <ScrollView contentContainerStyle={styles.contentScroll}>
-          {filtered.length === 0 ? (
+          {reportsLoading ? (
+            <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 40 }} />
+          ) : reportsError ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle" size={48} color="#EF4444" />
+              <Text style={styles.emptyStateText}>{reportsError}</Text>
+            </View>
+          ) : filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="shield-checkmark" size={48} color="#CBD5E1" />
               <Text style={styles.emptyStateText}>Henüz şikayet bulunmuyor.</Text>
               <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>Yeni şikayetler burada görünecek.</Text>
             </View>
           ) : (
-            filtered.map(c => (
-              <View key={c.id} style={styles.complaintCard}>
-                <View style={styles.complaintHeader}>
-                  <View style={styles.complaintHeaderLeft}>
-                    <Text style={styles.complaintType}>{c.type}</Text>
-                    <View style={[styles.badge, c.status === 'pending' ? styles.badgeWarning : c.status === 'resolved' ? styles.badgeSuccess : styles.badgeInfo]}>
-                      <Text style={styles.badgeText}>{c.status === 'pending' ? 'Bekliyor' : c.status === 'resolved' ? 'Çözüldü' : c.status === 'investigating' ? 'İnceleniyor' : 'Reddedildi'}</Text>
+            filtered.map(c => {
+              const contentTypeLabel = c.contentType === 'listing' ? 'İlan' : c.contentType === 'event' ? 'Etkinlik' : c.contentType === 'post' ? 'Gönderi' : 'Diğer';
+              return (
+                <View key={c.id} style={styles.complaintCard}>
+                  <View style={styles.complaintHeader}>
+                    <View style={styles.complaintHeaderLeft}>
+                      <Text style={styles.complaintType}>{contentTypeLabel}</Text>
+                      <View style={[styles.badge, c.status === 'pending' ? styles.badgeWarning : c.status === 'resolved' ? styles.badgeSuccess : styles.badgeInfo]}>
+                        <Text style={styles.badgeText}>{c.status === 'pending' ? 'Bekliyor' : c.status === 'resolved' ? 'Çözüldü' : 'Reddedildi'}</Text>
+                      </View>
                     </View>
-                    <View style={[styles.badge, c.priority === 'Yüksek' ? styles.badgeDanger : styles.badgeDefault]}>
-                      <Text style={[styles.badgeText, c.priority === 'Yüksek' && { color: '#FFF' }]}>{c.priority} Öncelik</Text>
+                    <Text style={styles.complaintDate}>{new Date(c.createdAt).toLocaleDateString('tr-TR')}</Text>
+                  </View>
+                  
+                  <Text style={styles.complaintTarget}><Text style={{ color: '#64748B' }}>Şikayet Edilen:</Text> {c.reported_name || c.reported_username || c.reportedUserId}</Text>
+                  <Text style={styles.complaintTarget}><Text style={{ color: '#64748B' }}>Şikayet Eden:</Text> {c.reporter_name || c.reporter_username || c.reporterUserId}</Text>
+                  <Text style={styles.complaintReason}><Text style={{ color: '#64748B' }}>Sebep:</Text> {c.reason}</Text>
+                  {c.description ? <Text style={styles.complaintDesc} numberOfLines={2}>{c.description}</Text> : null}
+                  
+                  <View style={styles.complaintActions}>
+                    <Pressable style={styles.outlineBtn} onPress={() => setSelectedComplaint(c)}>
+                      <Text style={styles.outlineBtnText}>Detay Gör</Text>
+                    </Pressable>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {c.status !== 'resolved' && (
+                        <Pressable style={[styles.solidBtn, { backgroundColor: '#10B981' }]} onPress={() => AlertHelper.alert('Bilgi', 'Durum güncelleme apisi henüz bağlanmadı.')}>
+                          <Text style={styles.solidBtnText}>Çözüldü Yap</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
-                  <Text style={styles.complaintDate}>{c.date}</Text>
                 </View>
-                
-                <Text style={styles.complaintTarget}><Text style={{ color: '#64748B' }}>İçerik/Kişi:</Text> {c.target}</Text>
-                <Text style={styles.complaintTarget}><Text style={{ color: '#64748B' }}>Şikayet Eden:</Text> {c.reporter}</Text>
-                <Text style={styles.complaintReason}><Text style={{ color: '#64748B' }}>Sebep:</Text> {c.reason}</Text>
-                <Text style={styles.complaintDesc} numberOfLines={2}>{c.desc}</Text>
-                
-                <View style={styles.complaintActions}>
-                  <Pressable style={styles.outlineBtn} onPress={() => setSelectedComplaint(c)}>
-                    <Text style={styles.outlineBtnText}>Detay Gör</Text>
-                  </Pressable>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {c.status !== 'resolved' && (
-                      <Pressable style={[styles.solidBtn, { backgroundColor: '#10B981' }]} onPress={() => AlertHelper.alert('Başarılı', 'Durum "Çözüldü" olarak işaretlendi.')}>
-                        <Text style={styles.solidBtnText}>Çözüldü Yap</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-              </View>
-            ))
+              );
+            })
           )}
         </ScrollView>
       </View>
@@ -522,6 +580,7 @@ export default function AdminScreen() {
             {renderSidebarItem('overview', 'Genel Bakış', 'grid')}
             {renderSidebarItem('moderation', 'Şikayet Talepleri', 'flag')}
             {renderSidebarItem('verifications', 'Kimlik Doğrulama', 'id-card')}
+            {renderSidebarItem('ban_system', 'Ban Sistemi', 'ban')}
             <Text style={styles.sidebarSectionTitle}>İÇERİKLER</Text>
             {renderSidebarItem('listings', 'İlanlar', 'home')}
             {renderSidebarItem('posts', 'Gönderiler', 'newspaper')}
@@ -556,7 +615,8 @@ export default function AdminScreen() {
           {activeTab === 'overview' && renderOverview()}
           {activeTab === 'moderation' && renderModeration()}
           {activeTab === 'verifications' && renderVerifications()}
-          {activeTab === 'listings' && renderPlaceholder('İlanlar', 'home', 'Henüz ilan bulunmuyor.')}
+          {activeTab === 'ban_system' && renderPlaceholder('Ban Sistemi', 'ban', 'Ban yönetim paneli çok yakında burada olacak.')}
+          {activeTab === 'listings' && renderPlaceholder('İlan Yönetimi', 'home', 'İlanları yönetme ve onaylama paneli hazırlanıyor.')}
           {activeTab === 'posts' && renderPlaceholder('Gönderiler', 'newspaper', 'Henüz gönderi bulunmuyor.')}
           {activeTab === 'events' && renderPlaceholder('Etkinlikler', 'calendar', 'Henüz etkinlik bulunmuyor.')}
           {activeTab === 'notifications' && renderPlaceholder('Bildirimler', 'notifications', 'Henüz bildirim bulunmuyor.')}

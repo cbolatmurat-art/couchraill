@@ -9,6 +9,7 @@ import { useAppContext } from '../../context/AppContext';
 import { API_BASE_URL } from '../../constants/config';
 import { ListingCard } from '../../components/ListingCard';
 import { EventCard } from '../../components/EventCard';
+import { ReportModal } from '../../components/ReportModal';
 import { normalizeCity } from '../../utils/normalizeCity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -38,6 +39,15 @@ export default function DiscoverScreen() {
 
   // Post Menu State
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+  
+  // Report State
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportItem, setReportItem] = useState<any>(null);
+
+  const handleReportConfirm = useCallback((item: any) => {
+    setReportItem(item);
+    setReportModalVisible(true);
+  }, []);
 
   const fetchFeed = useCallback(async () => {
     if (!currentUser) return;
@@ -545,6 +555,7 @@ export default function DiscoverScreen() {
               setOpenMenuId={setOpenMenuPostId}
               onProfilePress={handleNavigateToProfile}
               onDeleteConfirm={confirmDeleteItem}
+              onReportConfirm={handleReportConfirm}
             />
           )}
           contentContainerStyle={matchesFeed.length === 0 ? styles.listEmpty : styles.listContent}
@@ -577,6 +588,7 @@ export default function DiscoverScreen() {
               setOpenMenuId={setOpenMenuPostId}
               onProfilePress={handleNavigateToProfile}
               onDeleteConfirm={confirmDeleteItem}
+              onReportConfirm={handleReportConfirm}
             />
           )}
           contentContainerStyle={eventsFeed.length === 0 ? styles.listEmpty : styles.listContent}
@@ -683,6 +695,17 @@ export default function DiscoverScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {reportItem && currentUser && (
+        <ReportModal
+          visible={reportModalVisible}
+          onClose={() => setReportModalVisible(false)}
+          reporterUserId={currentUser.id || currentUser.userId || currentUser._id || currentUser.uid || currentUser.email || currentUser.username || "unknown_reporter"}
+          reportedUserId={reportItem.userId || reportItem.authorId || reportItem.ownerId || reportItem.hostId || (reportItem.owner && reportItem.owner.id) || (reportItem.author && reportItem.author.id)}
+          contentType={(reportItem.type === 'listing' || reportItem.isListing) ? 'listing' : (reportItem.type === 'event' || reportItem.isEvent) ? 'event' : 'post'}
+          contentId={reportItem.id}
+        />
+      )}
     </SafeAreaView>
   );
 }

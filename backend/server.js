@@ -4594,6 +4594,73 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
     res.status(500).json({ success: false, error: 'Yorum yapılamadı.' });
   }
 });
+// GET Admin Reports
+app.get('/api/admin/reports', checkAdminAuth, async (req, res) => {
+  try {
+    const { type } = req.query; // 'all', 'listing', 'post', 'event', 'other'
+    let queryStr = `
+      SELECT r.*, 
+        u1.name as reporter_name, u1.username as reporter_username, 
+        u2.name as reported_name, u2.username as reported_username
+      FROM reports r
+      LEFT JOIN users u1 ON r."reporterUserId" = u1.id
+      LEFT JOIN users u2 ON r."reportedUserId" = u2.id
+    `;
+    let queryParams = [];
+
+    if (type && type !== 'all') {
+      if (type === 'other') {
+        queryStr += ` WHERE r."contentType" NOT IN ('listing', 'post', 'event')`;
+      } else {
+        queryStr += ` WHERE r."contentType" = $1`;
+        queryParams.push(type);
+      }
+    }
+
+    queryStr += ` ORDER BY r."createdAt" DESC`;
+
+    const { rows } = await query(queryStr, queryParams);
+    res.json({ success: true, reports: rows });
+  } catch (error) {
+    console.error('[ADMIN_REPORTS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Şikayetler alınamadı.' });
+  }
+});
+
+// POST Submit Report
+app.post('/api/reports', async (req, res) => {
+  const { reporterUserId, contentType, contentId, reason, description } = req.body;
+  if (!reporterUserId || !contentType || !contentId || !reason) {
+    return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
+  }
+
+  try {
+    let finalReportedUserId = req.body.reportedUserId;
+
+    if (!finalReportedUserId) {
+      if (contentType === 'listing') {
+        const { rows } = await query(`SELECT "hostId", "ownerId" FROM listings WHERE id = $1`, [contentId]);
+        if (rows.length > 0) finalReportedUserId = rows[0].hostId || rows[0].ownerId;
+      } else if (contentType === 'post' || contentType === 'event') {
+        const { rows } = await query(`SELECT "userId", "authorId" FROM posts WHERE id = $1`, [contentId]);
+        if (rows.length > 0) finalReportedUserId = rows[0].userId || rows[0].authorId;
+      }
+    }
+
+    const newReportId = `rep_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const createdAt = new Date().toISOString();
+
+    await query(`
+      INSERT INTO reports (id, "reporterUserId", "reportedUserId", "contentType", "contentId", reason, description, status, priority, "createdAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, [newReportId, reporterUserId, finalReportedUserId || 'unknown', contentType, contentId, reason, description || null, 'pending', 'Normal', createdAt]);
+
+    res.json({ success: true, report: { id: newReportId } });
+  } catch (error) {
+    console.error('[SUBMIT_REPORT_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Şikayet iletilemedi.' });
+  }
+});
 
 
 app.post('/api/messages/:id/reaction', (req, res) => {

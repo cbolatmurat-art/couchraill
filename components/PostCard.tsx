@@ -13,6 +13,7 @@ interface PostCardProps {
   onLikeToggle: (id: string, isLikedByMe: boolean) => void;
   onOpenComments: (id: string) => void;
   onDeleteConfirm: (item: any) => void;
+  onReportConfirm?: (item: any) => void;
 }
 
 export const PostCard = React.memo(({
@@ -23,7 +24,8 @@ export const PostCard = React.memo(({
   onProfilePress,
   onLikeToggle,
   onOpenComments,
-  onDeleteConfirm
+  onDeleteConfirm,
+  onReportConfirm
 }: PostCardProps) => {
   const dateStr = item.createdAt 
     ? new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -112,11 +114,11 @@ export const PostCard = React.memo(({
           </View>
         </TouchableOpacity>
 
-        {isOwner && (
+        {setOpenMenuId && (
           <View style={{ position: 'relative', zIndex: 100 }}>
             <TouchableOpacity 
               style={{ padding: 4 }}
-              onPress={() => setOpenMenuId && setOpenMenuId(openMenuId === item.id ? null : item.id)}
+              onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
             >
               <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textLight} />
             </TouchableOpacity>
@@ -159,10 +161,15 @@ export const PostCard = React.memo(({
         </TouchableOpacity>
       </View>
 
-      {openMenuId === item.id && isOwner && (
+      {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
-          <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
-            <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
+          {isOwner && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
+              <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm && onReportConfirm(item)}>
+            <Text style={styles.dropdownItemText}>Şikayet Et</Text>
           </TouchableOpacity>
         </View>
       )}

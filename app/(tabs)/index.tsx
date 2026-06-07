@@ -12,6 +12,7 @@ import { DeleteConfirmModal } from '../../components/DeleteConfirmModal';
 import { PostCard } from '../../components/PostCard';
 import { ListingCard } from '../../components/ListingCard';
 import { EventCard } from '../../components/EventCard';
+import { ReportModal, ContentType } from '../../components/ReportModal';
 
 
 
@@ -28,6 +29,16 @@ export default function FeedScreen() {
 
   // Post Menu State
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+  
+  // Report State
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportItem, setReportItem] = useState<any>(null);
+
+  const handleReportConfirm = (item: any) => {
+    setReportItem(item);
+    setReportModalVisible(true);
+    setOpenMenuPostId(null);
+  };
 
   // Comments Modal State
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
@@ -556,6 +567,7 @@ export default function FeedScreen() {
                 onLikeToggle={(id, isLikedByMe) => handleLikeToggle(id, isLikedByMe, 'post')}
                 onOpenComments={(id) => openComments(id, 'post')}
                 onDeleteConfirm={confirmDeleteItem}
+                onReportConfirm={handleReportConfirm}
               />
             )}
             contentContainerStyle={communityFeed.length === 0 ? styles.listEmpty : styles.listContent}
@@ -581,6 +593,7 @@ export default function FeedScreen() {
               setOpenMenuId={setOpenMenuPostId}
               onProfilePress={handleNavigateToProfile}
               onDeleteConfirm={confirmDeleteItem}
+              onReportConfirm={handleReportConfirm}
             />
           )}
           contentContainerStyle={feed.filter((item: any) => item.type === 'event' || item.isEvent).length === 0 ? styles.listEmpty : styles.listContent}
@@ -608,20 +621,36 @@ export default function FeedScreen() {
                   onLikeToggle={(id, isLikedByMe) => handleLikeToggle(id, isLikedByMe, 'post')}
                   onOpenComments={(id) => openComments(id, 'post')}
                   onDeleteConfirm={confirmDeleteItem}
+                  onReportConfirm={handleReportConfirm}
+                />
+              );
+            } else if (item.type === 'listing' || item.type === 'host_listing' || item.isListing) {
+              return (
+                <ListingCard 
+                  item={item}
+                  currentUserId={currentUser?.id}
+                  openMenuId={openMenuPostId}
+                  setOpenMenuId={setOpenMenuPostId}
+                  onProfilePress={handleNavigateToProfile}
+                  onDeleteConfirm={confirmDeleteItem}
+                  onReportConfirm={handleReportConfirm}
+                />
+              );
+            } else if (item.type === 'event' || item.isEvent) {
+              return (
+                <EventCard 
+                  item={item}
+                  currentUserId={currentUser?.id}
+                  openMenuId={openMenuPostId}
+                  setOpenMenuId={setOpenMenuPostId}
+                  onProfilePress={handleNavigateToProfile}
+                  onDeleteConfirm={confirmDeleteItem}
+                  onReportConfirm={handleReportConfirm}
                 />
               );
             }
             
-            return (
-              <ListingCard 
-                item={item}
-                currentUserId={currentUser?.id}
-                openMenuId={openMenuPostId}
-                setOpenMenuId={setOpenMenuPostId}
-                onProfilePress={handleNavigateToProfile}
-                onDeleteConfirm={confirmDeleteItem}
-              />
-            );
+            return null;
           }}
           contentContainerStyle={displayFeed.length === 0 ? styles.listEmpty : styles.listContent}
           ListEmptyComponent={renderEmptyState}
@@ -693,15 +722,26 @@ export default function FeedScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <DeleteConfirmModal
-        visible={deleteModalVisible}
-        onCancel={() => { setDeleteModalVisible(false); setItemToDelete(null); }}
-        onConfirm={() => {
-          setDeleteModalVisible(false);
-          if (itemToDelete) deleteItem(itemToDelete);
-        }}
-      />
-    </View>
+        <DeleteConfirmModal
+          visible={deleteModalVisible}
+          onCancel={() => { setDeleteModalVisible(false); setItemToDelete(null); }}
+          onConfirm={() => {
+            setDeleteModalVisible(false);
+            if (itemToDelete) deleteItem(itemToDelete);
+          }}
+        />
+
+      {reportItem && currentUser && (
+        <ReportModal
+          visible={reportModalVisible}
+          onClose={() => setReportModalVisible(false)}
+          reporterUserId={currentUser.id || currentUser.userId || currentUser._id || currentUser.uid || currentUser.email || currentUser.username || "unknown_reporter"}
+          reportedUserId={reportItem.userId || reportItem.authorId || reportItem.ownerId || reportItem.hostId || (reportItem.owner && reportItem.owner.id) || (reportItem.author && reportItem.author.id)}
+          contentType={(reportItem.type === 'listing' || reportItem.isListing) ? 'listing' : (reportItem.type === 'event' || reportItem.isEvent) ? 'event' : 'post'}
+          contentId={reportItem.id}
+        />
+      )}
+      </View>
   );
 }
 

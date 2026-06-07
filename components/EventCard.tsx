@@ -12,6 +12,7 @@ interface EventCardProps {
   setOpenMenuId?: (id: string | null) => void;
   onProfilePress: (id: string) => void;
   onDeleteConfirm: (item: any) => void;
+  onReportConfirm?: (item: any) => void;
 }
 
 export const EventCard = React.memo(({
@@ -20,7 +21,8 @@ export const EventCard = React.memo(({
   openMenuId,
   setOpenMenuId,
   onProfilePress,
-  onDeleteConfirm
+  onDeleteConfirm,
+  onReportConfirm
 }: EventCardProps) => {
   const router = useRouter();
   
@@ -68,11 +70,11 @@ export const EventCard = React.memo(({
           </View>
         </TouchableOpacity>
 
-        {isOwner && (
+        {setOpenMenuId && (
           <View style={{ position: 'relative', zIndex: 100 }}>
             <TouchableOpacity 
               style={{ padding: 4 }}
-              onPress={() => setOpenMenuId && setOpenMenuId(openMenuId === item.id ? null : item.id)}
+              onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
             >
               <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textLight} />
             </TouchableOpacity>
@@ -115,10 +117,15 @@ export const EventCard = React.memo(({
         </View>
       )}
 
-      {openMenuId === item.id && isOwner && (
+      {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
-          <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
-            <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Etkinliği Sil</Text>
+          {isOwner && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
+              <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm && onReportConfirm(item)}>
+            <Text style={styles.dropdownItemText}>Şikayet Et</Text>
           </TouchableOpacity>
         </View>
       )}

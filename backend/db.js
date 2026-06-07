@@ -288,6 +288,39 @@ const initDB = async () => {
       )
     `);
 
+    // Event Interactions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS event_interactions (
+        id VARCHAR(255) PRIMARY KEY,
+        "eventId" VARCHAR(255),
+        "userId" VARCHAR(255),
+        type VARCHAR(50),
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Reports
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id VARCHAR(255) PRIMARY KEY,
+        "reporterUserId" VARCHAR(255),
+        "reportedUserId" VARCHAR(255),
+        "contentType" VARCHAR(50),
+        "contentId" VARCHAR(255),
+        reason VARCHAR(255),
+        description TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        priority VARCHAR(50) DEFAULT 'Normal',
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      await client.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`);
+    } catch (e) {
+      console.log("[DB] Priority column already exists or error");
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS friend_requests (
         id VARCHAR(255) PRIMARY KEY,

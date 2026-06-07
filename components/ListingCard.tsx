@@ -13,6 +13,7 @@ interface ListingCardProps {
   onProfilePress: (id: string) => void;
   onEditPress?: (item: any) => void;
   onDeleteConfirm: (item: any) => void;
+  onReportConfirm?: (item: any) => void;
 }
 
 export const ListingCard = React.memo(({
@@ -22,7 +23,8 @@ export const ListingCard = React.memo(({
   setOpenMenuId,
   onProfilePress,
   onEditPress,
-  onDeleteConfirm
+  onDeleteConfirm,
+  onReportConfirm
 }: ListingCardProps) => {
   const router = useRouter();
   const owner = item.owner || {};
@@ -141,10 +143,10 @@ export const ListingCard = React.memo(({
             {dateStr ? <Text style={styles.headerDate}>{dateStr}</Text> : null}
 
           </View>
-          {isOwner && (
+          {setOpenMenuId && (
             <TouchableOpacity 
               style={{ padding: 4, marginLeft: 8 }}
-              onPress={() => setOpenMenuId && setOpenMenuId(openMenuId === item.id ? null : item.id)}
+              onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
             >
               <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textLight} />
             </TouchableOpacity>
@@ -211,16 +213,23 @@ export const ListingCard = React.memo(({
         </View>
       )}
 
-      {openMenuId === item.id && isOwner && (
+      {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
-          {onEditPress && (
+          {isOwner && onEditPress && (
             <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onEditPress(item); }}>
               <Text style={styles.dropdownItemText}>Düzenle</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onDeleteConfirm(item); }}>
-            <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
-          </TouchableOpacity>
+          {isOwner && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onDeleteConfirm(item); }}>
+              <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
+            </TouchableOpacity>
+          )}
+          {onReportConfirm && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onReportConfirm(item); }}>
+              <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Şikayet Et</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>

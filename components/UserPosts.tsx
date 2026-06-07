@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { PostCard } from './PostCard';
 import { EventCard } from './EventCard';
+import { ListingCard } from './ListingCard';
+import { ReportModal, ContentType } from './ReportModal';
 import { useRouter } from 'expo-router';
 import { useAppContext } from '../context/AppContext';
 
@@ -18,7 +20,6 @@ interface UserPostsProps {
 }
 
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { ListingCard } from './ListingCard';
 
 export function UserPosts({ userId, currentUserId, profile, currentUser }: UserPostsProps) {
   const { listings, refreshData } = useAppContext();
@@ -53,6 +54,16 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
     });
     return () => sub.remove();
   }, [userId, currentUserId]);
+
+  // Report State
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportItem, setReportItem] = useState<any>(null);
+
+  const handleReportConfirm = (item: any) => {
+    setReportItem(item);
+    setReportModalVisible(true);
+    setOpenMenuPostId(null);
+  };
 
   const fetchPosts = async () => {
     try {
@@ -384,6 +395,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
         onLikeToggle={handleLikeToggle}
         onOpenComments={openComments}
         onDeleteConfirm={confirmDeleteItem}
+        onReportConfirm={handleReportConfirm}
       />
     ));
   };
@@ -416,6 +428,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
         setOpenMenuId={setOpenMenuPostId}
         onProfilePress={handleProfilePress}
         onDeleteConfirm={confirmDeleteItem}
+        onReportConfirm={handleReportConfirm}
       />
     ));
   };
@@ -440,6 +453,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
         onProfilePress={handleProfilePress}
         onEditPress={handleEditListing}
         onDeleteConfirm={confirmDeleteItem}
+        onReportConfirm={handleReportConfirm}
       />
     ));
   };
@@ -533,6 +547,16 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
           if (itemToDelete) deleteItem(itemToDelete);
         }}
       />
+      {reportItem && currentUserId && (
+        <ReportModal
+          visible={reportModalVisible}
+          onClose={() => setReportModalVisible(false)}
+          reporterUserId={currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.uid || currentUser?.email || currentUser?.username || currentUserId || "unknown_reporter"}
+          reportedUserId={reportItem.userId || reportItem.authorId || reportItem.ownerId || reportItem.hostId || (reportItem.owner && reportItem.owner.id) || (reportItem.author && reportItem.author.id)}
+          contentType={(reportItem.type === 'listing' || reportItem.isListing) ? 'listing' : (reportItem.type === 'event' || reportItem.isEvent) ? 'event' : 'post'}
+          contentId={reportItem.id}
+        />
+      )}
     </View>
   );
 }
