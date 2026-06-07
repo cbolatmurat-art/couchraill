@@ -76,7 +76,16 @@ export default function CreatePostScreen() {
     const processCoordinates = async (latitude: number, longitude: number) => {
       try {
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-        if (!response.ok) throw new Error('Network response was not ok');
+        
+        if (!response.ok) {
+          console.warn(`Reverse geocode API error: ${response.status}`);
+          setLocationResults([
+            { city: `Konum alındı ancak adres bilgisi çözümlenemedi. (Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`, latitude, longitude }
+          ]);
+          setLoadingLocation(false);
+          return;
+        }
+        
         const data = await response.json();
         console.log("REVERSE GEOCODE:", data);
 
@@ -98,14 +107,12 @@ export default function CreatePostScreen() {
 
         if (uniqueOptions.length === 0) {
           uniqueOptions.push({ city: `Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, latitude, longitude });
-        } else {
-          uniqueOptions.push({ city: `Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, latitude, longitude });
         }
         
         setLocationResults(uniqueOptions);
-      } catch (err) {
-        console.error("LOCATION ERROR (Reverse Geocode):", err);
-        setLocationResults([{ city: `Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, latitude, longitude }]);
+      } catch (err: any) {
+        console.warn("LOCATION ERROR (Reverse Geocode):", err.message || err);
+        setLocationResults([{ city: `Konum alındı ancak adres bilgisi çözümlenemedi. (Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`, latitude, longitude }]);
       } finally {
         setLoadingLocation(false);
       }

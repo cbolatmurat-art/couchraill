@@ -108,8 +108,8 @@ export const clearAuthStorage = async () => {
   }
 };
 
-// API fetch helper with fallback mechanism
-async function safeFetch(url: string, options: RequestInit = {}) {
+// API fetch helper with fallback mechanism and retry for 502/503/504
+async function safeFetch(url: string, options: RequestInit = {}, retries = 1): Promise<any> {
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 8000); 
@@ -157,11 +157,25 @@ async function safeFetch(url: string, options: RequestInit = {}) {
     
     if (!res.ok) {
        let errorMsg = "API error status: " + res.status;
+       let responseBody = "";
        try {
-         const data = await res.json();
+         const cloned = res.clone();
+         responseBody = await cloned.text();
+         const data = JSON.parse(responseBody);
          if (data?.message) errorMsg = data.message;
          else if (data?.error) errorMsg = data.error;
        } catch(e) {}
+       
+       if ([502, 503, 504].includes(res.status)) {
+         console.warn(`[API ERROR ${res.status}] URL: ${url} | METHOD: ${options.method || 'GET'} | BODY: ${responseBody}`);
+         if (retries > 0) {
+           console.log(`[API RETRY] Retrying ${url}... (${retries} retries left)`);
+           await new Promise(resolve => setTimeout(resolve, 1500)); // wait 1.5s before retry
+           return safeFetch(url, options, retries - 1);
+         }
+         return null; // Graceful return to prevent Uncaught Promise Error and app crash
+       }
+       
        throw new Error(errorMsg);
     }
     return await res.json();
@@ -174,10 +188,19 @@ async function safeFetch(url: string, options: RequestInit = {}) {
                            e?.message?.includes("connect");
 
     if (isNetworkError) {
-      console.warn("API network unavailable", e);
+      console.warn(`[API NETWORK ERROR] URL: ${url} | METHOD: ${options.method || 'GET'}`);
+      
+      if (retries > 0) {
+        console.log(`[API RETRY] Retrying ${url} after network error... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return safeFetch(url, options, retries - 1);
+      }
       return null;
     }
-    throw e;
+    
+    // For other Uncaught API errors, log and return null instead of crashing the UI
+    console.error(`[UNCAUGHT API EXCEPTION] URL: ${url} | ERROR:`, e.message);
+    return null;
   }
 }
 
