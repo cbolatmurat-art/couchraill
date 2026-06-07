@@ -25,10 +25,11 @@ export const EventCard = React.memo(({
   const router = useRouter();
   
   // Use backend names if available, else standard names
-  const ownerId = item.ownerId || item.userId || item.authorId || item?.owner?.id;
-  const ownerName = item.ownerName || item?.owner?.name || 'Bilinmiyor';
-  const ownerUsername = item.ownerUsername || item?.owner?.username;
-  const ownerAvatar = item.ownerAvatar || item?.owner?.profileImage;
+  const owner = item.author || item.owner || {};
+  const ownerId = item.authorId || item.ownerId || item.userId || owner.id;
+  const ownerName = owner.fullName || owner.name || item.ownerName || 'Bilinmiyor';
+  const ownerUsername = owner.username || item.ownerUsername;
+  const ownerAvatar = owner.profileImage || owner.avatar || item.ownerAvatar;
 
   const isOwner = ownerId === currentUserId;
 

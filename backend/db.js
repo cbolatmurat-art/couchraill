@@ -395,7 +395,20 @@ const initDB = async () => {
       `ALTER TABLE listings ADD COLUMN IF NOT EXISTS text TEXT`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "taggedFriends" JSONB`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS location JSONB`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS text TEXT`
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS text TEXT`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS title VARCHAR(255)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS city VARCHAR(255)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS district VARCHAR(255)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS date VARCHAR(50)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS time VARCHAR(50)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "authorId" VARCHAR(255)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventDate" VARCHAR(50)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventTime" VARCHAR(50)`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`
     ];
     for (const alt of alters) {
       try {
@@ -405,40 +418,7 @@ const initDB = async () => {
       }
     }
     
-    // Sync listings from db.json into postgres
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const dbPath = path.join(__dirname, 'db.json');
-      if (fs.existsSync(dbPath)) {
-        const dbData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-        if (dbData.listings && Array.isArray(dbData.listings)) {
-          for (const listing of dbData.listings) {
-            const { rows } = await pool.query('SELECT id FROM listings WHERE id = $1', [listing.id]);
-            if (rows.length === 0) {
-              await pool.query(`
-                INSERT INTO listings (
-                  id, "hostId", "ownerId", type, title, description, city, district, neighborhood, location,
-                  images, "guestStayDuration", "isTimedListing", "listingDurationDays", "expiresAt",
-                  "createdAt", active, status, "ownerName", "userName"
-                ) VALUES (
-                  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                  $11, $12, $13, $14, $15,
-                  $16, $17, $18, $19, $20
-                )
-              `, [
-                listing.id, listing.hostId || listing.ownerId, listing.ownerId || listing.hostId, listing.type || 'listing', listing.title, listing.description, listing.city, listing.district, listing.neighborhood || '', listing.location || listing.district || '',
-                JSON.stringify(listing.images || []), listing.guestStayDuration || '', Boolean(listing.isTimedListing), listing.isTimedListing ? Number(listing.listingDurationDays) : null, listing.expiresAt || null,
-                listing.createdAt || new Date().toISOString(), listing.active !== false, listing.status || 'active', listing.ownerName || null, listing.userName || null
-              ]);
-            }
-          }
-          console.log(`[DB] Synced listings from db.json to PostgreSQL.`);
-        }
-      }
-    } catch (e) {
-      console.error('[DB] Error syncing listings to PostgreSQL:', e);
-    }
+    // Removed db.json to PostgreSQL sync as it's no longer needed
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[DB] Error initializing PostgreSQL tables:', e);

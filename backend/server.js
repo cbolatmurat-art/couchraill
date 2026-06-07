@@ -39,6 +39,48 @@ initDB()
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
+const normalizePost = (p, currentUserId, comments = []) => ({
+  id: p.id,
+  authorId: p.userId,
+  content: p.content || p.text,
+  createdAt: p.createdAt,
+  type: 'post',
+  author: {
+    id: p.userId,
+    fullName: p.owner_name || p.fullName || p.name,
+    username: p.owner_username || p.username,
+    profileImage: p.owner_profileImage || p.profileImage || p.avatar
+  },
+  likesCount: parseInt(p.likesCount || p.likeCount || 0),
+  likedByCurrentUser: p.likedByCurrentUser === true || p.isLikedByMe === true,
+  commentsCount: parseInt(p.commentsCount || p.commentCount || 0),
+  comments: comments
+});
+
+const normalizeEvent = (e, currentUserId) => ({
+  id: e.id,
+  authorId: e.authorId || e.userId,
+  type: 'event',
+  title: e.title,
+  city: e.city,
+  district: e.district,
+  neighborhood: e.neighborhood,
+  date: e.eventDate || e.date,
+  time: e.eventTime || e.time,
+  description: e.description || e.text,
+  status: e.status || (e.isActive ? 'active' : 'inactive'),
+  createdAt: e.createdAt,
+  author: {
+    id: e.authorId || e.userId,
+    fullName: e.owner_name || e.fullName || e.name,
+    username: e.owner_username || e.username,
+    profileImage: e.owner_profileImage || e.profileImage || e.avatar
+  },
+  likesCount: parseInt(e.likesCount || e.likeCount || 0),
+  likedByCurrentUser: e.likedByCurrentUser === true || e.isLikedByMe === true,
+  commentsCount: parseInt(e.commentsCount || e.commentCount || 0)
+});
+
 // Root and health routes — MUST be before all middleware for Railway
 app.get("/", (req, res) => {
   res.status(200).send("Couchraill backend is running");
@@ -174,15 +216,7 @@ io.on('connection', (socket) => {
     socket.userId = userId;
     console.log(`[SOCKET] User connected: ${userId} with socket ID: ${socket.id}`);
 
-    const db = readDB();
-    const user = db.users.find(u => u.id === userId);
     let lastSeenStr = new Date().toISOString();
-    
-    if (user) {
-      user.isOnline = true;
-      user.lastSeen = lastSeenStr;
-      writeDB(db);
-    }
     
     try {
       await pool.query('UPDATE users SET "isOnline" = true, "lastSeen" = $1 WHERE id = $2', [lastSeenStr, userId]);
@@ -196,13 +230,16 @@ io.on('connection', (socket) => {
       lastSeen: lastSeenStr
     });
 
-    // Mark sent messages to this user as delivered
-    let dbUpdated = false;
-    db.messages.forEach(m => {
-      if (m.receiverId === userId && m.status === 'sent') {
-        m.status = 'delivered';
-        dbUpdated = true;
-        
+    // Mark sent messages to this user as delivered in Postgres
+    try {
+      const { rows: updatedMessages } = await pool.query(`
+        UPDATE messages
+        SET status = 'delivered'
+        WHERE "receiverId" = $1 AND status = 'sent'
+        RETURNING id, "conversationId", "senderId"
+      `, [userId]);
+
+      for (const m of updatedMessages) {
         const senderSocketId = activeUsers.get(m.senderId);
         if (senderSocketId) {
           io.to(senderSocketId).emit('message_status_changed', {
@@ -212,10 +249,8 @@ io.on('connection', (socket) => {
           });
         }
       }
-    });
-
-    if (dbUpdated) {
-      writeDB(db);
+    } catch (e) {
+      console.error('[SOCKET] PG user_connected messages update error:', e.message);
     }
   });
 
@@ -240,20 +275,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('read_conversation', (data) => {
+  socket.on('read_conversation', async (data) => {
     const { conversationId, userId } = data;
     if (!conversationId || !userId) return;
 
-    const db = readDB();
-    let dbUpdated = false;
-    
-    db.messages.forEach(m => {
-      if (m.conversationId === conversationId && m.receiverId === userId && m.status !== 'read') {
-        m.status = 'read';
-        m.read = true;
-        m.readAt = new Date().toISOString();
-        dbUpdated = true;
-        
+    try {
+      const readAtStr = new Date().toISOString();
+      const { rows: updatedMessages } = await pool.query(`
+        UPDATE messages
+        SET status = 'read', read = true, "readAt" = $1
+        WHERE "conversationId" = $2 AND "receiverId" = $3 AND status != 'read'
+        RETURNING id, "senderId"
+      `, [readAtStr, conversationId, userId]);
+
+      for (const m of updatedMessages) {
         const senderSocketId = activeUsers.get(m.senderId);
         if (senderSocketId) {
           io.to(senderSocketId).emit('message_status_changed', {
@@ -263,10 +298,8 @@ io.on('connection', (socket) => {
           });
         }
       }
-    });
-
-    if (dbUpdated) {
-      writeDB(db);
+    } catch (e) {
+      console.error('[SOCKET] PG read_conversation error:', e.message);
     }
   });
 
@@ -276,15 +309,7 @@ io.on('connection', (socket) => {
     if (userId) {
       activeUsers.delete(userId);
       
-      const db = readDB();
-      const user = db.users.find(u => u.id === userId);
       let lastSeenStr = new Date().toISOString();
-      
-      if (user) {
-        user.isOnline = false;
-        user.lastSeen = lastSeenStr;
-        writeDB(db);
-      }
       
       try {
         await pool.query('UPDATE users SET "isOnline" = false, "lastSeen" = $1 WHERE id = $2', [lastSeenStr, userId]);
@@ -303,7 +328,6 @@ io.on('connection', (socket) => {
 
 // Helper to create notifications
 const createNotification = (db, { userId, type, title, message, relatedId, relatedType }) => {
-  if (!db.notifications) db.notifications = [];
   const newNotif = {
     id: `n${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
@@ -315,14 +339,20 @@ const createNotification = (db, { userId, type, title, message, relatedId, relat
     read: false,
     createdAt: new Date().toISOString()
   };
-  db.notifications.unshift(newNotif);
+  
+  query(`
+    INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  `, [
+    newNotif.id, newNotif.userId, newNotif.type, newNotif.title, newNotif.message, 
+    newNotif.relatedId, newNotif.relatedType, newNotif.read, newNotif.createdAt
+  ]).catch(err => console.error('[CREATE_NOTIFICATION_ERROR]', err.message));
+  
   return newNotif;
 };
 
 const Notification = {
   create: async (data) => {
-    const db = readDB();
-    if (!db.notifications) db.notifications = [];
     const newNotif = {
       id: `n${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       userId: data.userId,
@@ -334,8 +364,19 @@ const Notification = {
       read: data.read ?? false,
       createdAt: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString()
     };
-    db.notifications.unshift(newNotif);
-    writeDB(db);
+    
+    try {
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [
+        newNotif.id, newNotif.userId, newNotif.type, newNotif.title, newNotif.message, 
+        newNotif.relatedId, newNotif.relatedType, newNotif.read, newNotif.createdAt
+      ]);
+    } catch (err) {
+      console.error('[NOTIFICATION_CREATE_ERROR]', err.message);
+    }
+    
     return newNotif;
   }
 };
@@ -765,24 +806,7 @@ app.get('/api/feed', async (req, res) => {
       AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
     `, [userId, blockedArr]);
 
-    // Get active posts (pg-mem compatible: no correlated subqueries)
-    const { rows: posts } = await query(`
-      SELECT p.*, 'post' as type,
-        COALESCE(pl.like_count, 0) as "likeCount",
-        COALESCE(pc.comment_count, 0) as "commentCount",
-        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "isLikedByMe",
-        u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
-        u."identityVerified", u.verified, u."emailVerified", u."phoneVerified", u."userType" as "owner_userType"
-      FROM posts p
-      LEFT JOIN users u ON p."userId" = u.id
-      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
-      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
-      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
-      WHERE p."isActive" = true AND p."isTest" = false
-      AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
-    `, [userId, blockedArr]);
-
-    let allFeedItems = [...listings, ...posts];
+    let allFeedItems = [...listings];
 
     // Score calculation
     const populatedFeed = allFeedItems.map(item => {
@@ -806,6 +830,12 @@ app.get('/api/feed', async (req, res) => {
         commentCount: parseInt(item.commentCount),
         isLikedByMe: item.isLikedByMe,
         isFollowed,
+        // Event-specific fields — expose explicitly so frontend can access
+        authorId: item.authorId || item.userId,
+        eventDate: item.eventDate || item.date,
+        eventTime: item.eventTime || item.time,
+        description: item.description || item.text,
+        status: item.status || (item.isActive ? 'active' : 'inactive'),
         owner: {
           id: ownerId,
           name: item.owner_name,
@@ -828,6 +858,99 @@ app.get('/api/feed', async (req, res) => {
   } catch (err) {
     console.error('[FEED_ERROR]', err);
     res.status(500).json({ success: false, error: 'Sunucu hatası.', debug: err.message, detail: err.detail || null });
+  }
+});
+
+app.get('/api/posts/feed', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+
+    const { rows: blockedRows } = await query('SELECT * FROM blocked_users WHERE "blockerId" = $1 OR "blockedId" = $1', [userId]);
+    const blockedIds = blockedRows.map(b => b.blockerId === userId ? b.blockedId : b.blockerId);
+    const blockedArr = blockedIds.length > 0 ? blockedIds : ['___none___'];
+
+    const { rows: posts } = await query(`
+      SELECT p.*,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
+      WHERE p."isTest" = false AND p."isActive" = true AND (p.type IS NULL OR p.type = 'post')
+      AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
+      ORDER BY p."createdAt" DESC
+    `, [userId, blockedArr]);
+
+    const normalizedPosts = posts.map(p => normalizePost(p, userId));
+    res.json({ success: true, items: normalizedPosts });
+  } catch (err) {
+    console.error('[POSTS_FEED_ERROR]', err);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
+app.get('/api/events', async (req, res) => {
+  try {
+    const { rows: events } = await query(`
+      SELECT p.*,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        false as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
+      ORDER BY p."createdAt" DESC
+    `);
+    
+    const normalizedEvents = events.map(e => normalizeEvent(e, null));
+    res.json({ success: true, items: normalizedEvents });
+  } catch (err) {
+    console.error('[EVENTS_ERROR]', err);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
+app.get('/api/events/feed', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+
+    const { rows: blockedRows } = await query('SELECT * FROM blocked_users WHERE "blockerId" = $1 OR "blockedId" = $1', [userId]);
+    const blockedIds = blockedRows.map(b => b.blockerId === userId ? b.blockedId : b.blockerId);
+    const blockedArr = blockedIds.length > 0 ? blockedIds : ['___none___'];
+
+    const { rows: events } = await query(`
+      SELECT p.*,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
+      WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
+      AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
+      ORDER BY p."createdAt" DESC
+    `, [userId, blockedArr]);
+
+    const normalizedEvents = events.map(e => normalizeEvent(e, userId));
+    res.json({ success: true, items: normalizedEvents });
+  } catch (err) {
+    console.error('[EVENTS_FEED_ERROR]', err);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
   }
 });
 
@@ -1900,38 +2023,56 @@ app.delete('/api/users/me/verification-data', (req, res) => {
 // ---- CONVERSATIONS & MESSAGES ----
 app.get('/api/conversations/:userId', async (req, res) => {
   const { userId } = req.params;
-  const db = readDB();
   if (!userId) return res.json([]);
   
-  const userConversations = db.conversations
-    .filter(c => c.participantIds.includes(userId))
-    .sort((a, b) => new Date(b.lastMessageAt || b.createdAt) - new Date(a.lastMessageAt || a.createdAt));
-    
-  const populated = await Promise.all(userConversations.map(async c => {
-    const otherUserId = c.participantIds.find(id => id !== userId);
-    const otherUser = await findUserByAnyIdentifier(otherUserId, db);
-    const currentUserInfo = await findUserByAnyIdentifier(userId, db);
-    
-    return {
-      ...c,
-      participantNames: {
-        ...(c.participantNames || {}),
-        [otherUserId]: otherUser ? (otherUser.name || otherUser.fullName || otherUser.username) : 'Bilinmeyen Kullanıcı',
-        [userId]: currentUserInfo ? (currentUserInfo.name || currentUserInfo.fullName || currentUserInfo.username) : 'Bilinmeyen Kullanıcı'
-      },
-      participantProfiles: {
-        ...(c.participantProfiles || {}),
-        [otherUserId]: otherUser ? (otherUser.profileImage || otherUser.avatar || null) : null,
-        [userId]: currentUserInfo ? (currentUserInfo.profileImage || currentUserInfo.avatar || null) : null
-      },
-      otherUserStatus: otherUser ? {
-        isOnline: otherUser.isOnline || false,
-        lastSeen: otherUser.lastSeen || null
-      } : { isOnline: false, lastSeen: null }
-    };
-  }));
-    
-  res.json(populated);
+  try {
+    const { rows: userConversations } = await query(`
+      SELECT * FROM conversations
+      WHERE "participantIds" @> $1::jsonb
+      ORDER BY COALESCE("lastMessageTime", "updatedAt") DESC
+    `, [JSON.stringify([userId])]);
+
+    const populated = await Promise.all(userConversations.map(async c => {
+      // In Postgres, JSONB arrays might be returned as JS arrays
+      const participantIds = Array.isArray(c.participantIds) ? c.participantIds : JSON.parse(c.participantIds || '[]');
+      const otherUserId = participantIds.find(id => id !== userId);
+      
+      let otherUser = null;
+      let currentUserInfo = null;
+      
+      if (otherUserId) {
+        const { rows: otherUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar, "isOnline", "lastSeen" FROM users WHERE id = $1', [otherUserId]);
+        if (otherUserRows.length > 0) otherUser = otherUserRows[0];
+      }
+      
+      const { rows: currentUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar FROM users WHERE id = $1', [userId]);
+      if (currentUserRows.length > 0) currentUserInfo = currentUserRows[0];
+      
+      return {
+        ...c,
+        participantIds,
+        participantNames: {
+          ...(c.participantNames || {}),
+          [otherUserId]: otherUser ? (otherUser.name || otherUser.fullName || otherUser.username) : 'Bilinmeyen Kullanıcı',
+          [userId]: currentUserInfo ? (currentUserInfo.name || currentUserInfo.fullName || currentUserInfo.username) : 'Bilinmeyen Kullanıcı'
+        },
+        participantProfiles: {
+          ...(c.participantProfiles || {}),
+          [otherUserId]: otherUser ? (otherUser.profileImage || otherUser.avatar || null) : null,
+          [userId]: currentUserInfo ? (currentUserInfo.profileImage || currentUserInfo.avatar || null) : null
+        },
+        otherUserStatus: otherUser ? {
+          isOnline: otherUser.isOnline || false,
+          lastSeen: otherUser.lastSeen || null
+        } : { isOnline: false, lastSeen: null }
+      };
+    }));
+      
+    res.json(populated);
+  } catch (error) {
+    console.error('[GET_CONVERSATIONS_PG_ERROR]', error.message);
+    res.status(500).json({ error: 'Konuşmalar yüklenemedi' });
+  }
 });
 
 app.post('/api/conversations/start', async (req, res) => {
@@ -1947,34 +2088,57 @@ app.post('/api/conversations/start', async (req, res) => {
   const targetUser = await findUserByAnyIdentifier(targetUserId, db);
   if (!targetUser) return res.status(404).json({ error: 'Hedef kullanıcı bulunamadı.' });
 
-  let existingConv = db.conversations.find(c => 
-    c.participantIds.includes(currentUser.id) && c.participantIds.includes(targetUser.id)
-  );
+  try {
+    const participantIds = [currentUser.id, targetUser.id];
+    
+    // Check if conversation exists
+    const { rows: existingRows } = await query(`
+      SELECT * FROM conversations
+      WHERE "participantIds" @> $1::jsonb AND "participantIds" @> $2::jsonb
+    `, [JSON.stringify([currentUser.id]), JSON.stringify([targetUser.id])]);
 
-  if (existingConv) {
-    return res.json({ success: true, conversation: existingConv });
-  }
+    if (existingRows.length > 0) {
+      return res.json({ success: true, conversation: existingRows[0] });
+    }
 
-  const newConv = {
-    id: `c${Date.now()}`,
-    participantIds: [currentUser.id, targetUser.id],
-    participantNames: {
+    const participantNames = {
       [currentUser.id]: currentUser.name || currentUser.fullName || currentUser.username,
       [targetUser.id]: targetUser.name || targetUser.fullName || targetUser.username,
-    },
-    participantProfiles: {
+    };
+    
+    const participantProfiles = {
       [currentUser.id]: currentUser.profileImage || currentUser.avatar || null,
       [targetUser.id]: targetUser.profileImage || targetUser.avatar || null,
-    },
-    mutedBy: [],
-    deletedBy: [],
-    createdAt: new Date().toISOString()
-  };
+    };
 
-  if (!db.conversations) db.conversations = [];
-  db.conversations.unshift(newConv);
-  writeDB(db);
-  res.json({ success: true, conversation: newConv });
+    const newConv = {
+      id: `c${Date.now()}`,
+      participantIds,
+      participantNames,
+      participantProfiles,
+      mutedBy: [],
+      deletedFor: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await query(`
+      INSERT INTO conversations (id, "participantIds", "participantNames", "updatedAt", "mutedBy", "deletedFor")
+      VALUES ($1, $2::jsonb, $3::jsonb, $4, $5::jsonb, $6::jsonb)
+    `, [
+      newConv.id, 
+      JSON.stringify(newConv.participantIds), 
+      JSON.stringify(newConv.participantNames),
+      newConv.updatedAt,
+      JSON.stringify(newConv.mutedBy),
+      JSON.stringify(newConv.deletedFor)
+    ]);
+
+    res.json({ success: true, conversation: newConv });
+  } catch (error) {
+    console.error('[START_CONVERSATION_PG_ERROR]', error.message);
+    res.status(500).json({ error: 'Konuşma başlatılamadı.' });
+  }
 });
 
 app.post('/api/conversations/:conversationId/mute', (req, res) => {
@@ -2026,103 +2190,130 @@ app.post('/api/conversations/:conversationId/unmute', (req, res) => {
   }
 });
 
-app.get('/api/messages/:conversationId', (req, res) => {
-  const db = readDB();
-  const msgs = db.messages.filter(m => m.conversationId === req.params.conversationId);
-  const formattedMsgs = msgs.map(message => ({
-    id: message.id,
-    conversationId: message.conversationId,
-    senderId: message.senderId,
-    receiverId: message.receiverId,
-    text: message.text,
-    createdAt: message.createdAt,
-    read: message.read,
-    readAt: message.readAt,
-    status: message.status,
-    replyTo: message.replyTo || null,
-    reactions: message.reactions || []
-  }));
-  res.json(formattedMsgs);
+app.get('/api/messages/:conversationId', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT * FROM messages
+      WHERE "conversationId" = $1
+      ORDER BY "createdAt" ASC
+    `, [req.params.conversationId]);
+
+    const formattedMsgs = rows.map(message => ({
+      id: message.id,
+      conversationId: message.conversationId,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      text: message.text,
+      createdAt: message.createdAt,
+      read: message.read,
+      readAt: message.readAt,
+      status: message.status,
+      replyTo: message.replyTo || null,
+      reactions: message.reactions || []
+    }));
+    res.json(formattedMsgs);
+  } catch (error) {
+    console.error('[GET_MESSAGES_ERROR]', error.message);
+    res.status(500).json({ error: 'Mesajlar yüklenemedi' });
+  }
 });
 
-app.post('/api/messages', (req, res) => {
+app.post('/api/messages', async (req, res) => {
   const { conversationId, senderId, text, replyTo } = req.body;
-  const db = readDB();
   
-  const convIndex = db.conversations.findIndex(c => c.id === conversationId);
-  if (convIndex === -1) return res.status(404).json({ error: 'Conversation not found' });
-  
-  const conv = db.conversations[convIndex];
-  const receiverId = conv.participantIds.find(id => id !== senderId) || '';
-
-  // Block check
-  const isBlocked = (db.blocked_users || []).some(b => 
-    (b.blockerUserId === senderId && b.blockedUserId === receiverId) ||
-    (b.blockerUserId === receiverId && b.blockedUserId === senderId)
-  );
-  if (isBlocked) {
-    return res.status(403).json({ success: false, code: 'BLOCKED_CONVERSATION', message: 'Bu kullanıcıyla mesajlaşamazsınız.' });
-  }
-
-  const newMessage = {
-    id: `m${Date.now()}`,
-    conversationId,
-    senderId,
-    receiverId,
-    text,
-    replyTo: replyTo ? {
-      messageId: replyTo.messageId,
-      text: replyTo.text,
-      senderId: replyTo.senderId,
-      senderName: replyTo.senderName
-    } : null,
-    createdAt: new Date().toISOString(),
-    read: false,
-    status: 'sent',
-    reactions: []
-  };
-
-  const isMuted = conv.mutedBy && conv.mutedBy.includes(receiverId);
-
-  const receiverSocketId = activeUsers.get(receiverId);
-  if (receiverSocketId) {
-    newMessage.status = 'delivered';
-    io.to(receiverSocketId).emit('message_received', newMessage);
+  try {
+    const { rows: convRows } = await query(`SELECT * FROM conversations WHERE id = $1`, [conversationId]);
+    if (convRows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
     
-    // Also notify sender immediately that it is delivered
-    const senderSocketId = activeUsers.get(senderId);
-    if (senderSocketId) {
-      io.to(senderSocketId).emit('message_status_changed', {
-        messageId: newMessage.id,
-        conversationId,
-        status: 'delivered'
-      });
+    const conv = convRows[0];
+    const participantIds = Array.isArray(conv.participantIds) ? conv.participantIds : JSON.parse(conv.participantIds || '[]');
+    const receiverId = participantIds.find(id => id !== senderId) || '';
+
+    // Block check
+    const { rows: blockRows } = await query(`
+      SELECT * FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [senderId, receiverId]);
+
+    if (blockRows.length > 0) {
+      return res.status(403).json({ success: false, code: 'BLOCKED_CONVERSATION', message: 'Bu kullanıcıyla mesajlaşamazsınız.' });
     }
-  } else if (!isMuted) {
-    // Receiver is offline and hasn't muted the conversation, send a push notification
-    const senderName = conv.participantNames[senderId] || 'Birisi';
-    sendPushNotification(receiverId, senderName, text, { conversationId });
-  }
 
-  db.messages.push(newMessage);
-  
-  db.conversations[convIndex].lastMessage = text;
-  db.conversations[convIndex].lastMessageAt = newMessage.createdAt;
-  
-  if (!isMuted) {
-    const senderName = conv.participantNames[senderId] || 'Birisi';
-    createNotification(db, {
-      userId: receiverId,
-      type: 'message_received',
-      title: 'Yeni Mesaj',
-      message: `${senderName} size bir mesaj gönderdi.`,
-      relatedId: conversationId,
-      relatedType: 'conversation'
-    });
-  }
+    const newMessage = {
+      id: `m${Date.now()}`,
+      conversationId,
+      senderId,
+      receiverId,
+      text,
+      replyTo: replyTo ? {
+        messageId: replyTo.messageId,
+        text: replyTo.text,
+        senderId: replyTo.senderId,
+        senderName: replyTo.senderName
+      } : null,
+      createdAt: new Date().toISOString(),
+      read: false,
+      status: 'sent',
+      reactions: []
+    };
 
-  writeDB(db);
-  res.json({ success: true, message: newMessage, conversation: db.conversations[convIndex] });
+    const mutedBy = Array.isArray(conv.mutedBy) ? conv.mutedBy : JSON.parse(conv.mutedBy || '[]');
+    const isMuted = mutedBy.includes(receiverId);
+
+    const receiverSocketId = activeUsers.get(receiverId);
+    if (receiverSocketId) {
+      newMessage.status = 'delivered';
+      io.to(receiverSocketId).emit('message_received', newMessage);
+      
+      // Also notify sender immediately that it is delivered
+      const senderSocketId = activeUsers.get(senderId);
+      if (senderSocketId) {
+        io.to(senderSocketId).emit('message_status_changed', {
+          messageId: newMessage.id,
+          conversationId,
+          status: 'delivered'
+        });
+      }
+    } else if (!isMuted) {
+      const participantNames = conv.participantNames || {};
+      const senderName = participantNames[senderId] || 'Birisi';
+      sendPushNotification(receiverId, senderName, text, { conversationId });
+    }
+
+    // Insert message into Postgres
+    await query(`
+      INSERT INTO messages (id, "conversationId", "senderId", "receiverId", text, read, status, "replyTo", reactions, "createdAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)
+    `, [
+      newMessage.id, newMessage.conversationId, newMessage.senderId, newMessage.receiverId,
+      newMessage.text, newMessage.read, newMessage.status,
+      JSON.stringify(newMessage.replyTo), JSON.stringify(newMessage.reactions), newMessage.createdAt
+    ]);
+
+    // Update conversation lastMessageTime
+    await query(`
+      UPDATE conversations SET "lastMessageTime" = $1, "updatedAt" = $1
+      WHERE id = $2
+    `, [newMessage.createdAt, conversationId]);
+    
+    if (!isMuted) {
+      const participantNames = conv.participantNames || {};
+      const senderName = participantNames[senderId] || 'Birisi';
+      // Use Postgres for notifications
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+      `, [
+        `n_${Date.now()}`, receiverId, 'message_received', 'Yeni Mesaj',
+        `${senderName} size bir mesaj gönderdi.`, conversationId, 'conversation', new Date().toISOString()
+      ]);
+    }
+
+    res.json({ success: true, message: newMessage, conversation: { ...conv, lastMessageTime: newMessage.createdAt } });
+  } catch (error) {
+    console.error('[POST_MESSAGES_ERROR]', error.message);
+    res.status(500).json({ error: 'Mesaj gönderilemedi' });
+  }
 });
 
 app.get('/api/messages/unread-count', (req, res) => {
@@ -2176,21 +2367,21 @@ app.patch('/api/messages/conversation/:conversationId/read', (req, res) => {
 });
 
 // ---- NOTIFICATIONS ----
-app.get('/api/notifications', (req, res) => {
+app.get('/api/notifications', async (req, res) => {
   const { userId } = req.query;
-  console.log("GET_NOTIFICATIONS_HIT", JSON.stringify({ userId }, null, 2));
   
-  const db = readDB();
-  const notifs = (db.notifications || [])
-    .filter(n => n.userId === userId)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
-  console.log("GET_NOTIFICATIONS_RESULT", JSON.stringify({
-    count: notifs.length,
-    notifications: notifs
-  }, null, 2));
+  try {
+    const { rows } = await query(`
+      SELECT * FROM notifications
+      WHERE "userId" = $1
+      ORDER BY "createdAt" DESC
+    `, [userId]);
 
-  res.json({ success: true, notifications: notifs });
+    res.json({ success: true, notifications: rows });
+  } catch (error) {
+    console.error('[GET_NOTIFICATIONS_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Bildirimler yüklenemedi' });
+  }
 });
 
 // TEST ENDPOINT FOR NOTIFICATIONS
@@ -2210,46 +2401,52 @@ app.post('/api/debug/notifications/test', (req, res) => {
   res.json({ success: true, notification: notif });
 });
 
-app.get('/api/notifications/unread-count', (req, res) => {
+app.get('/api/notifications/unread-count', async (req, res) => {
   const { userId } = req.query;
-  const db = readDB();
-  const unreadCount = (db.notifications || []).filter(n => n.userId === userId && n.read === false).length;
-  res.json({ success: true, unreadCount });
-});
-
-app.patch('/api/notifications/:id/read', (req, res) => {
-  const db = readDB();
-  const notif = (db.notifications || []).find(n => n.id === req.params.id);
-  if (notif) {
-    notif.read = true;
-    writeDB(db);
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: 'Not found' });
+  try {
+    const { rows } = await query(`
+      SELECT COUNT(*) FROM notifications
+      WHERE "userId" = $1 AND read = false
+    `, [userId]);
+    
+    res.json({ success: true, unreadCount: parseInt(rows[0].count) });
+  } catch (error) {
+    console.error('[GET_UNREAD_COUNT_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Okunmamış bildirim sayısı alınamadı' });
   }
 });
 
-app.patch('/api/notifications/read-all', (req, res) => {
-  const { userId } = req.body;
-  const db = readDB();
-  let updated = false;
-  (db.notifications || []).forEach(n => {
-    if (n.userId === userId && n.read === false) {
-      n.read = true;
-      updated = true;
-    }
-  });
-  if (updated) writeDB(db);
-  res.json({ success: true });
+app.patch('/api/notifications/:id/read', async (req, res) => {
+  try {
+    await query(`UPDATE notifications SET read = true WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[READ_NOTIFICATION_ERROR]', error.message);
+    res.status(500).json({ error: 'Okundu olarak işaretlenemedi' });
+  }
 });
 
-app.delete('/api/notifications/clear', (req, res) => {
+app.patch('/api/notifications/read-all', async (req, res) => {
+  const { userId } = req.body;
+  try {
+    await query(`UPDATE notifications SET read = true WHERE "userId" = $1 AND read = false`, [userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[READ_ALL_NOTIFICATIONS_ERROR]', error.message);
+    res.status(500).json({ error: 'Okundu olarak işaretlenemedi' });
+  }
+});
+
+app.delete('/api/notifications/clear', async (req, res) => {
   const userId = req.query.userId || req.body.userId;
   if (!userId) return res.status(400).json({ success: false, error: 'userId required' });
-  const db = readDB();
-  db.notifications = (db.notifications || []).filter(n => n.userId !== userId);
-  writeDB(db);
-  res.json({ success: true });
+  try {
+    await query(`DELETE FROM notifications WHERE "userId" = $1`, [userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[CLEAR_NOTIFICATIONS_ERROR]', error.message);
+    res.status(500).json({ error: 'Bildirimler temizlenemedi' });
+  }
 });
 
 // ---- MIGRATION ----
@@ -3365,7 +3562,7 @@ app.delete('/api/social/follow/:userId', async (req, res) => {
 });
 
 // GET Followers list
-app.get('/api/social/followers/:userId', (req, res) => {
+app.get('/api/social/followers/:userId', async (req, res) => {
   const { userId } = req.params;
   const { currentUserId } = req.query;
 
@@ -3373,18 +3570,23 @@ app.get('/api/social/followers/:userId', (req, res) => {
     return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
   }
 
-  const db = readDB();
+  try {
+    const { rows } = await query(`
+      SELECT u.id, u.name, u."profileImage", u."userType"
+      FROM follows f
+      JOIN users u ON f."followerUserId" = u.id
+      WHERE f."followingUserId" = $1 AND (u."isDeleted" IS NULL OR u."isDeleted" = false) AND u.active = true
+    `, [userId]);
 
-  const followerIds = db.follows.filter(f => f.followingUserId === userId).map(f => f.followerUserId);
-  const followerUsers = db.users
-    .filter(u => followerIds.includes(u.id) && u.isDeleted !== true && u.active !== false)
-    .map(u => ({ id: u.id, name: u.name, profileImage: u.profileImage || null, userType: u.userType }));
-
-  res.json({ success: true, users: followerUsers });
+    res.json({ success: true, users: rows });
+  } catch (error) {
+    console.error('[GET_FOLLOWERS_ERROR]', error.message);
+    res.status(500).json({ success: false, message: 'Takipçiler yüklenemedi.' });
+  }
 });
 
 // GET Following list
-app.get('/api/social/following/:userId', (req, res) => {
+app.get('/api/social/following/:userId', async (req, res) => {
   const { userId } = req.params;
   const { currentUserId } = req.query;
 
@@ -3392,14 +3594,19 @@ app.get('/api/social/following/:userId', (req, res) => {
     return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
   }
 
-  const db = readDB();
+  try {
+    const { rows } = await query(`
+      SELECT u.id, u.name, u."profileImage", u."userType"
+      FROM follows f
+      JOIN users u ON f."followingUserId" = u.id
+      WHERE f."followerUserId" = $1 AND (u."isDeleted" IS NULL OR u."isDeleted" = false) AND u.active = true
+    `, [userId]);
 
-  const followingIds = db.follows.filter(f => f.followerUserId === userId).map(f => f.followingUserId);
-  const followingUsers = db.users
-    .filter(u => followingIds.includes(u.id) && u.isDeleted !== true && u.active !== false)
-    .map(u => ({ id: u.id, name: u.name, profileImage: u.profileImage || null, userType: u.userType }));
-
-  res.json({ success: true, users: followingUsers });
+    res.json({ success: true, users: rows });
+  } catch (error) {
+    console.error('[GET_FOLLOWING_ERROR]', error.message);
+    res.status(500).json({ success: false, message: 'Takip edilenler yüklenemedi.' });
+  }
 });
 
 // POST Send Friend Request
@@ -3794,54 +4001,210 @@ app.post('/api/social/poke/:userId', async (req, res) => {
   res.json({ success: true, message: 'Bu kişiyi dürttün' });
 });
 
-// ---- POSTS ENDPOINTS ----
-app.post('/api/posts', async (req, res) => {
-  console.log("EVENT BODY:", req.body);
-  const { type } = req.body;
+// ---- EVENTS ENDPOINTS ----
 
-  // Handle Event Creation
-  if (type === 'event') {
-    const missingFields = {
-      title: !!req.body.title,
-      city: !!req.body.city,
-      district: !!req.body.district,
-      neighborhood: !!req.body.neighborhood,
-      date: !!req.body.date,
-      time: !!req.body.time,
-      description: !!req.body.description,
-      userId: !!req.body.userId,
-      ownerId: !!req.body.ownerId,
-    };
-    
-    console.log("MISSING FIELDS:", missingFields);
-
-    const isMissingEventFields = Object.values(missingFields).some(val => val === false);
-    
-    if (isMissingEventFields) {
-      return res.status(400).json({
-        success: false,
-        message: "Eksik parametreler",
-        missingFields
-      });
+app.get('/api/events/feed', async (req, res) => {
+  const currentUserId = req.query.userId || req.query.currentUserId;
+  try {
+    let resolvedCurrentUserId = currentUserId;
+    if (currentUserId) {
+      const { rows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (rows.length > 0) resolvedCurrentUserId = rows[0].id;
     }
 
-    const db = readDB();
-    const newEvent = {
-      ...req.body,
-      id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      createdAt: req.body.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isActive: true
-    };
+    const { rows: events } = await query(`
+      SELECT p.*,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
+      WHERE p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
+      ORDER BY p."createdAt" DESC
+    `, [resolvedCurrentUserId]);
 
-    if (!db.posts) db.posts = [];
-    db.posts.unshift(newEvent);
-    writeDB(db);
+    const normalizedEvents = events.map(e => normalizeEvent(e, resolvedCurrentUserId));
+    res.json({ success: true, items: normalizedEvents, events: normalizedEvents });
+  } catch (error) {
+    console.error('[GET_EVENTS_FEED_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', items: [], events: [] });
+  }
+});
 
-    return res.json({ success: true, post: newEvent });
+app.get('/api/events', async (req, res) => {
+  // same as feed
+  const currentUserId = req.query.userId || req.query.currentUserId;
+  try {
+    let resolvedCurrentUserId = currentUserId;
+    if (currentUserId) {
+      const { rows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (rows.length > 0) resolvedCurrentUserId = rows[0].id;
+    }
+
+    const { rows: events } = await query(`
+      SELECT p.*,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
+      WHERE p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
+      ORDER BY p."createdAt" DESC
+    `, [resolvedCurrentUserId]);
+
+    const normalizedEvents = events.map(e => normalizeEvent(e, resolvedCurrentUserId));
+    res.json({ success: true, items: normalizedEvents, events: normalizedEvents });
+  } catch (error) {
+    console.error('[GET_EVENTS_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', items: [], events: [] });
+  }
+});
+
+// ---- POSTS ENDPOINTS ----
+app.post('/api/events', async (req, res) => {
+  const missingFields = {
+    title: !!req.body.title,
+    city: !!req.body.city,
+    district: !!req.body.district,
+    neighborhood: !!req.body.neighborhood,
+    date: !!req.body.date,
+    time: !!req.body.time,
+    description: !!req.body.description,
+    userId: !!(req.body.userId || req.body.ownerId || req.body.authorId),
+  };
+  
+  const isMissingEventFields = Object.values(missingFields).some(val => val === false);
+  
+  if (isMissingEventFields) {
+    return res.status(400).json({
+      success: false,
+      message: "Eksik parametreler",
+      missingFields
+    });
   }
 
-  // Handle Standard Post Creation
+  const eventId = `event_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+  const createdAt = new Date().toISOString();
+  
+  let targetUserId = req.body.userId || req.body.ownerId || req.body.authorId;
+  if (targetUserId) {
+    try {
+      const { rows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [targetUserId]);
+      if (rows.length > 0) targetUserId = rows[0].id;
+    } catch(e) {
+      console.warn("Could not resolve targetUserId", e.message);
+    }
+  }
+
+  try {
+    await query(`
+      INSERT INTO posts (
+        id, "userId", "authorId", type, title, city, district, neighborhood, 
+        date, time, "eventDate", "eventTime", description, text,
+        "createdAt", "updatedAt", "isActive", "isTest", status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+    `, [
+      eventId,
+      targetUserId,
+      targetUserId,
+      'event',
+      req.body.title,
+      req.body.city,
+      req.body.district,
+      req.body.neighborhood,
+      req.body.date,
+      req.body.time,
+      req.body.date,
+      req.body.time,
+      req.body.description,
+      req.body.description,
+      createdAt,
+      createdAt,
+      true,
+      false,
+      'active'
+    ]);
+
+    const { rows: eventRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
+    const { rows: userRows } = await query(`SELECT * FROM users WHERE id = $1`, [targetUserId]);
+    
+    if (eventRows.length > 0 && userRows.length > 0) {
+      eventRows[0].owner_name = userRows[0].name;
+      eventRows[0].owner_username = userRows[0].username;
+      eventRows[0].owner_profileImage = userRows[0].profileImage;
+    }
+
+    const newEvent = eventRows.length > 0 ? normalizeEvent(eventRows[0], null) : { id: eventId };
+
+    return res.json({ success: true, post: newEvent });
+  } catch (pgError) {
+    console.error('[EVENT_INSERT_ERROR]', pgError.message);
+    return res.status(500).json({ success: false, error: 'Etkinlik kaydedilemedi: ' + pgError.message });
+  }
+});
+
+app.get('/api/events/user/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const currentUserId = req.query?.currentUserId;
+
+  try {
+    let resolvedUserId = userId;
+    let resolvedCurrentUserId = currentUserId;
+
+    if (userId) {
+      const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+      if (uRows.length > 0) resolvedUserId = uRows[0].id;
+    }
+    if (currentUserId) {
+      const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (cRows.length > 0) resolvedCurrentUserId = cRows[0].id;
+    }
+    if (resolvedCurrentUserId) {
+      const { rows: blockRows } = await query(`
+        SELECT * FROM blocked_users
+        WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+      `, [resolvedCurrentUserId, resolvedUserId]);
+      if (blockRows.length > 0) {
+        return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+      }
+    }
+
+    const { rows: events } = await query(`
+      SELECT p.*,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $2
+      WHERE p."userId" = $1 AND p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
+      ORDER BY p."createdAt" DESC
+    `, [resolvedUserId, resolvedCurrentUserId || resolvedUserId]);
+
+    const normalizedEvents = events.map(e => normalizeEvent(e, resolvedCurrentUserId));
+    res.json({ success: true, events: normalizedEvents });
+  } catch (error) {
+    console.error('[GET_USER_EVENTS_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', events: [] });
+  }
+});
+
+app.post('/api/posts', async (req, res) => {
   const { userId, text } = req.body;
   if (!userId || !text) return res.status(400).json({ success: false, error: 'Eksik parametreler.', message: 'Eksik parametreler.' });
   if (text.length < 3 || text.length > 500) return res.status(400).json({ success: false, error: 'Gönderi 3 ile 500 karakter arasında olmalıdır.', message: 'Gönderi 3 ile 500 karakter arasında olmalıdır.' });
@@ -3877,7 +4240,17 @@ app.post('/api/posts', async (req, res) => {
     location,
     createdAt,
     updatedAt: createdAt,
-    isActive: true
+    isActive: true,
+    likeCount: 0,
+    commentCount: 0,
+    isLikedByMe: false,
+    owner: {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      profileImage: user.profileImage,
+      isFullyVerified: (user.identityVerified || user.verified) && user.emailVerified && user.phoneVerified
+    }
   };
 
   // Insert into Postgres
@@ -3947,166 +4320,196 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 });
 
-app.get('/api/posts/user/:userId', (req, res) => {
+app.get('/api/posts/user/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.query?.currentUserId;
-  const db = readDB();
-  
-  // Check blocking
-  if (currentUserId) {
-    const blockedMe = (db.blocked_users || []).some(b => b.blockedId === currentUserId && b.blockerId === userId);
-    const blockedByMe = (db.blocked_users || []).some(b => b.blockerId === currentUserId && b.blockedId === userId);
-    if (blockedMe || blockedByMe) {
-      return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
-    }
-  }
 
-  const userPosts = (db.posts || []).filter(p => p.userId === userId && p.isActive !== false);
-  
-  const populatedPosts = userPosts.map(p => {
-    const likeCount = (db.post_likes || []).filter(like => like.postId === p.id).length;
-    const commentCount = (db.post_comments || []).filter(comment => comment.postId === p.id).length;
-    let isLikedByMe = false;
+  try {
+    let resolvedUserId = userId;
+    let resolvedCurrentUserId = currentUserId;
+
+    if (userId) {
+      const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+      if (uRows.length > 0) resolvedUserId = uRows[0].id;
+    }
     if (currentUserId) {
-      isLikedByMe = (db.post_likes || []).some(like => like.postId === p.id && like.userId === currentUserId);
+      const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (cRows.length > 0) resolvedCurrentUserId = cRows[0].id;
     }
-    const owner = db.users.find(u => u.id === p.userId) || {};
-    const isIdVerified = owner.identityVerified === true || owner.identityVerificationStatus === 'verified' || owner.verified === true;
 
-    return { 
-      ...p, 
-      type: p.type || 'post', 
-      likeCount, 
-      commentCount, 
-      isLikedByMe,
-      owner: {
-        id: owner.id,
-        name: owner.name,
-        username: owner.username,
-        profileImage: owner.profileImage,
-        isFullyVerified: isIdVerified && owner.emailVerified === true && owner.phoneVerified === true
+    // Check blocking
+    if (resolvedCurrentUserId) {
+      const { rows: blockRows } = await query(`
+        SELECT * FROM blocked_users
+        WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+      `, [resolvedCurrentUserId, resolvedUserId]);
+      if (blockRows.length > 0) {
+        return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
       }
-    };
-  });
+    }
 
-  populatedPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json({ success: true, posts: populatedPosts });
-});
+    const { rows: posts } = await query(`
+      SELECT 
+        p.*,
+        COALESCE(p.type, 'post') as type,
+        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(pc.comment_count, 0) as "commentsCount",
+        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+      FROM posts p
+      LEFT JOIN users u ON p."userId" = u.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
+      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $2
+      WHERE p."userId" = $1 AND p."isActive" = true AND p."isTest" = false AND (p.type IS NULL OR p.type = 'post')
+      ORDER BY p."createdAt" DESC
+    `, [resolvedUserId, resolvedCurrentUserId || resolvedUserId]);
 
-app.post('/api/posts/:postId/like', (req, res) => {
-  const { postId } = req.params;
-  const { userId } = req.body;
-  
-  if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
-  
-  const db = readDB();
-  const post = db.posts.find(p => p.id === postId);
-  if (!post) return res.status(404).json({ success: false, error: 'Gönderi bulunamadı.' });
+    const populatedPosts = posts.map(p => normalizePost(p, resolvedCurrentUserId));
 
-  const ownerId = post.userId;
-  const blockedMe = (db.blocked_users || []).some(b => b.blockedId === userId && b.blockerId === ownerId);
-  const blockedByMe = (db.blocked_users || []).some(b => b.blockerId === userId && b.blockedId === ownerId);
-  if (blockedMe || blockedByMe) return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
-
-  const alreadyLiked = (db.post_likes || []).some(l => l.postId === postId && l.userId === userId);
-  if (alreadyLiked) return res.json({ success: true, message: 'Zaten beğenildi' });
-
-  if (!db.post_likes) db.post_likes = [];
-  db.post_likes.push({
-    id: `plike_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    postId,
-    userId,
-    createdAt: new Date().toISOString()
-  });
-
-  if (ownerId !== userId) {
-    const liker = db.users.find(u => u.id === userId);
-    createAndSendSocialNotification(db, {
-      userId: ownerId,
-      type: 'like',
-      title: 'Yeni Beğeni',
-      message: `${liker ? liker.name : 'Bir kullanıcı'} gönderini beğendi.`,
-      relatedUserId: userId,
-      relatedPostId: postId
-    });
+    res.json({ success: true, posts: populatedPosts });
+  } catch (error) {
+    console.error('[GET_USER_POSTS_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Gönderiler yüklenemedi.', posts: [] });
   }
-
-  writeDB(db);
-  res.json({ success: true });
 });
 
-app.delete('/api/posts/:postId/like', (req, res) => {
+app.post('/api/posts/:postId/like', async (req, res) => {
+  const { postId } = req.params;
+  const { userId } = req.body;
+  
+  if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+  
+  try {
+    const { rows: postRows } = await query(`SELECT * FROM posts WHERE id = $1`, [postId]);
+    if (postRows.length === 0) return res.status(404).json({ success: false, error: 'Gönderi bulunamadı.' });
+    
+    const post = postRows[0];
+    const ownerId = post.userId;
+
+    const { rows: blockRows } = await query(`
+      SELECT * FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [userId, ownerId]);
+    if (blockRows.length > 0) return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+
+    const { rows: existingLike } = await query(`SELECT * FROM post_likes WHERE "postId" = $1 AND "userId" = $2`, [postId, userId]);
+    if (existingLike.length > 0) return res.json({ success: true, message: 'Zaten beğenildi' });
+
+    const newLikeId = `plike_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    await query(`INSERT INTO post_likes (id, "postId", "userId", "createdAt") VALUES ($1, $2, $3, $4)`, [newLikeId, postId, userId, new Date().toISOString()]);
+
+    if (ownerId !== userId) {
+      const { rows: likerRows } = await query(`SELECT name FROM users WHERE id = $1`, [userId]);
+      const likerName = likerRows.length > 0 ? likerRows[0].name : 'Bir kullanıcı';
+      
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+      `, [`n_${Date.now()}`, ownerId, 'like', 'Yeni Beğeni', `${likerName} gönderini beğendi.`, postId, 'post', new Date().toISOString()]);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[POST_LIKE_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Beğeni işlemi başarısız.' });
+  }
+});
+
+app.delete('/api/posts/:postId/like', async (req, res) => {
   const { postId } = req.params;
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
   
-  const db = readDB();
-  db.post_likes = (db.post_likes || []).filter(l => !(l.postId === postId && l.userId === userId));
-  writeDB(db);
-  res.json({ success: true });
+  try {
+    await query(`DELETE FROM post_likes WHERE "postId" = $1 AND "userId" = $2`, [postId, userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[DELETE_LIKE_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Beğeni kaldırılamadı.' });
+  }
 });
 
-app.get('/api/posts/:postId/comments', (req, res) => {
+app.get('/api/posts/:postId/comments', async (req, res) => {
   const { postId } = req.params;
-  const db = readDB();
   
-  const postComments = (db.post_comments || []).filter(c => c.postId === postId);
-  
-  const populated = postComments.map(c => {
-    const user = db.users.find(u => u.id === c.userId) || {};
-    return {
-      ...c,
-      user: { id: user.id, name: user.name, username: user.username, profileImage: user.profileImage }
-    };
-  });
-  
-  populated.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json({ success: true, comments: populated });
+  try {
+    const { rows } = await query(`
+      SELECT c.*, u.id as "user_id", u.name as "user_name", u.username as "user_username", u."profileImage" as "user_profileImage"
+      FROM post_comments c
+      LEFT JOIN users u ON c."userId" = u.id
+      WHERE c."postId" = $1
+      ORDER BY c."createdAt" DESC
+    `, [postId]);
+
+    const populated = rows.map(c => ({
+      id: c.id,
+      postId: c.postId,
+      userId: c.userId,
+      text: c.content || c.text,
+      createdAt: c.createdAt,
+      user: {
+        id: c.user_id,
+        name: c.user_name,
+        username: c.user_username,
+        profileImage: c.user_profileImage
+      }
+    }));
+    
+    res.json({ success: true, comments: populated });
+  } catch (error) {
+    console.error('[GET_COMMENTS_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Yorumlar yüklenemedi.' });
+  }
 });
 
-app.post('/api/posts/:postId/comments', (req, res) => {
+app.post('/api/posts/:postId/comments', async (req, res) => {
   const { postId } = req.params;
   const { userId, text } = req.body;
   if (!userId || !text) return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
   if (text.length > 500) return res.status(400).json({ success: false, error: 'Yorum çok uzun.' });
 
-  const db = readDB();
-  const post = db.posts.find(p => p.id === postId);
-  if (!post) return res.status(404).json({ success: false, error: 'Gönderi bulunamadı.' });
+  try {
+    const { rows: postRows } = await query(`SELECT * FROM posts WHERE id = $1`, [postId]);
+    if (postRows.length === 0) return res.status(404).json({ success: false, error: 'Gönderi bulunamadı.' });
 
-  const ownerId = post.userId;
-  const blockedMe = (db.blocked_users || []).some(b => b.blockedId === userId && b.blockerId === ownerId);
-  const blockedByMe = (db.blocked_users || []).some(b => b.blockerId === userId && b.blockedId === ownerId);
-  if (blockedMe || blockedByMe) return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+    const post = postRows[0];
+    const ownerId = post.userId;
 
-  const newComment = {
-    id: `pcomment_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    postId,
-    userId,
-    text,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
+    const { rows: blockRows } = await query(`
+      SELECT * FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [userId, ownerId]);
+    if (blockRows.length > 0) return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
 
-  if (!db.post_comments) db.post_comments = [];
-  db.post_comments.push(newComment);
+    const newCommentId = `pcomment_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const createdAt = new Date().toISOString();
 
-  if (ownerId !== userId) {
-    const commenter = db.users.find(u => u.id === userId);
-    createAndSendSocialNotification(db, {
-      userId: ownerId,
-      type: 'comment',
-      title: 'Yeni Yorum',
-      message: `${commenter ? commenter.name : 'Bir kullanıcı'} gönderine yorum yaptı.`,
-      relatedUserId: userId,
-      relatedPostId: postId
-    });
+    await query(`
+      INSERT INTO post_comments (id, "postId", "userId", content, "createdAt")
+      VALUES ($1, $2, $3, $4, $5)
+    `, [newCommentId, postId, userId, text, createdAt]);
+
+    let commenterUser = { id: userId, name: 'Bir kullanıcı', username: '', profileImage: null };
+
+    if (ownerId !== userId) {
+      const { rows: commenterRows } = await query(`SELECT id, name, username, "profileImage" FROM users WHERE id = $1`, [userId]);
+      if (commenterRows.length > 0) {
+        commenterUser = commenterRows[0];
+      }
+      
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+      `, [`n_${Date.now()}`, ownerId, 'comment', 'Yeni Yorum', `${commenterUser.name} gönderine yorum yaptı.`, postId, 'post', createdAt]);
+    }
+
+    res.json({ success: true, comment: { id: newCommentId, postId, userId, text, createdAt, user: commenterUser } });
+  } catch (error) {
+    console.error('[POST_COMMENT_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Yorum yapılamadı.' });
   }
-
-  writeDB(db);
-
-  const commenterUser = db.users.find(u => u.id === userId) || {};
-  res.json({ success: true, comment: { ...newComment, user: { id: commenterUser.id, name: commenterUser.name, username: commenterUser.username, profileImage: commenterUser.profileImage } } });
 });
 
 

@@ -310,6 +310,11 @@ export default function CreatePostScreen() {
         } catch (e) {
           console.error("Feed refresh error:", e);
         }
+
+        import('react-native').then(({ DeviceEventEmitter }) => {
+          DeviceEventEmitter.emit('refresh_request_index');
+          DeviceEventEmitter.emit('refresh_user_posts');
+        }).catch(() => {});
         
         router.replace('/(tabs)');
       } else {

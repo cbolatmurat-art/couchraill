@@ -105,17 +105,38 @@ export default function FeedScreen() {
         }
       }
 
-      const res = await fetch(`${API_BASE_URL}/feed?userId=${currentUser.id}`);
-      const data = await res.json();
-      console.log("FEED_RESPONSE", data);
+      const [feedRes, postsRes, eventsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/feed?userId=${currentUser.id}`),
+        fetch(`${API_BASE_URL}/posts/feed?userId=${currentUser.id}`),
+        fetch(`${API_BASE_URL}/events/feed?userId=${currentUser.id}`)
+      ]);
       
-      if (res.ok && data.success) {
-        setFeed(data.items || []);
-        if (data.isFollowingAnyone !== undefined && followingIds.length === 0) {
-          setIsFollowingAnyone(data.isFollowingAnyone !== false);
+      const safeParse = async (res: Response) => {
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          console.warn('Feed Parse Error:', text.slice(0, 100));
+          return { success: false, items: [] };
         }
-      } else {
-        setErrorMsg(data.error || 'Akış yüklenemedi.');
+      };
+
+      const feedData = await safeParse(feedRes);
+      const postsData = await safeParse(postsRes);
+      const eventsData = await safeParse(eventsRes);
+      
+      let combined = [];
+      if (feedData.success && feedData.items) combined.push(...feedData.items);
+      if (postsData.success && postsData.items) combined.push(...postsData.items);
+      if (eventsData.success && eventsData.items) combined.push(...eventsData.items);
+      
+      // Sort combined array by createdAt (newest first)
+      combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      
+      setFeed(combined);
+      
+      if (feedData.isFollowingAnyone !== undefined && followingIds.length === 0) {
+        setIsFollowingAnyone(feedData.isFollowingAnyone !== false);
       }
     } catch (err) {
       setErrorMsg('Bağlantı hatası.');
@@ -173,18 +194,27 @@ export default function FeedScreen() {
     // Optimistic UI update
     setFeed(prevFeed => prevFeed.map(l => {
       if (l.id === itemId) {
-        return {
-          ...l,
-          isLikedByMe: !isLikedByMe,
-          likeCount: isLikedByMe ? l.likeCount - 1 : l.likeCount + 1
-        };
+        const isNormalized = l.likesCount !== undefined;
+        if (isNormalized) {
+          return {
+            ...l,
+            likedByCurrentUser: !isLikedByMe,
+            likesCount: isLikedByMe ? Math.max((l.likesCount || 1) - 1, 0) : (l.likesCount || 0) + 1
+          };
+        } else {
+          return {
+            ...l,
+            isLikedByMe: !isLikedByMe,
+            likeCount: isLikedByMe ? Math.max((l.likeCount || 1) - 1, 0) : (l.likeCount || 0) + 1
+          };
+        }
       }
       return l;
     }));
 
     try {
       const method = isLikedByMe ? 'DELETE' : 'POST';
-      const endpoint = itemType === 'post' 
+      const endpoint = (itemType === 'post' || itemType === 'event')
         ? `${API_BASE_URL}/posts/${itemId}/like`
         : `${API_BASE_URL}/listings/${itemId}/like`;
 
@@ -198,26 +228,43 @@ export default function FeedScreen() {
       if (!data.success) {
         // Revert on failure
         setFeed(prevFeed => prevFeed.map(l => {
-          if (l.id === listingId) {
-            return {
-              ...l,
-              isLikedByMe: isLikedByMe,
-              likeCount: isLikedByMe ? l.likeCount + 1 : l.likeCount - 1
-            };
+          if (l.id === itemId) {
+            const isNormalized = l.likesCount !== undefined;
+            if (isNormalized) {
+              return {
+                ...l,
+                likedByCurrentUser: isLikedByMe,
+                likesCount: isLikedByMe ? (l.likesCount || 0) + 1 : Math.max((l.likesCount || 1) - 1, 0)
+              };
+            } else {
+              return {
+                ...l,
+                isLikedByMe: isLikedByMe,
+                likeCount: isLikedByMe ? (l.likeCount || 0) + 1 : Math.max((l.likeCount || 1) - 1, 0)
+              };
+            }
           }
           return l;
         }));
-        if (data.error) alert(data.error);
       }
     } catch (err) {
       // Revert on error
       setFeed(prevFeed => prevFeed.map(l => {
-        if (l.id === listingId) {
-          return {
-            ...l,
-            isLikedByMe: isLikedByMe,
-            likeCount: isLikedByMe ? l.likeCount + 1 : l.likeCount - 1
-          };
+        if (l.id === itemId) {
+          const isNormalized = l.likesCount !== undefined;
+          if (isNormalized) {
+            return {
+              ...l,
+              likedByCurrentUser: isLikedByMe,
+              likesCount: isLikedByMe ? (l.likesCount || 0) + 1 : Math.max((l.likesCount || 1) - 1, 0)
+            };
+          } else {
+            return {
+              ...l,
+              isLikedByMe: isLikedByMe,
+              likeCount: isLikedByMe ? (l.likeCount || 0) + 1 : Math.max((l.likeCount || 1) - 1, 0)
+            };
+          }
         }
         return l;
       }));
@@ -232,7 +279,7 @@ export default function FeedScreen() {
     setComments([]);
 
     try {
-      const endpoint = itemType === 'post' 
+      const endpoint = (itemType === 'post' || itemType === 'event')
         ? `${API_BASE_URL}/posts/${itemId}/comments`
         : `${API_BASE_URL}/listings/${itemId}/comments`;
       const res = await fetch(endpoint);
@@ -263,7 +310,7 @@ export default function FeedScreen() {
     try {
       const activeItem = feed.find(l => l.id === activeListingId);
       const itemType = activeItem?.type || 'listing';
-      const endpoint = itemType === 'post' 
+      const endpoint = (itemType === 'post' || itemType === 'event')
         ? `${API_BASE_URL}/posts/${activeListingId}/comments`
         : `${API_BASE_URL}/listings/${activeListingId}/comments`;
 
@@ -281,7 +328,12 @@ export default function FeedScreen() {
         // Update feed comment count
         setFeed(prevFeed => prevFeed.map(l => {
           if (l.id === activeListingId) {
-            return { ...l, commentCount: (l.commentCount || 0) + 1 };
+            const isNormalized = l.commentsCount !== undefined;
+            if (isNormalized) {
+              return { ...l, commentsCount: (l.commentsCount || 0) + 1 };
+            } else {
+              return { ...l, commentCount: (l.commentCount || 0) + 1 };
+            }
           }
           return l;
         }));

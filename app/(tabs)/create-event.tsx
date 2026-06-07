@@ -11,7 +11,7 @@ import { CityPicker } from '../../components/CityPicker';
 import { Input } from '../../components/Input';
 
 export default function CreateEventScreen() {
-  const { currentUser } = useAppContext();
+  const { currentUser, fetchListingsAndRequests } = useAppContext();
   const router = useRouter();
   
   const [title, setTitle] = useState('');
@@ -71,7 +71,17 @@ export default function CreateEventScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+          <TouchableOpacity onPress={() => {
+            try {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)');
+              }
+            } catch (e) {
+              router.replace('/(tabs)');
+            }
+          }} style={styles.closeBtn}>
             <Ionicons name="close" size={28} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Etkinlik Oluştur</Text>
@@ -182,14 +192,26 @@ export default function CreateEventScreen() {
                 };
                 
                 console.log("EVENT PAYLOAD:", payload);
-                console.log("SAVING EVENT");
+                console.log("SAVING EVENT TO URL:", `${API_BASE_URL}/events`);
+                console.log("METHOD:", "POST");
 
-                const res = await fetch(`${API_BASE_URL}/posts`, {
+                const res = await fetch(`${API_BASE_URL}/events`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(payload)
                 });
-                const data = await res.json();
+                
+                console.log("STATUS CODE:", res.status);
+                const text = await res.text();
+                console.log("RAW RESPONSE:", text.slice(0, 200));
+
+                let data: any = {};
+                try {
+                  data = JSON.parse(text);
+                } catch (e) {
+                  console.warn("EVENT JSON PARSE ERROR:", text.slice(0, 100));
+                  data = { success: false, error: 'Etkinlik oluşturulamadı (Sunucu Hatası).' };
+                }
                 
                 if (res.ok && data.success) {
                   console.log("EVENT SAVED");
@@ -200,9 +222,30 @@ export default function CreateEventScreen() {
                   setDate('');
                   setTime('');
                   setDescription('');
+
+                  try {
+                    if (fetchListingsAndRequests) await fetchListingsAndRequests();
+                  } catch (e) {
+                    console.error("Feed refresh error:", e);
+                  }
+
+                  import('react-native').then(({ DeviceEventEmitter }) => {
+                    DeviceEventEmitter.emit('refresh_request_index');
+                    DeviceEventEmitter.emit('refresh_user_posts');
+                  }).catch(() => {});
+
                   setTimeout(() => {
-                    router.back();
-                  }, 2000);
+                    try {
+                      if (router.canGoBack()) {
+                        router.back();
+                      } else {
+                        router.replace('/(tabs)');
+                      }
+                    } catch (navError) {
+                      console.warn('[NAV] GO_BACK failed, redirecting to home:', navError);
+                      router.replace('/(tabs)');
+                    }
+                  }, 1500);
                 } else {
                   let errorMsg = data.error || data.message || 'Etkinlik oluşturulamadı.';
                   if (data.missingFields) {
@@ -212,12 +255,12 @@ export default function CreateEventScreen() {
                       .join(', ');
                     errorMsg += `\nEksik alanlar: ${missing}`;
                   }
-                  console.error("EVENT SAVE ERROR:", errorMsg);
+                  console.warn("EVENT SAVE ERROR:", errorMsg);
                   showToast(errorMsg, "error");
                 }
               } catch (error: any) {
-                console.error("EVENT SAVE ERROR:", error);
-                showToast("Etkinlik oluşturulamadı.", "error");
+                console.warn("EVENT SAVE FETCH ERROR:", error);
+                showToast("Etkinlik oluşturulamadı. Bağlantıyı kontrol edin.", "error");
               } finally {
                 setLoading(false);
               }

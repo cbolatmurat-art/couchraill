@@ -25,7 +25,6 @@ export const PostCard = React.memo(({
   onOpenComments,
   onDeleteConfirm
 }: PostCardProps) => {
-  const owner = item.owner || {};
   const dateStr = item.createdAt 
     ? new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
@@ -44,6 +43,13 @@ export const PostCard = React.memo(({
     }
   };
 
+  const postOwner = item.author || item.owner || {};
+  const isLikedByMe = item.likedByCurrentUser !== undefined ? item.likedByCurrentUser : item.isLikedByMe;
+  const likeCount = item.likesCount !== undefined ? item.likesCount : (item.likeCount || 0);
+  const commentCount = item.commentsCount !== undefined ? item.commentsCount : (item.commentCount || 0);
+  
+  const ownerName = postOwner.fullName || postOwner.name;
+
   const triggerLikeAnimation = () => {
     Animated.sequence([
       Animated.parallel([
@@ -52,12 +58,12 @@ export const PostCard = React.memo(({
       ]),
       Animated.timing(heartOpacity, { toValue: 0, duration: 300, delay: 500, useNativeDriver: true })
     ]).start(() => heartScale.setValue(0));
-    if (!item.isLikedByMe) {
+    if (!isLikedByMe) {
       onLikeToggle(item.id, false);
     }
   };
 
-  const isOwner = item.userId === currentUserId || item.authorId === currentUserId || item.ownerId === currentUserId || item.createdBy === currentUserId || owner.id === currentUserId;
+  const isOwner = item.userId === currentUserId || item.authorId === currentUserId || item.ownerId === currentUserId || item.createdBy === currentUserId || postOwner.id === currentUserId;
 
   const tagsData = item.taggedFriends || item.taggedUsers || item.tagged_users || item.mentions || item.tags || [];
   const hasTags = Array.isArray(tagsData) && tagsData.length > 0;
@@ -65,19 +71,19 @@ export const PostCard = React.memo(({
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <TouchableOpacity onPress={() => onProfilePress(owner.id)} style={styles.ownerInfo}>
-          {owner.profileImage ? (
-            <Image source={{ uri: owner.profileImage }} style={styles.avatar} />
+        <TouchableOpacity onPress={() => onProfilePress(postOwner.id)} style={styles.ownerInfo}>
+          {postOwner.profileImage ? (
+            <Image source={{ uri: postOwner.profileImage }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{owner.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+              <Text style={styles.avatarText}>{ownerName?.charAt(0)?.toUpperCase() || '?'}</Text>
             </View>
           )}
           <View style={styles.ownerText}>
             <View style={[styles.nameRow, hasTags && { flexWrap: 'wrap' }]}>
               <Text style={styles.ownerName}>
-                {owner.name}
-                {owner.isFullyVerified && (
+                {ownerName}
+                {postOwner.isFullyVerified && (
                   <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" style={{ marginLeft: 4 }} />
                 )}
                 {hasTags && (
@@ -102,7 +108,7 @@ export const PostCard = React.memo(({
                 )}
               </Text>
             </View>
-            {owner.username && <Text style={styles.ownerUsername}>@{owner.username}</Text>}
+            {postOwner.username && <Text style={styles.ownerUsername}>@{postOwner.username}</Text>}
           </View>
         </TouchableOpacity>
 
@@ -142,14 +148,14 @@ export const PostCard = React.memo(({
       </TouchableWithoutFeedback>
 
       <View style={styles.actionBar}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => onLikeToggle(item.id, item.isLikedByMe)}>
-          <Ionicons name={item.isLikedByMe ? "heart" : "heart-outline"} size={24} color={item.isLikedByMe ? Colors.danger : Colors.text} />
-          <Text style={[styles.actionText, item.isLikedByMe && { color: Colors.danger }]}>{item.likeCount || 0}</Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => onLikeToggle(item.id, isLikedByMe)}>
+          <Ionicons name={isLikedByMe ? "heart" : "heart-outline"} size={24} color={isLikedByMe ? Colors.danger : Colors.text} />
+          <Text style={[styles.actionText, isLikedByMe && { color: Colors.danger }]}>{likeCount}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={() => onOpenComments(item.id)}>
           <Ionicons name="chatbubble-outline" size={22} color={Colors.text} />
-          <Text style={styles.actionText}>{item.commentCount || 0}</Text>
+          <Text style={styles.actionText}>{commentCount}</Text>
         </TouchableOpacity>
       </View>
 

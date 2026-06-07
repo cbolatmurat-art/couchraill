@@ -26,6 +26,8 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'listings'>('posts');
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [postsError, setPostsError] = useState<string | null>(null);
 
   // Comments Modal State
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
@@ -56,13 +58,28 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
     try {
       const query = currentUserId ? `?currentUserId=${currentUserId}` : '';
       
-      const postsRes = await fetch(`${API_BASE_URL}/posts/user/${userId}${query}`);
-      const postsData = await postsRes.json();
+      const safeFetch = async (url: string) => {
+        try {
+          const res = await fetch(url);
+          const text = await res.text();
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.warn(`JSON Parse Error for ${url}:`, text.slice(0, 100));
+            return { success: false, error: 'Sunucu hatası: Geçersiz format', events: [], posts: [] };
+          }
+        } catch (e) {
+          console.warn(`Fetch Error for ${url}:`, e);
+          return { success: false, error: 'Bağlantı hatası', events: [], posts: [] };
+        }
+      };
+
+      const postsData = await safeFetch(`${API_BASE_URL}/posts/user/${userId}${query}`);
+      const eventsData = await safeFetch(`${API_BASE_URL}/events/user/${userId}${query}`);
 
       let feedItems: any[] = [];
       try {
-        const feedRes = await fetch(`${API_BASE_URL}/feed${query}`);
-        const feedData = await feedRes.json();
+        const feedData = await safeFetch(`${API_BASE_URL}/feed${query}`);
         if (feedData.success && feedData.items) {
           feedItems = feedData.items;
         }
@@ -74,6 +91,16 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
       
       if (postsData.success && postsData.posts) {
         combinedItems = [...postsData.posts];
+        setPostsError(null);
+      } else {
+        setPostsError(postsData.error || 'Gönderiler yüklenemedi.');
+      }
+
+      if (eventsData.success && eventsData.events) {
+        combinedItems = [...combinedItems, ...eventsData.events];
+        setEventsError(null);
+      } else {
+        setEventsError(eventsData.error || 'Etkinlikler yüklenemedi.');
       }
 
       feedItems.forEach((fItem: any) => {
@@ -96,7 +123,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
       
       setItems(combinedItems);
     } catch (e) {
-      console.error('Error fetching items', e);
+      console.warn('Error fetching items', e);
     } finally {
       setLoading(false);
     }
@@ -109,11 +136,20 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
     // Optimistic update
     setItems(prev => prev.map(p => {
       if (p.id === postId) {
-        return {
-          ...p,
-          isLikedByMe: !isLikedByMe,
-          likeCount: isLikedByMe ? Math.max(0, p.likeCount - 1) : p.likeCount + 1
-        };
+        const isNormalized = p.likesCount !== undefined;
+        if (isNormalized) {
+          return {
+            ...p,
+            likedByCurrentUser: !isLikedByMe,
+            likesCount: isLikedByMe ? Math.max(0, (p.likesCount || 0) - 1) : (p.likesCount || 0) + 1
+          };
+        } else {
+          return {
+            ...p,
+            isLikedByMe: !isLikedByMe,
+            likeCount: isLikedByMe ? Math.max(0, (p.likeCount || 0) - 1) : (p.likeCount || 0) + 1
+          };
+        }
       }
       return p;
     }));
@@ -137,7 +173,15 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
     setLoadingComments(true);
     try {
       const res = await fetch(`${API_BASE_URL}/posts/${postId}/comments`);
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Fetch comments JSON Parse error:', text.slice(0, 100));
+        data = { success: false, error: 'Sunucu hatası' };
+      }
+
       if (data.success) {
         setComments(data.comments || []);
       }
@@ -161,14 +205,32 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId, text: newComment.trim() })
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Submit comment JSON Parse error:', text.slice(0, 100));
+        data = { success: false, error: 'Sunucu hatası' };
+      }
+
       console.log("COMMENT_SEND_RESPONSE", data);
 
       if (data.success) {
         setComments(prev => [data.comment, ...prev]);
         setNewComment('');
         // Update post comment count
-        setItems(prev => prev.map(p => p.id === selectedPostId ? { ...p, commentCount: p.commentCount + 1 } : p));
+        setItems(prev => prev.map(p => {
+          if (p.id === selectedPostId) {
+            const isNormalized = p.commentsCount !== undefined;
+            if (isNormalized) {
+              return { ...p, commentsCount: (p.commentsCount || 0) + 1 };
+            } else {
+              return { ...p, commentCount: (p.commentCount || 0) + 1 };
+            }
+          }
+          return p;
+        }));
       }
     } catch (err) {
       console.error('Submit comment error', err);
@@ -293,6 +355,15 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
   const showListingsTab = isMyProfile && isHostProfile;
 
   const renderPostsContent = () => {
+    if (postsError) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="warning-outline" size={48} color={Colors.danger} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Hata oluştu</Text>
+          <Text style={styles.emptyText}>{postsError}</Text>
+        </View>
+      );
+    }
     if (postsFeed.length === 0) {
       return (
         <View style={styles.emptyContainer}>
@@ -318,6 +389,15 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
   };
 
   const renderEventsContent = () => {
+    if (eventsError) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="warning-outline" size={48} color={Colors.danger} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Hata oluştu</Text>
+          <Text style={styles.emptyText}>{eventsError}</Text>
+        </View>
+      );
+    }
     if (eventsFeed.length === 0) {
       return (
         <View style={styles.emptyContainer}>
