@@ -43,12 +43,22 @@ export default function FeedScreen() {
 
   const deleteItem = async (item: any) => {
     try {
-      const isPost = item.type === 'post' || item.type === 'event';
-      const endpoint = isPost ? 'posts' : 'listings';
+      const isEvent = item.type === 'event';
+      const isListing = item.type === 'listing' || item.isListing;
+      const isPost = item.type === 'post';
+
+      let endpoint = 'posts';
+      if (isEvent) endpoint = 'events';
+      else if (isListing) endpoint = 'listings';
+
       const itemId = item._id || item.id || item.postId || item.eventId;
       
       const deleteUrl = `${API_BASE_URL}/${endpoint}/${itemId}`;
-      const response = await fetch(deleteUrl, { method: "DELETE" });
+      const response = await fetch(deleteUrl, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id })
+      });
       const text = await response.text();
 
       let result: any = {};
