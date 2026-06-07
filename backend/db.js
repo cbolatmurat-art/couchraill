@@ -418,7 +418,30 @@ const initDB = async () => {
       }
     }
     
-    // Removed db.json to PostgreSQL sync as it's no longer needed
+    // Legacy Follows Migration
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dbPath = path.join(__dirname, 'db.json');
+      if (fs.existsSync(dbPath)) {
+        const localDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+        if (localDb.follows && localDb.follows.length > 0) {
+          console.log(`[DB] Migrating ${localDb.follows.length} follows from db.json to PostgreSQL...`);
+          for (const f of localDb.follows) {
+            if (f.followerUserId && f.followingUserId) {
+              await client.query(`
+                INSERT INTO follows ("followerUserId", "followingUserId", "createdAt")
+                VALUES ($1, $2, $3)
+                ON CONFLICT ("followerUserId", "followingUserId") DO NOTHING
+              `, [f.followerUserId, f.followingUserId, f.createdAt ? new Date(f.createdAt) : new Date()]);
+            }
+          }
+          console.log('[DB] Follows migration completed.');
+        }
+      }
+    } catch (migErr) {
+      console.warn('[DB WARNING] Follows migration failed:', migErr.message);
+    }
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[DB] Error initializing PostgreSQL tables:', e);

@@ -3428,41 +3428,62 @@ const createAndSendSocialNotification = (db, { userId, type, title, message, rel
 };
 
 // GET Follow stats for a user
-app.get('/api/social/follow-stats/:userId', (req, res) => {
+app.get('/api/social/follow-stats/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.query.currentUserId;
-  const db = readDB();
 
-  const followersCount = db.follows.filter(f => f.followingUserId === userId).length;
-  const followingCount = db.follows.filter(f => f.followerUserId === userId).length;
+  try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
 
-  // Mutual follow check for friends count
-  const followingIds = db.follows.filter(f => f.followerUserId === userId).map(f => f.followingUserId);
-  const followerIds = db.follows.filter(f => f.followingUserId === userId).map(f => f.followerUserId);
-  const mutualIds = followingIds.filter(id => followerIds.includes(id));
-  const friendsCount = mutualIds.length;
-
-  let isFollowing = false;
-  let friendshipStatus = 'none';
-
-  if (currentUserId && currentUserId !== userId) {
-    isFollowing = db.follows.some(f => f.followerUserId === currentUserId && f.followingUserId === userId);
-    const isFollowedBy = db.follows.some(f => f.followerUserId === userId && f.followingUserId === currentUserId);
-    const isFriend = isFollowing && isFollowedBy;
-    friendshipStatus = isFriend ? 'accepted' : 'none';
-  }
-
-  res.json({
-    success: true,
-    stats: {
-      followersCount,
-      followingCount,
-      friendsCount,
-      isFollowing,
-      friendshipStatus,
-      friendshipRequestId: null
+    let cId = currentUserId;
+    if (currentUserId) {
+      const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (cRows.length > 0) cId = cRows[0].id;
     }
-  });
+
+    const { rows: followerCountRows } = await query(`SELECT COUNT(*) FROM follows WHERE "followingUserId" = $1`, [targetId]);
+    const followersCount = parseInt(followerCountRows[0]?.count || '0');
+
+    const { rows: followingCountRows } = await query(`SELECT COUNT(*) FROM follows WHERE "followerUserId" = $1`, [targetId]);
+    const followingCount = parseInt(followingCountRows[0]?.count || '0');
+
+    const { rows: friendsCountRows } = await query(`
+      SELECT COUNT(*) FROM follows f1
+      INNER JOIN follows f2 ON f1."followerUserId" = f2."followingUserId" AND f1."followingUserId" = f2."followerUserId"
+      WHERE f1."followerUserId" = $1
+    `, [targetId]);
+    const friendsCount = parseInt(friendsCountRows[0]?.count || '0');
+
+    let isFollowing = false;
+    let friendshipStatus = 'none';
+
+    if (cId && cId !== targetId) {
+      const { rows: fRows } = await query(`SELECT 1 FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [cId, targetId]);
+      isFollowing = fRows.length > 0;
+      
+      const { rows: fbRows } = await query(`SELECT 1 FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [targetId, cId]);
+      const isFollowedBy = fbRows.length > 0;
+      
+      friendshipStatus = (isFollowing && isFollowedBy) ? 'accepted' : 'none';
+    }
+
+    res.json({
+      success: true,
+      stats: {
+        followersCount,
+        followingCount,
+        friendsCount,
+        isFollowing,
+        friendshipStatus,
+        friendshipRequestId: null
+      }
+    });
+  } catch (error) {
+    console.error('[GET_FOLLOW_STATS_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'İstatistikler yüklenemedi.' });
+  }
 });
 
 // POST Follow a user
@@ -3471,60 +3492,46 @@ app.post('/api/social/follow/:userId', async (req, res) => {
   const currentUserId = req.body?.currentUserId || req.query?.currentUserId;
 
   if (!currentUserId) return res.status(400).json({ success: false, error: 'currentUserId required' });
-  if (currentUserId === userId) return res.status(400).json({ success: false, error: 'Kendinizi takip edemezsiniz.' });
 
-  const db = readDB();
-  const targetUser = await findUserByAnyIdentifier(userId, db);
-  const currentUser = await findUserByAnyIdentifier(currentUserId, db);
-
-  if (!targetUser || !currentUser) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
-
-  // Block check
-  const isBlocked = (db.blocked_users || []).some(b => 
-    (b.blockerUserId === currentUserId && b.blockedUserId === userId) ||
-    (b.blockerUserId === userId && b.blockedUserId === currentUserId)
-  );
-  if (isBlocked) {
-    return res.status(403).json({ success: false, error: 'Bu kullanıcıyı takip edemezsiniz.' });
-  }
-
-  // Check in postgres
   try {
-    const { rows } = await query(`SELECT 1 FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [currentUserId, userId]);
-    if (rows.length > 0) {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id, name FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
+
+    let cId = currentUserId;
+    const { rows: cRows } = await query(`SELECT id, name FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    if (cRows.length > 0) cId = cRows[0].id;
+
+    if (cId === targetId) return res.status(400).json({ success: false, error: 'Kendinizi takip edemezsiniz.' });
+    if (uRows.length === 0 || cRows.length === 0) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+
+    const currentUser = cRows[0];
+
+    const { rows: existRows } = await query(`SELECT 1 FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [cId, targetId]);
+    if (existRows.length > 0) {
       return res.status(400).json({ success: false, error: 'Bu kullanıcıyı zaten takip ediyorsunuz.' });
     }
 
     await query(`
       INSERT INTO follows ("followerUserId", "followingUserId")
       VALUES ($1, $2)
-    `, [currentUserId, userId]);
-  } catch (err) {
-    console.error('[FOLLOW_DB_ERROR]', err);
-  }
+    `, [cId, targetId]);
 
-  // Legacy json update
-  const alreadyFollows = db.follows.some(f => f.followerUserId === currentUserId && f.followingUserId === userId);
-  if (!alreadyFollows) {
-    db.follows.push({
-      id: `f_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      followerUserId: currentUserId,
-      followingUserId: userId,
-      createdAt: new Date().toISOString()
+    // Send real-time notification
+    const db = readDB();
+    createAndSendSocialNotification(db, {
+      userId: targetId,
+      type: 'new_follower',
+      title: 'Yeni Takipçi',
+      message: `${currentUser.name} seni takip etmeye başladı.`,
+      relatedUserId: cId
     });
-    writeDB(db);
+
+    res.json({ success: true, message: 'Kullanıcı takip edildi.' });
+  } catch (error) {
+    console.error('[FOLLOW_DB_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Takip edilemedi: Sunucu hatası.' });
   }
-
-  // Send real-time notification
-  createAndSendSocialNotification(db, {
-    userId,
-    type: 'new_follower',
-    title: 'Yeni Takipçi',
-    message: `${currentUser.name} seni takip etmeye başladı.`,
-    relatedUserId: currentUserId
-  });
-
-  res.json({ success: true, message: 'Kullanıcı takip edildi.' });
 });
 
 // DELETE Unfollow a user
@@ -3534,31 +3541,32 @@ app.delete('/api/social/follow/:userId', async (req, res) => {
 
   if (!currentUserId) return res.status(400).json({ success: false, error: 'currentUserId required' });
 
-  let postgresDeleted = false;
   try {
-    const { rowCount } = await query(`DELETE FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [currentUserId, userId]);
-    if (rowCount > 0) postgresDeleted = true;
-  } catch (err) {
-    console.error('[UNFOLLOW_DB_ERROR]', err);
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
+
+    let cId = currentUserId;
+    const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    if (cRows.length > 0) cId = cRows[0].id;
+
+    const { rowCount } = await query(`DELETE FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [cId, targetId]);
+    
+    if (rowCount === 0) {
+      return res.status(400).json({ success: false, error: 'Zaten takip etmiyorsunuz.' });
+    }
+
+    // Emit stats update
+    const receiverSocketId = activeUsers.get(targetId);
+    if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId: targetId });
+    const senderSocketId = activeUsers.get(cId);
+    if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: cId });
+
+    res.json({ success: true, message: 'Takipten çıkıldı.' });
+  } catch (error) {
+    console.error('[UNFOLLOW_DB_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Takipten çıkılamadı.' });
   }
-
-  const db = readDB();
-  const initialCount = db.follows.length;
-  db.follows = db.follows.filter(f => !(f.followerUserId === currentUserId && f.followingUserId === userId));
-
-  if (db.follows.length === initialCount && !postgresDeleted) {
-    return res.status(400).json({ success: false, error: 'Zaten takip etmiyorsunuz.' });
-  }
-
-  writeDB(db);
-
-  // Emit stats update
-  const receiverSocketId = activeUsers.get(userId);
-  if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId });
-  const senderSocketId = activeUsers.get(currentUserId);
-  if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: currentUserId });
-
-  res.json({ success: true, message: 'Takipten çıkıldı.' });
 });
 
 // GET Followers list
@@ -3566,17 +3574,27 @@ app.get('/api/social/followers/:userId', async (req, res) => {
   const { userId } = req.params;
   const { currentUserId } = req.query;
 
-  if (currentUserId !== userId) {
-    return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
-  }
-
   try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
+
+    let cId = currentUserId;
+    if (currentUserId) {
+      const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (cRows.length > 0) cId = cRows[0].id;
+    }
+
+    if (cId !== targetId) {
+      return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
+    }
+
     const { rows } = await query(`
-      SELECT u.id, u.name, u."profileImage", u."userType"
+      SELECT u.id, u.name, u."profileImage", u."userType", u.username, u."fullName"
       FROM follows f
       JOIN users u ON f."followerUserId" = u.id
       WHERE f."followingUserId" = $1 AND (u."isDeleted" IS NULL OR u."isDeleted" = false) AND u.active = true
-    `, [userId]);
+    `, [targetId]);
 
     res.json({ success: true, users: rows });
   } catch (error) {
@@ -3590,17 +3608,27 @@ app.get('/api/social/following/:userId', async (req, res) => {
   const { userId } = req.params;
   const { currentUserId } = req.query;
 
-  if (currentUserId !== userId) {
-    return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
-  }
-
   try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
+
+    let cId = currentUserId;
+    if (currentUserId) {
+      const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (cRows.length > 0) cId = cRows[0].id;
+    }
+
+    if (cId !== targetId) {
+      return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
+    }
+
     const { rows } = await query(`
-      SELECT u.id, u.name, u."profileImage", u."userType"
+      SELECT u.id, u.name, u."profileImage", u."userType", u.username, u."fullName"
       FROM follows f
       JOIN users u ON f."followingUserId" = u.id
       WHERE f."followerUserId" = $1 AND (u."isDeleted" IS NULL OR u."isDeleted" = false) AND u.active = true
-    `, [userId]);
+    `, [targetId]);
 
     res.json({ success: true, users: rows });
   } catch (error) {
@@ -3783,18 +3811,28 @@ app.get('/api/social/friends/:userId', async (req, res) => {
   const { userId } = req.params;
   const { currentUserId } = req.query;
 
-  if (currentUserId !== userId) {
-    return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
-  }
-
   try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
+
+    let cId = currentUserId;
+    if (currentUserId) {
+      const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+      if (cRows.length > 0) cId = cRows[0].id;
+    }
+
+    if (cId && cId !== targetId) {
+      return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
+    }
+
     const { rows: friendUsers } = await query(`
-      SELECT u.id, u.name, u.username, u."profileImage", u."userType"
-      FROM users u
-      INNER JOIN follows f1 ON f1."followingUserId" = u.id AND f1."followerUserId" = $1
-      INNER JOIN follows f2 ON f2."followerUserId" = u.id AND f2."followingUserId" = $1
-      WHERE u."isDeleted" != true AND u.active != false
-    `, [userId]);
+      SELECT u.id, u.name, u.username, u."profileImage", u."userType", u."fullName"
+      FROM follows f1
+      INNER JOIN follows f2 ON f1."followerUserId" = f2."followingUserId" AND f1."followingUserId" = f2."followerUserId"
+      JOIN users u ON f1."followingUserId" = u.id
+      WHERE f1."followerUserId" = $1 AND (u."isDeleted" IS NULL OR u."isDeleted" = false) AND u.active = true
+    `, [targetId]);
 
     res.json({ success: true, users: friendUsers });
   } catch (error) {
