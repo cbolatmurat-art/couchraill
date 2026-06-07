@@ -4658,7 +4658,7 @@ app.post('/api/reports', async (req, res) => {
     res.json({ success: true, report: { id: newReportId } });
   } catch (error) {
     console.error('[SUBMIT_REPORT_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Şikayet iletilemedi.' });
+    res.status(500).json({ success: false, error: 'Şikayet iletilemedi.', details: error.message, stack: error.stack });
   }
 });
 

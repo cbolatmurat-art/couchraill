@@ -315,12 +315,6 @@ const initDB = async () => {
       )
     `);
 
-    try {
-      await client.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`);
-    } catch (e) {
-      console.log("[DB] Priority column already exists or error");
-    }
-
     await client.query(`
       CREATE TABLE IF NOT EXISTS friend_requests (
         id VARCHAR(255) PRIMARY KEY,
@@ -409,8 +403,7 @@ const initDB = async () => {
       )
     `);
 
-    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
-    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
+
 
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');
@@ -441,7 +434,8 @@ const initDB = async () => {
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
+      `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`
     ];
     for (const alt of alters) {
       try {
@@ -450,6 +444,9 @@ const initDB = async () => {
         console.warn(`[DB WARNING] Could not execute: ${alt}`, e.message);
       }
     }
+
+    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
+    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
     
     // Legacy Follows Migration
     try {
