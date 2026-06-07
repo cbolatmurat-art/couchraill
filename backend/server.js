@@ -1902,15 +1902,21 @@ app.get('/api/conversations/:userId', (req, res) => {
   res.json(populated);
 });
 
-app.post('/api/conversations/start', (req, res) => {
-  const { currentUserId, targetUser } = req.body;
+app.post('/api/conversations/start', async (req, res) => {
+  const { currentUserId, targetUser: reqTargetUser } = req.body;
   const db = readDB();
   
-  const currentUser = db.users.find(u => u.id === currentUserId);
-  if (!currentUser) return res.status(404).json({ error: 'User not found' });
+  const currentUser = await findUserByAnyIdentifier(currentUserId, db);
+  if (!currentUser) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+  const targetUserId = reqTargetUser?.id || reqTargetUser?.userId || reqTargetUser?._id || reqTargetUser?.uid || reqTargetUser?.email || reqTargetUser?.username;
+  if (!targetUserId) return res.status(400).json({ error: 'Hedef kullanıcı bilgisi eksik.' });
+
+  const targetUser = await findUserByAnyIdentifier(targetUserId, db);
+  if (!targetUser) return res.status(404).json({ error: 'Hedef kullanıcı bulunamadı.' });
 
   let existingConv = db.conversations.find(c => 
-    c.participantIds.includes(currentUserId) && c.participantIds.includes(targetUser.id)
+    c.participantIds.includes(currentUser.id) && c.participantIds.includes(targetUser.id)
   );
 
   if (existingConv) {
@@ -1919,20 +1925,21 @@ app.post('/api/conversations/start', (req, res) => {
 
   const newConv = {
     id: `c${Date.now()}`,
-    participantIds: [currentUserId, targetUser.id],
+    participantIds: [currentUser.id, targetUser.id],
     participantNames: {
-      [currentUserId]: currentUser.name,
-      [targetUser.id]: targetUser.name,
+      [currentUser.id]: currentUser.name || currentUser.fullName || currentUser.username,
+      [targetUser.id]: targetUser.name || targetUser.fullName || targetUser.username,
     },
     participantProfiles: {
-      [currentUserId]: currentUser.profileImage || null,
-      [targetUser.id]: targetUser.profileImage || null,
+      [currentUser.id]: currentUser.profileImage || currentUser.avatar || null,
+      [targetUser.id]: targetUser.profileImage || targetUser.avatar || null,
     },
     mutedBy: [],
     deletedBy: [],
     createdAt: new Date().toISOString()
   };
 
+  if (!db.conversations) db.conversations = [];
   db.conversations.unshift(newConv);
   writeDB(db);
   res.json({ success: true, conversation: newConv });
@@ -3228,7 +3235,7 @@ app.get('/api/social/follow-stats/:userId', (req, res) => {
 });
 
 // POST Follow a user
-app.post('/api/social/follow/:userId', (req, res) => {
+app.post('/api/social/follow/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.body?.currentUserId || req.query?.currentUserId;
 
@@ -3236,8 +3243,8 @@ app.post('/api/social/follow/:userId', (req, res) => {
   if (currentUserId === userId) return res.status(400).json({ success: false, error: 'Kendinizi takip edemezsiniz.' });
 
   const db = readDB();
-  const targetUser = db.users.find(u => u.id === userId);
-  const currentUser = db.users.find(u => u.id === currentUserId);
+  const targetUser = await findUserByAnyIdentifier(userId, db);
+  const currentUser = await findUserByAnyIdentifier(currentUserId, db);
 
   if (!targetUser || !currentUser) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
 
@@ -3676,7 +3683,7 @@ app.get('/api/social/block-status/:userId', (req, res) => {
 });
 
 // POST Poke a user
-app.post('/api/social/poke/:userId', (req, res) => {
+app.post('/api/social/poke/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.body?.currentUserId || req.query?.currentUserId;
 
@@ -3684,8 +3691,8 @@ app.post('/api/social/poke/:userId', (req, res) => {
   if (currentUserId === userId) return res.status(400).json({ success: false, error: 'Kendinizi dürtemezsiniz.' });
 
   const db = readDB();
-  const targetUser = db.users.find(u => u.id === userId);
-  const currentUser = db.users.find(u => u.id === currentUserId);
+  const targetUser = await findUserByAnyIdentifier(userId, db);
+  const currentUser = await findUserByAnyIdentifier(currentUserId, db);
 
   if (!targetUser || !currentUser) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
 
