@@ -127,7 +127,7 @@ export const PostCard = React.memo(({
       <TouchableWithoutFeedback onPress={handleDoubleTap}>
         <View style={styles.cardBody}>
           <Text style={styles.postText}>
-            {item.text}
+            {item.content || item.text || item.description}
           </Text>
           
           {item.location && (
