@@ -4626,6 +4626,116 @@ app.get('/api/admin/reports', checkAdminAuth, async (req, res) => {
     res.status(500).json({ success: false, error: 'Şikayetler alınamadı.' });
   }
 });
+// GET Admin Report Details
+app.get('/api/admin/reports/:id/details', checkAdminAuth, async (req, res) => {
+  try {
+    const reportId = req.params.id;
+    
+    // Fetch report info with reporters
+    const { rows: reportRows } = await query(`
+      SELECT r.*, 
+        u1.name as reporter_name, u1.username as reporter_username, u1."profileImage" as reporter_avatar,
+        u2.name as reported_name, u2.username as reported_username, u2."profileImage" as reported_avatar
+      FROM reports r
+      LEFT JOIN users u1 ON r."reporterUserId" = u1.id
+      LEFT JOIN users u2 ON r."reportedUserId" = u2.id
+      WHERE r.id = $1
+    `, [reportId]);
+
+    if (reportRows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Şikayet bulunamadı.' });
+    }
+
+    const report = reportRows[0];
+    let content = null;
+    let isDeleted = false;
+
+    if (report.contentType === 'listing') {
+      const { rows } = await query(`
+        SELECT l.*, u.name as owner_name, u.username as owner_username, u."profileImage" as owner_avatar 
+        FROM listings l
+        LEFT JOIN users u ON (l."hostId" = u.id OR l."ownerId" = u.id)
+        WHERE l.id = $1
+      `, [report.contentId]);
+      if (rows.length > 0) {
+        content = rows[0];
+        if (content.deletedAt) isDeleted = true;
+      } else {
+        isDeleted = true;
+      }
+    } else if (report.contentType === 'post' || report.contentType === 'event') {
+      const { rows } = await query(`
+        SELECT p.*, u.name as owner_name, u.username as owner_username, u."profileImage" as owner_avatar 
+        FROM posts p
+        LEFT JOIN users u ON (p."userId" = u.id OR p."authorId" = u.id)
+        WHERE p.id = $1
+      `, [report.contentId]);
+      if (rows.length > 0) {
+        content = rows[0];
+      } else {
+        isDeleted = true;
+      }
+    } else if (report.contentType === 'user') {
+      const { rows } = await query(`
+        SELECT u.id, u.name, u.username, u."profileImage" as avatar, u.city, u."identityVerified", u.active,
+        (SELECT count(*) FROM follows WHERE "followingUserId" = u.id) as followers,
+        (SELECT count(*) FROM follows WHERE "followerUserId" = u.id) as following
+        FROM users u
+        WHERE u.id = $1
+      `, [report.contentId]);
+      if (rows.length > 0) {
+        content = rows[0];
+      } else {
+        isDeleted = true;
+      }
+    }
+
+    res.json({ success: true, report, content, isDeleted });
+  } catch (error) {
+    console.error('[ADMIN_REPORT_DETAILS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Detaylar alınamadı.' });
+  }
+});
+
+// POST Resolve Report
+app.post('/api/admin/reports/:id/resolve', checkAdminAuth, async (req, res) => {
+  try {
+    const reportId = req.params.id;
+    await query(`UPDATE reports SET status = 'resolved' WHERE id = $1`, [reportId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ADMIN_REPORT_RESOLVE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Şikayet çözülemedi.' });
+  }
+});
+
+// POST Hide Content
+app.post('/api/admin/moderate/hide-content', checkAdminAuth, async (req, res) => {
+  try {
+    const { contentType, contentId } = req.body;
+    if (contentType === 'listing') {
+      await query(`UPDATE listings SET active = false WHERE id = $1`, [contentId]);
+    } else if (contentType === 'post' || contentType === 'event') {
+      await query(`UPDATE posts SET "isActive" = false WHERE id = $1`, [contentId]);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ADMIN_MODERATE_HIDE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'İçerik gizlenemedi.' });
+  }
+});
+
+// POST Deactivate User
+app.post('/api/admin/moderate/deactivate-user', checkAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    await query(`UPDATE users SET active = false WHERE id = $1`, [userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ADMIN_MODERATE_DEACTIVATE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Kullanıcı pasifleştirilemedi.' });
+  }
+});
 
 // POST Submit Report
 app.post('/api/reports', async (req, res) => {

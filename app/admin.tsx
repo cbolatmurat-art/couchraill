@@ -85,6 +85,9 @@ export default function AdminScreen() {
   // Moderation state
   const [modTab, setModTab] = useState('all'); // all, pending, resolved, etc.
   const [selectedComplaint, setSelectedComplaint] = useState<any | null>(null);
+  const [complaintDetails, setComplaintDetails] = useState<any | null>(null);
+  const [complaintDetailsLoading, setComplaintDetailsLoading] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   const clearAdminSession = async () => {
     localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt');
@@ -225,6 +228,99 @@ export default function AdminScreen() {
       setReportsError(e?.message || 'Sunucu bağlantı hatası.');
     } finally {
       setReportsLoading(false);
+    }
+  };
+
+  const fetchComplaintDetails = async (id: string) => {
+    if (!adminToken) return;
+    setComplaintDetailsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/${id}/details`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setComplaintDetails(data);
+      } else {
+        AlertHelper.alert('Hata', data.error || 'Detaylar alınamadı.');
+      }
+    } catch (error) {
+      AlertHelper.alert('Hata', 'Sunucuya bağlanılamadı.');
+    } finally {
+      setComplaintDetailsLoading(false);
+    }
+  };
+
+  const handleOpenComplaint = (complaint: any) => {
+    setSelectedComplaint(complaint);
+    setComplaintDetails(null);
+    fetchComplaintDetails(complaint.id);
+  };
+
+  const handleHideContent = async (contentType: string, contentId: string) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/moderate/hide-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ contentType, contentId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', 'İçerik gizlendi.');
+      } else {
+        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleDeactivateUser = async (userId: string) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/moderate/deactivate-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', 'Kullanıcı pasife alındı.');
+      } else {
+        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleResolveComplaint = async (id: string) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/${id}/resolve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', 'Şikayet çözüldü olarak işaretlendi.');
+        setSelectedComplaint(null);
+        fetchReports(undefined, reportTypeFilter);
+      } else {
+        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -426,7 +522,7 @@ export default function AdminScreen() {
                   {c.description ? <Text style={styles.complaintDesc} numberOfLines={2}>{c.description}</Text> : null}
                   
                   <View style={styles.complaintActions}>
-                    <Pressable style={styles.outlineBtn} onPress={() => setSelectedComplaint(c)}>
+                    <Pressable style={styles.outlineBtn} onPress={() => handleOpenComplaint(c)}>
                       <Text style={styles.outlineBtnText}>Detay Gör</Text>
                     </Pressable>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -632,52 +728,214 @@ export default function AdminScreen() {
               <Pressable onPress={() => setSelectedComplaint(null)}><Ionicons name="close" size={24} color="#64748B" /></Pressable>
             </View>
             <ScrollView style={styles.detailedModalBody}>
-              {selectedComplaint && (
+              {complaintDetailsLoading ? (
+                <ActivityIndicator size="large" color="#4F46E5" style={{ marginVertical: 40 }} />
+              ) : complaintDetails && complaintDetails.report ? (
                 <>
                   <View style={styles.detailBox}>
                     <Text style={styles.detailLabel}>Tarih</Text>
-                    <Text style={styles.detailValue}>{selectedComplaint.date}</Text>
+                    <Text style={styles.detailValue}>{new Date(complaintDetails.report.createdAt).toLocaleString('tr-TR')}</Text>
+                  </View>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>Şikayet ID</Text>
+                    <Text style={styles.detailValue}>{complaintDetails.report.id}</Text>
                   </View>
                   <View style={styles.detailBox}>
                     <Text style={styles.detailLabel}>Şikayet Eden</Text>
-                    <Text style={styles.detailValue}>{selectedComplaint.reporter}</Text>
+                    <Text style={styles.detailValue}>{complaintDetails.report.reporter_name || complaintDetails.report.reporter_username || complaintDetails.report.reporterUserId}</Text>
                   </View>
                   <View style={styles.detailBox}>
-                    <Text style={styles.detailLabel}>Şikayet Edilen İçerik/Kişi</Text>
-                    <Text style={styles.detailValue}>{selectedComplaint.target}</Text>
+                    <Text style={styles.detailLabel}>Şikayet Edilen Kullanıcı</Text>
+                    <Text style={styles.detailValue}>{complaintDetails.report.reported_name || complaintDetails.report.reported_username || complaintDetails.report.reportedUserId}</Text>
                   </View>
                   <View style={styles.detailBox}>
                     <Text style={styles.detailLabel}>Şikayet Nedeni</Text>
-                    <Text style={styles.detailValue}>{selectedComplaint.reason}</Text>
+                    <Text style={styles.detailValue}>{complaintDetails.report.reason}</Text>
                   </View>
                   <View style={styles.detailBox}>
                     <Text style={styles.detailLabel}>Açıklama</Text>
-                    <Text style={styles.detailValue}>{selectedComplaint.desc}</Text>
+                    <Text style={styles.detailValue}>{complaintDetails.report.description || '-'}</Text>
+                  </View>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>Şikayet Türü</Text>
+                    <Text style={styles.detailValue}>
+                      {complaintDetails.report.contentType === 'listing' ? 'İlan' : 
+                       complaintDetails.report.contentType === 'post' ? 'Gönderi' : 
+                       complaintDetails.report.contentType === 'event' ? 'Etkinlik' : 
+                       complaintDetails.report.contentType === 'user' ? 'Kullanıcı' : 'Diğer'}
+                    </Text>
                   </View>
 
-                  <Text style={styles.sectionTitle}>Moderasyon Notu</Text>
-                  <TextInput style={styles.modNoteInput} placeholder="İnceleme notlarınızı buraya yazın..." multiline numberOfLines={4} />
-                  
+                  <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Şikayet Edilen İçerik (Canlı Önizleme)</Text>
+                  {complaintDetails.isDeleted ? (
+                    <View style={[styles.emptyState, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                      <Ionicons name="warning-outline" size={32} color="#EF4444" />
+                      <Text style={[styles.emptyStateText, { color: '#EF4444' }]}>Şikayet edilen içerik artık mevcut değil.</Text>
+                    </View>
+                  ) : complaintDetails.content ? (
+                    <View style={styles.previewCard}>
+                      {complaintDetails.report.contentType === 'listing' && (
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            {complaintDetails.content.owner_avatar ? (
+                              <Image source={{ uri: complaintDetails.content.owner_avatar }} style={styles.previewAvatar} />
+                            ) : (
+                              <View style={[styles.previewAvatar, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={16} color="#94A3B8" />
+                              </View>
+                            )}
+                            <View style={{ marginLeft: 8 }}>
+                              <Text style={styles.previewOwnerName}>{complaintDetails.content.owner_name}</Text>
+                              <Text style={styles.previewOwnerUsername}>@{complaintDetails.content.owner_username}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.previewTitle}>{complaintDetails.content.title}</Text>
+                          <Text style={styles.previewDesc}>{complaintDetails.content.description}</Text>
+                          <View style={styles.previewInfoRow}>
+                            <Ionicons name="location-outline" size={14} color="#64748B" />
+                            <Text style={styles.previewInfoText}>{complaintDetails.content.city}, {complaintDetails.content.district}, {complaintDetails.content.neighborhood}</Text>
+                          </View>
+                          <View style={styles.previewInfoRow}>
+                            <Ionicons name="time-outline" size={14} color="#64748B" />
+                            <Text style={styles.previewInfoText}>Süre: {complaintDetails.content.guestStayDuration || 'Belirtilmedi'}</Text>
+                          </View>
+                          <Text style={styles.previewDate}>Yayın: {new Date(complaintDetails.content.createdAt).toLocaleDateString('tr-TR')}</Text>
+                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/(tabs)/index`)}>
+                            <Text style={styles.previewBtnText}>İlana Git</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                      
+                      {complaintDetails.report.contentType === 'post' && (
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            {complaintDetails.content.owner_avatar ? (
+                              <Image source={{ uri: complaintDetails.content.owner_avatar }} style={styles.previewAvatar} />
+                            ) : (
+                              <View style={[styles.previewAvatar, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={16} color="#94A3B8" />
+                              </View>
+                            )}
+                            <View style={{ marginLeft: 8 }}>
+                              <Text style={styles.previewOwnerName}>{complaintDetails.content.owner_name}</Text>
+                              <Text style={styles.previewOwnerUsername}>@{complaintDetails.content.owner_username}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.previewDesc}>{complaintDetails.content.text}</Text>
+                          {complaintDetails.content.image && (
+                            <Image source={{ uri: complaintDetails.content.image }} style={styles.previewPostImage} />
+                          )}
+                          <View style={{ flexDirection: 'row', gap: 16, marginTop: 12, marginBottom: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name="heart-outline" size={16} color="#64748B" />
+                              <Text style={{ marginLeft: 4, color: '#64748B' }}>{complaintDetails.content.likesCount || 0}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name="chatbubble-outline" size={16} color="#64748B" />
+                              <Text style={{ marginLeft: 4, color: '#64748B' }}>{complaintDetails.content.commentsCount || 0}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.previewDate}>Yayın: {new Date(complaintDetails.content.createdAt).toLocaleDateString('tr-TR')}</Text>
+                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/(tabs)/matches`)}>
+                            <Text style={styles.previewBtnText}>Gönderiye Git</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                      
+                      {complaintDetails.report.contentType === 'event' && (
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            {complaintDetails.content.owner_avatar ? (
+                              <Image source={{ uri: complaintDetails.content.owner_avatar }} style={styles.previewAvatar} />
+                            ) : (
+                              <View style={[styles.previewAvatar, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={16} color="#94A3B8" />
+                              </View>
+                            )}
+                            <View style={{ marginLeft: 8 }}>
+                              <Text style={styles.previewOwnerName}>{complaintDetails.content.owner_name}</Text>
+                              <Text style={styles.previewOwnerUsername}>@{complaintDetails.content.owner_username}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.previewTitle}>{complaintDetails.content.title || complaintDetails.content.text}</Text>
+                          {complaintDetails.content.description && <Text style={styles.previewDesc}>{complaintDetails.content.description}</Text>}
+                          <View style={styles.previewInfoRow}>
+                            <Ionicons name="location-outline" size={14} color="#64748B" />
+                            <Text style={styles.previewInfoText}>{complaintDetails.content.city}, {complaintDetails.content.district}, {complaintDetails.content.neighborhood}</Text>
+                          </View>
+                          <View style={styles.previewInfoRow}>
+                            <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                            <Text style={styles.previewInfoText}>{complaintDetails.content.eventDate} {complaintDetails.content.eventTime}</Text>
+                          </View>
+                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/(tabs)/matches`)}>
+                            <Text style={styles.previewBtnText}>Etkinliğe Git</Text>
+                          </Pressable>
+                        </View>
+                      )}
+
+                      {complaintDetails.report.contentType === 'user' && (
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            {complaintDetails.content.avatar ? (
+                              <Image source={{ uri: complaintDetails.content.avatar }} style={[styles.previewAvatar, { width: 60, height: 60, borderRadius: 30 }]} />
+                            ) : (
+                              <View style={[styles.previewAvatar, { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={32} color="#94A3B8" />
+                              </View>
+                            )}
+                            <View style={{ marginLeft: 12 }}>
+                              <Text style={[styles.previewOwnerName, { fontSize: 18 }]}>{complaintDetails.content.name}</Text>
+                              <Text style={styles.previewOwnerUsername}>@{complaintDetails.content.username}</Text>
+                              {complaintDetails.content.identityVerified && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                  <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                                  <Text style={{ fontSize: 12, color: '#10B981', marginLeft: 4 }}>Doğrulanmış</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <View style={styles.previewInfoRow}>
+                            <Ionicons name="location-outline" size={14} color="#64748B" />
+                            <Text style={styles.previewInfoText}>{complaintDetails.content.city || 'Belirtilmedi'}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 16, marginTop: 12, marginBottom: 12 }}>
+                            <View style={{ alignItems: 'center' }}>
+                              <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{complaintDetails.content.followers}</Text>
+                              <Text style={{ fontSize: 12, color: '#64748B' }}>Takipçi</Text>
+                            </View>
+                            <View style={{ alignItems: 'center' }}>
+                              <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{complaintDetails.content.following}</Text>
+                              <Text style={{ fontSize: 12, color: '#64748B' }}>Takip Edilen</Text>
+                            </View>
+                          </View>
+                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/profile/${complaintDetails.content.id}`)}>
+                            <Text style={styles.previewBtnText}>Profili Aç</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
+
                   <Text style={styles.sectionTitle}>Hızlı Aksiyonlar</Text>
                   <View style={styles.actionGrid}>
-                    <Pressable style={styles.actionGridBtn} onPress={() => AlertHelper.alert('Bilgi', 'İçerik gizlendi (Mock)')}>
+                    <Pressable style={styles.actionGridBtn} onPress={() => handleHideContent(complaintDetails.report.contentType, complaintDetails.report.contentId)} disabled={actionInProgress}>
                       <Ionicons name="eye-off-outline" size={20} color="#64748B" />
                       <Text style={styles.actionGridBtnText}>İçeriği Gizle</Text>
                     </Pressable>
-                    <Pressable style={styles.actionGridBtn} onPress={() => AlertHelper.alert('Bilgi', 'Kullanıcı pasife alındı (Mock)')}>
+                    <Pressable style={styles.actionGridBtn} onPress={() => handleDeactivateUser(complaintDetails.report.reportedUserId)} disabled={actionInProgress}>
                       <Ionicons name="person-remove-outline" size={20} color="#EF4444" />
                       <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>Kullanıcıyı Pasifleştir</Text>
                     </Pressable>
                   </View>
                 </>
-              )}
+              ) : null}
             </ScrollView>
             <View style={styles.detailedModalFooter}>
               <Pressable style={styles.outlineBtn} onPress={() => setSelectedComplaint(null)}>
                 <Text style={styles.outlineBtnText}>Kapat</Text>
               </Pressable>
-              <Pressable style={[styles.solidBtn, { backgroundColor: '#10B981' }]} onPress={() => { AlertHelper.alert('Başarılı', 'Şikayet çözüldü olarak işaretlendi.'); setSelectedComplaint(null); }}>
-                <Text style={styles.solidBtnText}>Çözüldü İşaretle</Text>
+              <Pressable style={[styles.solidBtn, { backgroundColor: '#10B981' }]} onPress={() => handleResolveComplaint(selectedComplaint.id)} disabled={actionInProgress || complaintDetailsLoading}>
+                {actionInProgress ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.solidBtnText}>Çözüldü İşaretle</Text>}
               </Pressable>
             </View>
           </View>
@@ -836,5 +1094,19 @@ const styles = StyleSheet.create({
   // Zoom overlay
   zoomOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   zoomedImage: { width: '90%', height: '80%', resizeMode: 'contain' },
-  zoomCloseBtn: { position: 'absolute', top: 40, right: 20, padding: 8 }
+  zoomCloseBtn: { position: 'absolute', top: 40, right: 20, padding: 8 },
+
+  // Live Preview Styles
+  previewCard: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginTop: 8, marginBottom: 16 },
+  previewAvatar: { width: 40, height: 40, borderRadius: 20 },
+  previewOwnerName: { fontSize: 14, fontWeight: 'bold', color: '#0F172A' },
+  previewOwnerUsername: { fontSize: 12, color: '#64748B' },
+  previewTitle: { fontSize: 16, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 },
+  previewDesc: { fontSize: 14, color: '#475569', marginBottom: 12, lineHeight: 20 },
+  previewInfoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  previewInfoText: { fontSize: 13, color: '#475569', marginLeft: 6 },
+  previewDate: { fontSize: 12, color: '#94A3B8', marginTop: 8, marginBottom: 12 },
+  previewBtn: { backgroundColor: '#EEF2FF', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  previewBtnText: { color: '#4F46E5', fontWeight: '600', fontSize: 14 },
+  previewPostImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 8, backgroundColor: '#E2E8F0' }
 });
