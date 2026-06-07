@@ -257,14 +257,14 @@ export default function AdminScreen() {
     fetchComplaintDetails(complaint.id);
   };
 
-  const handleRemoveContent = async (contentType: string, contentId: string, reportId: string) => {
+  const handleRemoveContent = async (contentType: string, contentId: string, reportId: string, reportedUserId: string, reason: string) => {
     if (!adminToken) return;
     setActionInProgress(true);
     try {
       const res = await fetch(`${API_BASE_URL}/admin/moderate/hide-content`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-        body: JSON.stringify({ contentType, contentId })
+        body: JSON.stringify({ contentType, contentId, reportedUserId, reason })
       });
       const data = await res.json();
       if (data.success) {
@@ -913,7 +913,7 @@ export default function AdminScreen() {
 
                   <Text style={styles.sectionTitle}>Hızlı Aksiyonlar</Text>
                   <View style={styles.actionGrid}>
-                    <Pressable style={styles.actionGridBtn} onPress={() => handleRemoveContent(complaintDetails.report.contentType, complaintDetails.report.contentId, complaintDetails.report.id)} disabled={actionInProgress}>
+                    <Pressable style={styles.actionGridBtn} onPress={() => handleRemoveContent(complaintDetails.report.contentType, complaintDetails.report.contentId, complaintDetails.report.id, complaintDetails.report.reportedUserId, complaintDetails.report.reason)} disabled={actionInProgress}>
                       <Ionicons name="trash-outline" size={20} color="#EF4444" />
                       <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>İçeriği Kaldır</Text>
                     </Pressable>

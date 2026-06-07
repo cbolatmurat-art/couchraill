@@ -104,7 +104,9 @@ export default function NotificationsScreen() {
       case 'request_accepted': return 'checkmark-circle';
       case 'request_rejected': return 'close-circle';
       case 'message_received': return 'chatbubble';
-      case 'listing_removed': return 'trash';
+      case 'listing_removed': 
+      case 'post_removed': 
+      case 'event_removed': return 'trash';
       case 'profile_verified':
       case 'identity_approved':
       case 'email_verified':
@@ -124,7 +126,9 @@ export default function NotificationsScreen() {
       case 'request_accepted': return Colors.success;
       case 'request_rejected': return Colors.danger;
       case 'message_received': return '#3498db';
-      case 'listing_removed': return Colors.danger;
+      case 'listing_removed': 
+      case 'post_removed': 
+      case 'event_removed': return Colors.danger;
       case 'profile_verified':
       case 'identity_approved':
       case 'email_verified':

@@ -4712,12 +4712,53 @@ app.post('/api/admin/reports/:id/resolve', checkAdminAuth, async (req, res) => {
 // POST Hide Content
 app.post('/api/admin/moderate/hide-content', checkAdminAuth, async (req, res) => {
   try {
-    const { contentType, contentId } = req.body;
+    const { contentType, contentId, reportedUserId, reason } = req.body;
     if (contentType === 'listing') {
       await query(`DELETE FROM listings WHERE id = $1`, [contentId]);
     } else if (contentType === 'post' || contentType === 'event') {
       await query(`DELETE FROM posts WHERE id = $1`, [contentId]);
     }
+
+    // Create notification if user and reason are provided
+    if (reportedUserId && reason) {
+      let contentName = 'İlanınız';
+      let type = 'listing_removed';
+      if (contentType === 'post') {
+        contentName = 'Gönderiniz';
+        type = 'post_removed';
+      } else if (contentType === 'event') {
+        contentName = 'Etkinliğiniz';
+        type = 'event_removed';
+      }
+
+      let message = `${contentName} platform politikalarımıza aykırı bulunduğu için kaldırıldı.`;
+      const lowerReason = reason.toLowerCase();
+      if (lowerReason.includes('spam')) {
+        message = `Spam olması nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
+      } else if (lowerReason.includes('rahatsız edici')) {
+        message = `Rahatsız edici içerik içermesi nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
+      } else if (lowerReason.includes('yanıltıcı')) {
+        message = `Yanıltıcı bilgi içermesi nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
+      } else if (lowerReason.includes('uygunsuz')) {
+        message = `Uygunsuz içerik içermesi nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
+      }
+
+      const notif = createNotification(db, {
+        userId: reportedUserId,
+        type: type,
+        title: `${contentName} kaldırıldı`,
+        message: message,
+        relatedId: contentId,
+        relatedType: contentType
+      });
+
+      // Send real-time notification
+      const receiverSocketId = Object.keys(userSockets).find(id => userSockets[id] === reportedUserId);
+      if (receiverSocketId && io.sockets.sockets.get(receiverSocketId)) {
+        io.to(receiverSocketId).emit('social_notification', notif);
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('[ADMIN_MODERATE_HIDE_ERROR]', error);
