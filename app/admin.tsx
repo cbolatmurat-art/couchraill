@@ -257,7 +257,7 @@ export default function AdminScreen() {
     fetchComplaintDetails(complaint.id);
   };
 
-  const handleHideContent = async (contentType: string, contentId: string) => {
+  const handleRemoveContent = async (contentType: string, contentId: string, reportId: string) => {
     if (!adminToken) return;
     setActionInProgress(true);
     try {
@@ -268,9 +268,16 @@ export default function AdminScreen() {
       });
       const data = await res.json();
       if (data.success) {
-        AlertHelper.alert('Başarılı', 'İçerik gizlendi.');
+        let msg = 'İçerik kaldırıldı.';
+        if (contentType === 'listing') msg = 'İlan kaldırıldı.';
+        else if (contentType === 'post') msg = 'Gönderi kaldırıldı.';
+        else if (contentType === 'event') msg = 'Etkinlik kaldırıldı.';
+        
+        AlertHelper.alert('Başarılı', msg);
+        // Auto resolve the complaint
+        await handleResolveComplaint(reportId, true);
       } else {
-        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+        AlertHelper.alert('Hata', data.error || 'İçerik kaldırılamadı.');
       }
     } catch (e) {
       AlertHelper.alert('Hata', 'Sunucu hatası.');
@@ -301,7 +308,7 @@ export default function AdminScreen() {
     }
   };
 
-  const handleResolveComplaint = async (id: string) => {
+  const handleResolveComplaint = async (id: string, isSilent = false) => {
     if (!adminToken) return;
     setActionInProgress(true);
     try {
@@ -311,14 +318,14 @@ export default function AdminScreen() {
       });
       const data = await res.json();
       if (data.success) {
-        AlertHelper.alert('Başarılı', 'Şikayet çözüldü olarak işaretlendi.');
+        if (!isSilent) AlertHelper.alert('Başarılı', 'Şikayet çözüldü olarak işaretlendi.');
         setSelectedComplaint(null);
         fetchReports(undefined, reportTypeFilter);
       } else {
-        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+        if (!isSilent) AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
       }
     } catch (e) {
-      AlertHelper.alert('Hata', 'Sunucu hatası.');
+      if (!isSilent) AlertHelper.alert('Hata', 'Sunucu hatası.');
     } finally {
       setActionInProgress(false);
     }
@@ -800,9 +807,6 @@ export default function AdminScreen() {
                             <Text style={styles.previewInfoText}>Süre: {complaintDetails.content.guestStayDuration || 'Belirtilmedi'}</Text>
                           </View>
                           <Text style={styles.previewDate}>Yayın: {new Date(complaintDetails.content.createdAt).toLocaleDateString('tr-TR')}</Text>
-                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/(tabs)/index`)}>
-                            <Text style={styles.previewBtnText}>İlana Git</Text>
-                          </Pressable>
                         </View>
                       )}
                       
@@ -836,9 +840,6 @@ export default function AdminScreen() {
                             </View>
                           </View>
                           <Text style={styles.previewDate}>Yayın: {new Date(complaintDetails.content.createdAt).toLocaleDateString('tr-TR')}</Text>
-                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/(tabs)/matches`)}>
-                            <Text style={styles.previewBtnText}>Gönderiye Git</Text>
-                          </Pressable>
                         </View>
                       )}
                       
@@ -867,9 +868,6 @@ export default function AdminScreen() {
                             <Ionicons name="calendar-outline" size={14} color="#64748B" />
                             <Text style={styles.previewInfoText}>{complaintDetails.content.eventDate} {complaintDetails.content.eventTime}</Text>
                           </View>
-                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/(tabs)/matches`)}>
-                            <Text style={styles.previewBtnText}>Etkinliğe Git</Text>
-                          </Pressable>
                         </View>
                       )}
 
@@ -908,9 +906,6 @@ export default function AdminScreen() {
                               <Text style={{ fontSize: 12, color: '#64748B' }}>Takip Edilen</Text>
                             </View>
                           </View>
-                          <Pressable style={styles.previewBtn} onPress={() => router.push(`/profile/${complaintDetails.content.id}`)}>
-                            <Text style={styles.previewBtnText}>Profili Aç</Text>
-                          </Pressable>
                         </View>
                       )}
                     </View>
@@ -918,9 +913,9 @@ export default function AdminScreen() {
 
                   <Text style={styles.sectionTitle}>Hızlı Aksiyonlar</Text>
                   <View style={styles.actionGrid}>
-                    <Pressable style={styles.actionGridBtn} onPress={() => handleHideContent(complaintDetails.report.contentType, complaintDetails.report.contentId)} disabled={actionInProgress}>
-                      <Ionicons name="eye-off-outline" size={20} color="#64748B" />
-                      <Text style={styles.actionGridBtnText}>İçeriği Gizle</Text>
+                    <Pressable style={styles.actionGridBtn} onPress={() => handleRemoveContent(complaintDetails.report.contentType, complaintDetails.report.contentId, complaintDetails.report.id)} disabled={actionInProgress}>
+                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>İçeriği Kaldır</Text>
                     </Pressable>
                     <Pressable style={styles.actionGridBtn} onPress={() => handleDeactivateUser(complaintDetails.report.reportedUserId)} disabled={actionInProgress}>
                       <Ionicons name="person-remove-outline" size={20} color="#EF4444" />

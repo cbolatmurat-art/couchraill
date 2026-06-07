@@ -4714,14 +4714,14 @@ app.post('/api/admin/moderate/hide-content', checkAdminAuth, async (req, res) =>
   try {
     const { contentType, contentId } = req.body;
     if (contentType === 'listing') {
-      await query(`UPDATE listings SET active = false WHERE id = $1`, [contentId]);
+      await query(`DELETE FROM listings WHERE id = $1`, [contentId]);
     } else if (contentType === 'post' || contentType === 'event') {
-      await query(`UPDATE posts SET "isActive" = false WHERE id = $1`, [contentId]);
+      await query(`DELETE FROM posts WHERE id = $1`, [contentId]);
     }
     res.json({ success: true });
   } catch (error) {
     console.error('[ADMIN_MODERATE_HIDE_ERROR]', error);
-    res.status(500).json({ success: false, error: 'İçerik gizlenemedi.' });
+    res.status(500).json({ success: false, error: 'İçerik kaldırılamadı.' });
   }
 });
 
