@@ -168,7 +168,7 @@ const sendPushNotification = async (receiverId, title, body, data = {}) => {
 io.on('connection', (socket) => {
   console.log(`[SOCKET] Client connected: ${socket.id}`);
 
-  socket.on('user_connected', (userId) => {
+  socket.on('user_connected', async (userId) => {
     if (!userId) return;
     activeUsers.set(userId, socket.id);
     socket.userId = userId;
@@ -176,17 +176,25 @@ io.on('connection', (socket) => {
 
     const db = readDB();
     const user = db.users.find(u => u.id === userId);
+    let lastSeenStr = new Date().toISOString();
+    
     if (user) {
       user.isOnline = true;
-      user.lastSeen = new Date().toISOString();
+      user.lastSeen = lastSeenStr;
       writeDB(db);
-      
-      io.emit('user_status_changed', {
-        userId,
-        isOnline: true,
-        lastSeen: user.lastSeen
-      });
     }
+    
+    try {
+      await pool.query('UPDATE users SET "isOnline" = true, "lastSeen" = $1 WHERE id = $2', [lastSeenStr, userId]);
+    } catch (e) {
+      console.error('[SOCKET] PG user_connected isOnline update error:', e.message);
+    }
+
+    io.emit('user_status_changed', {
+      userId,
+      isOnline: true,
+      lastSeen: lastSeenStr
+    });
 
     // Mark sent messages to this user as delivered
     let dbUpdated = false;
@@ -262,7 +270,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log(`[SOCKET] Client disconnected: ${socket.id}`);
     const userId = socket.userId;
     if (userId) {
@@ -270,17 +278,25 @@ io.on('connection', (socket) => {
       
       const db = readDB();
       const user = db.users.find(u => u.id === userId);
+      let lastSeenStr = new Date().toISOString();
+      
       if (user) {
         user.isOnline = false;
-        user.lastSeen = new Date().toISOString();
+        user.lastSeen = lastSeenStr;
         writeDB(db);
-        
-        io.emit('user_status_changed', {
-          userId,
-          isOnline: false,
-          lastSeen: user.lastSeen
-        });
       }
+      
+      try {
+        await pool.query('UPDATE users SET "isOnline" = false, "lastSeen" = $1 WHERE id = $2', [lastSeenStr, userId]);
+      } catch (e) {
+        console.error('[SOCKET] PG disconnect isOnline update error:', e.message);
+      }
+
+      io.emit('user_status_changed', {
+        userId,
+        isOnline: false,
+        lastSeen: lastSeenStr
+      });
     }
   });
 });
