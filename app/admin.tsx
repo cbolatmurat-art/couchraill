@@ -229,7 +229,7 @@ export default function AdminScreen() {
   };
 
   useEffect(() => {
-    if (isAuthorized && activeTab === 'complaints') {
+    if (isAuthorized && (activeTab === 'moderation' || activeTab === 'overview')) {
       fetchReports(undefined, reportTypeFilter);
     }
   }, [activeTab, reportTypeFilter, isAuthorized]);
@@ -404,7 +404,6 @@ export default function AdminScreen() {
             <View style={styles.emptyState}>
               <Ionicons name="shield-checkmark" size={48} color="#CBD5E1" />
               <Text style={styles.emptyStateText}>Henüz şikayet bulunmuyor.</Text>
-              <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>Yeni şikayetler burada görünecek.</Text>
             </View>
           ) : (
             filtered.map(c => {
