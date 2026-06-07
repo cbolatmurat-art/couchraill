@@ -86,11 +86,11 @@ export const ListingCard = React.memo(({
     }
   };
 
-  const ownerName = item.ownerName || item.userName || owner.name || owner.fullName || 'Bilinmiyor';
-  const ownerUsernameRaw = item.ownerUsername || item.username || owner.username || owner?.user?.username || '';
+  const ownerName = owner.name || owner.fullName || item.ownerName || item.userName || 'Bilinmiyor';
+  const ownerUsernameRaw = owner.username || owner?.user?.username || item.ownerUsername || item.username || '';
   const ownerUsername = ownerUsernameRaw ? ownerUsernameRaw.replace('@', '') : '';
-  const ownerAvatar = item.ownerAvatar || item.avatar || item.profileImage || owner.profileImage || owner.avatar;
-  const isFullyVerified = item.isFullyVerified || owner.isFullyVerified;
+  const ownerAvatar = owner.profileImage || owner.avatar || item.ownerAvatar || item.avatar || item.profileImage;
+  const isFullyVerified = owner.isFullyVerified || item.isFullyVerified;
 
   const itemCity = item.city || '';
   const itemDistrict = item.district || item.ilce || '';

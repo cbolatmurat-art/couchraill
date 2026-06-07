@@ -13,7 +13,7 @@ import { CityPicker } from '../../components/CityPicker';
 import * as Location from 'expo-location';
 
 export default function CreatePostScreen() {
-  const { currentUser, getSocialList } = useAppContext();
+  const { currentUser, getSocialList, fetchListingsAndRequests } = useAppContext();
   const router = useRouter();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,7 +80,7 @@ export default function CreatePostScreen() {
         if (!response.ok) {
           console.warn(`Reverse geocode API error: ${response.status}`);
           setLocationResults([
-            { city: `Konum alındı ancak adres bilgisi çözümlenemedi. (Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`, latitude, longitude }
+            { city: `Konumlar yüklenemedi, lütfen tekrar deneyin`, latitude, longitude }
           ]);
           setLoadingLocation(false);
           return;
@@ -106,13 +106,13 @@ export default function CreatePostScreen() {
           .filter(a => a.neighborhood || a.district || a.city);
 
         if (uniqueOptions.length === 0) {
-          uniqueOptions.push({ city: `Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, latitude, longitude });
+          uniqueOptions.push({ city: `Konumlar yüklenemedi, lütfen tekrar deneyin`, latitude, longitude });
         }
         
         setLocationResults(uniqueOptions);
       } catch (err: any) {
         console.warn("LOCATION ERROR (Reverse Geocode):", err.message || err);
-        setLocationResults([{ city: `Konum alındı ancak adres bilgisi çözümlenemedi. (Koordinat: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`, latitude, longitude }]);
+        setLocationResults([{ city: `Konumlar yüklenemedi, lütfen tekrar deneyin`, latitude, longitude }]);
       } finally {
         setLoadingLocation(false);
       }
@@ -292,6 +292,14 @@ export default function CreatePostScreen() {
         Alert.alert('Başarılı', 'Gönderi paylaşıldı');
         setText('');
         setTaggedUsers([]);
+        
+        // Refresh feed data so the new post appears in the flow
+        try {
+          if (fetchListingsAndRequests) await fetchListingsAndRequests();
+        } catch (e) {
+          console.error("Feed refresh error:", e);
+        }
+        
         router.replace('/(tabs)');
       } else {
         console.log("POST_CREATE_ERROR", data.error || data);

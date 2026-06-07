@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, KeyboardAvoidingView, Platform, TextInput, Image, Keyboard, Alert, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, KeyboardAvoidingView, Platform, TextInput, Image, Keyboard, Alert, DeviceEventEmitter } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -143,9 +144,30 @@ export default function DiscoverScreen() {
         .replace(/ç/g, 'c');
     };
 
-    const delayDebounceFn = setTimeout(() => {
+    const delayDebounceFn = setTimeout(async () => {
       const normalizedQuery = normalizeString(searchQuery);
 
+      try {
+        const res = await fetch(`${API_BASE_URL}/users/search?q=${encodeURIComponent(searchQuery)}`);
+        const data = await res.json();
+        if (data.success && data.users) {
+          // Normalize API results to ensure consistent targetId
+          const apiUsers = data.users.map((u: any) => ({
+            ...u,
+            id: u.id || u.userId || u._id || u.uid || u.email || u.username
+          })).filter((u: any) => {
+            const isCurrentUser = String(u.id) === String(currentUser?.id || currentUser?._id);
+            return !isCurrentUser;
+          });
+          setSearchResults(apiUsers);
+          setIsSearching(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('API search failed, falling back to local users', err);
+      }
+
+      // Fallback: local filter
       let filteredUsers = allUsers.filter((user: any) => {
         const fullName = String(
           user.fullName ||
@@ -161,10 +183,11 @@ export default function DiscoverScreen() {
           ""
         );
 
-        const isCurrentUser =
-          String(user.id || user._id) === String(currentUser?.id || currentUser?._id);
+        const targetId = user.id || user.userId || user._id || user.uid || user.email || user.username;
+        const currentTargetId = currentUser?.id || currentUser?._id;
+        const isCurrentUser = String(targetId) === String(currentTargetId);
 
-        if (isCurrentUser) return false;
+        if (isCurrentUser || !targetId) return false;
 
         const normalizedFullName = normalizeString(fullName);
         const normalizedUsername = normalizeString(username);
@@ -413,7 +436,14 @@ export default function DiscoverScreen() {
     return (
       <TouchableOpacity 
         style={styles.searchResultCard} 
-        onPress={() => router.push(`/user/${item.id || item._id}`)}
+        onPress={() => {
+          const targetId = item.id || item.userId || item._id || item.uid || item.email || item.username;
+          if (targetId) {
+            router.push(`/user/${targetId}`);
+          } else {
+            console.warn('Arama sonucundan id bulunamadı. Kullanıcı objesi:', item);
+          }
+        }}
       >
         {item.avatar || item.profileImage ? (
           <Image source={{ uri: item.avatar || item.profileImage }} style={styles.searchAvatar} />
@@ -436,7 +466,7 @@ export default function DiscoverScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       {/* SEARCH BAR */}
       <View style={styles.headerRow}>
         {(searchQuery.length > 0 || isSearchFocused) && (

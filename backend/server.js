@@ -3551,7 +3551,7 @@ app.get('/api/social/friend-requests', (req, res) => {
 });
 
 // GET Friends list
-app.get('/api/social/friends/:userId', (req, res) => {
+app.get('/api/social/friends/:userId', async (req, res) => {
   const { userId } = req.params;
   const { currentUserId } = req.query;
 
@@ -3559,17 +3559,20 @@ app.get('/api/social/friends/:userId', (req, res) => {
     return res.status(403).json({ success: false, message: 'Bu liste yalnızca profil sahibi tarafından görüntülenebilir.' });
   }
 
-  const db = readDB();
+  try {
+    const { rows: friendUsers } = await query(`
+      SELECT u.id, u.name, u.username, u."lastName", u."profileImage", u."userType"
+      FROM users u
+      INNER JOIN follows f1 ON f1."followingUserId" = u.id AND f1."followerUserId" = $1
+      INNER JOIN follows f2 ON f2."followerUserId" = u.id AND f2."followingUserId" = $1
+      WHERE u."isDeleted" != true AND u.active != false
+    `, [userId]);
 
-  const followingIds = db.follows.filter(f => f.followerUserId === userId).map(f => f.followingUserId);
-  const followerIds = db.follows.filter(f => f.followingUserId === userId).map(f => f.followerUserId);
-  const mutualIds = followingIds.filter(id => followerIds.includes(id));
-
-  const friendUsers = db.users
-    .filter(u => mutualIds.includes(u.id) && u.isDeleted !== true && u.active !== false)
-    .map(u => ({ id: u.id, name: u.name, username: u.username, lastName: u.lastName, profileImage: u.profileImage || null, userType: u.userType }));
-
-  res.json({ success: true, users: friendUsers });
+    res.json({ success: true, users: friendUsers });
+  } catch (error) {
+    console.error('[FRIENDS_LIST_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Arkadaşlar listelenirken hata oluştu.' });
+  }
 });
 
 // DELETE Unfriend
@@ -3771,7 +3774,7 @@ app.post('/api/social/poke/:userId', async (req, res) => {
 });
 
 // ---- POSTS ENDPOINTS ----
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', async (req, res) => {
   console.log("EVENT BODY:", req.body);
   const { type } = req.body;
 
@@ -3823,7 +3826,7 @@ app.post('/api/posts', (req, res) => {
   if (text.length < 3 || text.length > 500) return res.status(400).json({ success: false, error: 'Gönderi 3 ile 500 karakter arasında olmalıdır.', message: 'Gönderi 3 ile 500 karakter arasında olmalıdır.' });
 
   const db = readDB();
-  const user = db.users.find(u => u.id === userId);
+  const user = await findUserByAnyIdentifier(userId, db);
   
   if (!user) return res.status(403).json({ success: false, error: 'Kullanıcı bulunamadı.' });
 
@@ -3839,18 +3842,45 @@ app.post('/api/posts', (req, res) => {
 
   if (!canCreatePost) return res.status(403).json({ success: false, error: 'Sadece ev arayanlar gönderi paylaşabilir.' });
 
+  const newPostId = `post_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+  const taggedFriends = req.body.taggedFriends || req.body.taggedUsers || [];
+  const location = req.body.location || null;
+  const createdAt = new Date().toISOString();
+
   const newPost = {
-    id: `post_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    userId,
+    id: newPostId,
+    userId: user.id,
     text,
     type: 'post',
-    taggedFriends: req.body.taggedFriends || req.body.taggedUsers || [],
-    location: req.body.location || null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    taggedFriends,
+    location,
+    createdAt,
+    updatedAt: createdAt,
     isActive: true
   };
 
+  // Insert into Postgres
+  try {
+    await query(`
+      INSERT INTO posts (id, "userId", text, type, "taggedFriends", location, "createdAt", "updatedAt", "isActive", "isTest")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, [
+      newPost.id, 
+      newPost.userId, 
+      newPost.text, 
+      newPost.type, 
+      JSON.stringify(newPost.taggedFriends), 
+      newPost.location ? JSON.stringify(newPost.location) : null, 
+      newPost.createdAt, 
+      newPost.updatedAt, 
+      newPost.isActive,
+      false
+    ]);
+  } catch (pgError) {
+    console.error('[POST_INSERT_ERROR]', pgError);
+  }
+
+  // Also write to db.json for fallback
   if (!db.posts) db.posts = [];
   db.posts.unshift(newPost);
   writeDB(db);

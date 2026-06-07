@@ -35,10 +35,11 @@ export default function PublicProfileScreen() {
 
   const [profile,      setProfile]      = useState<any>(null);
   const [loading,      setLoading]      = useState(true);
+  const [errorMsg,     setErrorMsg]     = useState<string | null>(null);
   const [blockStatus,  setBlockStatus]  = useState<BlockStatus>(BLOCK_INIT);
   const [blockLoading, setBlockLoading] = useState(false);
   const [menuVisible,  setMenuVisible]  = useState(false);
-
+  
   // Custom confirm dialog state (replaces Alert.alert which is broken on web)
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmMode,    setConfirmMode]    = useState<'block' | 'unblock'>('block');
@@ -77,18 +78,70 @@ export default function PublicProfileScreen() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      if (!userId) return;
-      const res = await getPublicProfile(userId);
-      if (!mounted) return;
-      if (res.success && res.profile) {
-        setProfile(res.profile);
-      } else {
-        Alert.alert('Hata', 'Profil yüklenemedi.');
-        if (router.canGoBack()) router.back();
+      if (!userId) {
+        if (mounted) {
+          setErrorMsg("Kullanıcı ID'si eksik.");
+          setLoading(false);
+        }
+        return;
       }
-      setLoading(false);
-      fetchSocialStats();
-      fetchBlockStatus();
+      
+      try {
+        const res = await getPublicProfile(userId);
+        if (!mounted) return;
+        
+        if (res.success && res.profile) {
+          setProfile(res.profile);
+        } else {
+          // Fallback to local storage
+          try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const stored = await AsyncStorage.getItem('misafirimol_users');
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              const usersArray = Array.isArray(parsed) ? parsed : (parsed.users || []);
+              const localUser = usersArray.find((u: any) => 
+                String(u.id) === String(userId) || 
+                String(u.userId) === String(userId) || 
+                String(u._id) === String(userId) || 
+                String(u.uid) === String(userId) || 
+                String(u.email) === String(userId) || 
+                String(u.username) === String(userId)
+              );
+              
+              if (localUser) {
+                // Mock public profile structure
+                setProfile({
+                  ...localUser,
+                  profileImage: localUser.profileImage || localUser.avatar,
+                  ratingAverage: 0,
+                  ratingCount: 0,
+                  recentReviews: [],
+                  activeListings: []
+                });
+              } else {
+                setErrorMsg('Bu kullanıcı sistemde bulunamadı veya hesabı silinmiş olabilir.');
+              }
+            } else {
+              setErrorMsg('Kullanıcı bilgileri yüklenemedi.');
+            }
+          } catch (e) {
+            setErrorMsg('Kullanıcı bilgileri yüklenirken bir sorun oluştu.');
+          }
+        }
+      } catch (err) {
+        if (mounted) {
+          setErrorMsg('Bağlantı hatası oluştu, lütfen tekrar deneyin.');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          if (!errorMsg) {
+            fetchSocialStats();
+            fetchBlockStatus();
+          }
+        }
+      }
     })();
     return () => { mounted = false; };
   }, [userId]);
@@ -113,9 +166,11 @@ export default function PublicProfileScreen() {
 
   const executeBlock = async () => {
     setConfirmVisible(false);
-    console.log('BLOCK_CLICKED — target:', userId, 'currentUser:', currentUser?.id);
+    const targetId = getTargetId();
+    if (!targetId) return;
+    console.log('BLOCK_CLICKED — target:', targetId, 'currentUser:', currentUser?.id);
     setBlockLoading(true);
-    const res = await blockUser(userId);
+    const res = await blockUser(targetId);
     setBlockLoading(false);
     console.log('BLOCK_RESPONSE:', JSON.stringify(res));
     if (res.success) {
@@ -131,9 +186,11 @@ export default function PublicProfileScreen() {
 
   const executeUnblock = async () => {
     setConfirmVisible(false);
-    console.log('UNBLOCK_CLICKED — target:', userId, 'currentUser:', currentUser?.id);
+    const targetId = getTargetId();
+    if (!targetId) return;
+    console.log('UNBLOCK_CLICKED — target:', targetId, 'currentUser:', currentUser?.id);
     setBlockLoading(true);
-    const res = await unblockUser(userId);
+    const res = await unblockUser(targetId);
     setBlockLoading(false);
     console.log('UNBLOCK_RESPONSE:', JSON.stringify(res));
     if (res.success) {
@@ -149,24 +206,39 @@ export default function PublicProfileScreen() {
 
   // ── Other handlers ──────────────────────────────────────────────────────────
 
+  const getTargetId = () => {
+    if (!profile) return userId;
+    return profile.id || profile.userId || profile._id || profile.uid || profile.email || profile.username || userId;
+  };
+
   const handleFollowToggle = async () => {
+    const targetId = getTargetId();
+    if (!targetId) {
+      Alert.alert('Hata', 'Kullanıcı bilgisi eksik.');
+      return;
+    }
     if (stats?.isFollowing) {
-      const res = await unfollowUser(userId);
+      const res = await unfollowUser(targetId);
       if (res.success) fetchSocialStats();
-      else Alert.alert('Hata', res.error || 'İşlem başarısız.');
+      else Alert.alert('Hata', res.error === 'User not found' ? 'Kullanıcı bulunamadı.' : (res.error || 'İşlem başarısız.'));
     } else {
-      const res = await followUser(userId);
+      const res = await followUser(targetId);
       if (res.success) fetchSocialStats();
-      else Alert.alert('Hata', res.error || 'İşlem başarısız.');
+      else Alert.alert('Hata', res.error === 'User not found' ? 'Kullanıcı bulunamadı.' : (res.error || 'İşlem başarısız.'));
     }
   };
 
   const handlePoke = async () => {
+    const targetId = getTargetId();
+    if (!targetId) {
+      Alert.alert('Hata', 'Kullanıcı bilgisi eksik.');
+      return;
+    }
     setPokeLoading(true);
-    const res = await pokeUser(userId);
+    const res = await pokeUser(targetId);
     setPokeLoading(false);
     if (res.success) Alert.alert('Dürtme', res.message || 'Bu kişiyi dürttün!');
-    else Alert.alert('Dürtme', res.error || 'Bu kişiyi kısa süre önce dürttün.');
+    else Alert.alert('Hata', res.error === 'User not found' ? 'Kullanıcı bulunamadı.' : (res.error || 'Bu kişiyi kısa süre önce dürttün.'));
   };
 
   const handleOpenSocialList = async (type: 'followers' | 'following' | 'friends') => {
@@ -186,11 +258,17 @@ export default function PublicProfileScreen() {
 
   const handleSendMessage = async () => {
     if (!profile) return;
+    const targetId = getTargetId();
+    if (!targetId) {
+      Alert.alert('Hata', 'Kullanıcı bilgisi eksik.');
+      return;
+    }
     try {
-      const conv = await startConversation({ id: profile.id, name: profile.name, profileImage: profile.profileImage });
+      const conv = await startConversation({ id: targetId, name: profile.name, profileImage: profile.profileImage });
       router.push(`/messages/${conv.id}`);
     } catch (e: any) {
-      Alert.alert('Hata', e.message || 'Sohbet başlatılamadı.');
+      const errorMsg = e.message === 'User not found' ? 'Kullanıcı bulunamadı.' : (e.message || 'Sohbet başlatılamadı.');
+      Alert.alert('Hata', errorMsg);
     }
   };
 
@@ -225,7 +303,24 @@ export default function PublicProfileScreen() {
       </View>
     );
   }
-  if (!profile) return null;
+
+  if (errorMsg || !profile) {
+    return (
+      <SafeAreaView style={[styles.container, { padding: 20 }]}>
+        <Stack.Screen options={{ title: 'Profil Bulunamadı', headerStyle: { backgroundColor: Colors.background }, headerShadowVisible: false }} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Ionicons name="person-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 8, textAlign: 'center' }}>
+            Profil Yüklenemedi
+          </Text>
+          <Text style={{ fontSize: 14, color: Colors.textLight, textAlign: 'center', marginBottom: 24, paddingHorizontal: 20 }}>
+            {errorMsg || 'Bu kullanıcı sistemde bulunamadı.'}
+          </Text>
+          <Button title="Geri Dön" onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/matches')} style={{ width: 200 }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const isOtherUser                              = !!(currentUser && currentUser.id !== profile.id);
   const { isBlockedByMe, hasBlockedMe }          = blockStatus;
