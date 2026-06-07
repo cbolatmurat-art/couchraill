@@ -539,7 +539,7 @@ app.get("/api/users/search", async (req, res) => {
     return res.json({
       success: true,
       users: results.map(user => ({
-        id: user.id,
+        id: user.id || user.userId || user._id || user.uid || user.email || user.username,
         name: user.name || user.fullName,
         username: user.username,
         avatar: user.avatar || user.profileImage,
@@ -2816,63 +2816,137 @@ app.post('/api/auth/verify-phone-code', (req, res) => {
 
 // ---- PUBLIC PROFILES & REVIEWS ----
 
-app.get('/api/users/:id/public', (req, res) => {
+// Merkezi Kullanıcı Bulma Fonksiyonu
+async function findUserByAnyIdentifier(identifier, db) {
+  if (!identifier) return null;
+  const target = String(identifier).trim();
+
+  // 1. Önce PostgreSQL'de ara (id, email veya username ile)
+  try {
+    const { rows } = await query(`
+      SELECT * FROM users 
+      WHERE id = $1 OR email = $1 OR username = $1
+    `, [target]);
+    if (rows && rows.length > 0) {
+      // PG'den bulduk, normalize edilmiş standart id ile dönelim
+      const u = rows[0];
+      u.id = u.id || u.userId || u._id || u.uid || u.email || u.username;
+      return u;
+    }
+  } catch (e) {
+    console.warn('[USER_FIND_PG_ERROR]', e.message);
+  }
+
+  // 2. Bulunamazsa db.json'da (local fallback) ara
+  if (db && db.users) {
+    const localUser = db.users.find(u => 
+      u.id === target || 
+      u.userId === target || 
+      u._id === target || 
+      u.uid === target || 
+      u.email === target || 
+      u.username === target
+    );
+    if (localUser) {
+      localUser.id = localUser.id || localUser.userId || localUser._id || localUser.uid || localUser.email || localUser.username;
+      return localUser;
+    }
+  }
+
+  return null;
+}
+
+app.get('/api/users/:id/public', async (req, res) => {
   const { id } = req.params;
-  const db = readDB();
-  const user = db.users.find(u => u.id === id);
-  
-  if (!user) {
-    return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+  try {
+    const db = readDB();
+    const user = await findUserByAnyIdentifier(id, db);
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+    }
+
+    const targetId = user.id;
+
+    // Aktif ilanları al (Önce PG, sonra db.json)
+    let activeListings = [];
+    try {
+      const { rows } = await query(`
+        SELECT * FROM listings 
+        WHERE "hostId" = $1 AND active = true AND status != 'removed' AND "deletedAt" IS NULL
+      `, [targetId]);
+      activeListings = rows;
+    } catch (e) {
+      console.warn('[PUBLIC_PROFILE] PG listings sorgusu hatası:', e.message);
+    }
+    if (!activeListings || activeListings.length === 0) {
+      activeListings = (db.listings || []).filter(l => l.hostId === targetId && l.active !== false && l.status !== 'removed' && !l.deletedAt);
+    }
+
+    // Değerlendirmeleri al (Önce PG, sonra db.json)
+    let userReviews = [];
+    try {
+      // PostgreSQL'de reviews tablosu varsa sorgula
+      const { rows } = await query(`SELECT * FROM reviews WHERE "reviewedUserId" = $1`, [targetId]);
+      userReviews = rows;
+    } catch (e) {
+      // Tablo yoksa veya hata varsa db.json'a düş
+      userReviews = (db.reviews || []).filter(r => r.reviewedUserId === targetId);
+    }
+
+    const ratingCount = userReviews.length;
+    let ratingAverage = 0;
+    if (ratingCount > 0) {
+      const sum = userReviews.reduce((acc, curr) => acc + curr.rating, 0);
+      ratingAverage = Number((sum / ratingCount).toFixed(1));
+    }
+
+    // Son 3 değerlendirme
+    const recentReviews = userReviews
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 3);
+
+    for (let r of recentReviews) {
+      let revUser = null;
+      if (r.reviewerId) {
+        try {
+          const { rows } = await query(`SELECT name, "profileImage", avatar FROM users WHERE id = $1`, [r.reviewerId]);
+          if (rows.length > 0) {
+            revUser = { name: rows[0].name, profileImage: rows[0].profileImage || rows[0].avatar };
+          }
+        } catch(e) {}
+        if (!revUser) {
+          const u = db.users.find(x => x.id === r.reviewerId);
+          if (u) revUser = { name: u.name, profileImage: u.profileImage || u.avatar };
+        }
+      }
+      r.reviewer = revUser;
+    }
+
+    const publicProfile = {
+      id: user.id,
+      name: user.name || user.fullName,
+      username: user.username,
+      profileImage: user.profileImage || user.avatar,
+      city: user.city || user.livingCity,
+      verified: user.verified,
+      identityVerified: user.identityVerified,
+      identityVerificationStatus: user.identityVerificationStatus,
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      userType: user.userType,
+      about: user.about || null,
+      ratingAverage,
+      ratingCount,
+      recentReviews,
+      activeListings
+    };
+
+    res.json({ success: true, profile: publicProfile });
+  } catch (error) {
+    console.error("[PUBLIC_PROFILE] Sunucu hatası:", error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası oluştu.' });
   }
-
-  // Get active listings for the user
-  const activeListings = (db.listings || []).filter(l => l.hostId === id && l.active !== false && l.status !== 'removed' && !l.deletedAt);
-  
-  // Calculate reviews and ratings
-  const userReviews = (db.reviews || []).filter(r => r.reviewedUserId === id);
-  const ratingCount = userReviews.length;
-  let ratingAverage = 0;
-  if (ratingCount > 0) {
-    const sum = userReviews.reduce((acc, curr) => acc + curr.rating, 0);
-    ratingAverage = Number((sum / ratingCount).toFixed(1));
-  }
-
-  // Get recent 3 reviews with reviewer details
-  const recentReviews = userReviews
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 3)
-    .map(r => {
-      const reviewer = db.users.find(u => u.id === r.reviewerId);
-      return {
-        ...r,
-        reviewer: reviewer ? {
-          name: reviewer.name,
-          profileImage: reviewer.profileImage
-        } : null
-      };
-    });
-
-  // Prepare public profile object (excluding sensitive info)
-  const publicProfile = {
-    id: user.id,
-    name: user.name,
-    username: user.username,
-    profileImage: user.profileImage,
-    city: user.city,
-    verified: user.verified,
-    identityVerified: user.identityVerified,
-    identityVerificationStatus: user.identityVerificationStatus,
-    emailVerified: user.emailVerified,
-    phoneVerified: user.phoneVerified,
-    userType: user.userType,
-    about: user.about || null,
-    ratingAverage,
-    ratingCount,
-    recentReviews,
-    activeListings
-  };
-
-  res.json({ success: true, profile: publicProfile });
 });
 
 app.post('/api/reviews', (req, res) => {
