@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, TextInput, TouchableOpacity, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -7,6 +7,7 @@ import { Typography } from '../../constants/Typography';
 import { Input } from '../../components/Input';
 import { CityPicker } from '../../components/CityPicker';
 import { useAppContext } from '../../context/AppContext';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -18,6 +19,9 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsVisible, setTermsVisible] = useState(false);
 
   const isHost = type === 'host';
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,7 +33,23 @@ export default function RegisterScreen() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!name || !email || !password || !phone) {
+    if (!termsAccepted) {
+      setErrorMsg('Devam etmek için şartları kabul etmelisiniz.');
+      return;
+    }
+
+    const trimmedEmail = email ? email.trim() : '';
+    if (!trimmedEmail) {
+      setErrorMsg('E-posta adresi gereklidir.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Geçerli bir e-posta adresi giriniz.');
+      return;
+    }
+
+    if (!name || !password || !phone) {
       setErrorMsg('Lütfen zorunlu alanları doldurun.');
       return;
     }
@@ -39,8 +59,56 @@ export default function RegisterScreen() {
       return;
     }
     
-    if (phone.length !== 10) {
+    const p = phone.trim();
+    if (!/^\d+$/.test(p) || p.length !== 10) {
       setErrorMsg('Telefon numarası 10 haneli olmalıdır.');
+      return;
+    }
+    if (p[0] !== '5') {
+      setErrorMsg('Telefon numarası 5 ile başlamalıdır.');
+      return;
+    }
+    const phoneSeqUp = "01234567890123456789";
+    const phoneSeqDown = "98765432109876543210";
+    let hasPhoneSeq = false;
+    for (let i = 0; i <= p.length - 8; i++) {
+        if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+        if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+    }
+    if (hasPhoneSeq) {
+      setErrorMsg('Telefon numarası ardışık sayılardan oluşamaz.');
+      return;
+    }
+    if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
+      setErrorMsg('Telefon numarası geçerli görünmüyor.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMsg('Şifre en az 6 karakter olmalıdır.');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password)) {
+      setErrorMsg('Şifre en az bir harf içermelidir.');
+      return;
+    }
+    if (!/\d/.test(password)) {
+      setErrorMsg('Şifre en az bir rakam içermelidir.');
+      return;
+    }
+    const seqUp = "0123456789";
+    const seqDown = "9876543210";
+    let hasSeq = false;
+    for (let i = 0; i <= seqUp.length - 6; i++) {
+        if (password.includes(seqUp.substring(i, i+6))) hasSeq = true;
+        if (password.includes(seqDown.substring(i, i+6))) hasSeq = true;
+    }
+    if (hasSeq) {
+      setErrorMsg('Şifre ardışık sayılardan oluşamaz.');
+      return;
+    }
+    if (/(.)\1{5}/.test(password)) {
+      setErrorMsg('Şifre aynı karakterlerin tekrarından oluşamaz.');
       return;
     }
 
@@ -55,6 +123,8 @@ export default function RegisterScreen() {
         userType: isHost ? 'host' : 'seeker',
         city: city,
         acceptsGuests: false,
+        termsAccepted: termsAccepted,
+        termsAcceptedAt: new Date().toISOString(),
       });
 
       if (result.success) {
@@ -81,6 +151,18 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.customHeader}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Kayıt Ol</Text>
+        </View>
+        <Text style={styles.headerSubtitle}>
+          {isHost ? 'Ev sahibi profilinizi oluşturun.' : 'Misafir profilinizi oluşturun.'}
+        </Text>
+      </View>
+
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -89,13 +171,6 @@ export default function RegisterScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.headerContainer}>
-            <Text style={styles.title}>Kayıt Ol</Text>
-            <Text style={styles.subtitle}>
-              {isHost ? 'Ev sahibi profilinizi oluşturun.' : 'Misafir profilinizi oluşturun.'}
-            </Text>
-          </View>
-
           <View style={styles.formContainer}>
             {errorMsg ? (
               <View style={styles.errorBox}>
@@ -154,15 +229,45 @@ export default function RegisterScreen() {
               />
             </View>
 
-            <Input
-              label="Şifre"
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={true}
-              textContentType="password"
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordContainer}>
+              <Text style={styles.label}>Şifre</Text>
+              <View style={styles.passwordInputWrapper}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor={Colors.textLight}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  textContentType="password"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isSubmitting}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(prev => !prev)} style={styles.eyeIcon}>
+                  <Ionicons
+                    name={showPassword ? "eye-off" : "eye"}
+                    size={20}
+                    color={Colors.textLight}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                onPress={() => setTermsAccepted(!termsAccepted)}
+                style={styles.checkboxContainer}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.checkbox, termsAccepted && styles.checkboxActive]}>
+                  {termsAccepted && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.termsText}>
+                <Text onPress={() => setTermsVisible(true)} style={styles.termsLink}>Şartları ve Topluluk Kurallarını</Text> okudum, kabul ediyorum.
+              </Text>
+            </View>
             
             <View style={styles.buttonWrapper}>
               <Pressable 
@@ -179,6 +284,46 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* Terms Modal */}
+      <Modal
+        visible={termsVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setTermsVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.bottomSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Şartlar ve Topluluk Kuralları</Text>
+              <TouchableOpacity onPress={() => setTermsVisible(false)} style={styles.closeIcon}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              <Text style={styles.modalText}>
+                <Text style={styles.modalSectionTitle}>1. Genel Kullanım{'\n'}</Text>
+                Couchraill, kullanıcıların güvenli ve saygılı şekilde iletişim kurmasını amaçlayan bir platformdur. Uygulamayı kullanarak doğru bilgi vermeyi, diğer kullanıcılara saygılı davranmayı ve platform kurallarına uymayı kabul edersiniz.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>2. Doğru Bilgi Verme{'\n'}</Text>
+                Üyelik sırasında verdiğiniz ad, kullanıcı adı, şehir, iletişim ve doğrulama bilgilerinin doğru olmasından siz sorumlusunuz. Sahte profil, yanıltıcı bilgi, başkasına ait fotoğraf veya kimlik bilgisi kullanmak yasaktır.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>3. Güvenli İletişim{'\n'}</Text>
+                Kullanıcılar arasında tehdit, hakaret, taciz, spam, dolandırıcılık, uygunsuz teklif, yasa dışı faaliyet veya rahatsız edici davranış yasaktır. Bu tür davranışlar hesabın kısıtlanmasına veya kapatılmasına neden olabilir.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>4. İlan ve Gönderi Kuralları{'\n'}</Text>
+                Paylaşılan ilan, gönderi ve etkinlikler gerçek, açık ve yanıltıcı olmayan bilgiler içermelidir. Spam, sahte ilan, uygunsuz içerik, yanıltıcı bilgi veya başkasını hedef alan paylaşımlar kaldırılabilir.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>5. Konaklama Sorumluluğu{'\n'}</Text>
+                Couchraill, kullanıcılar arasında iletişim kurmayı sağlayan bir platformdur. Konaklama, görüşme veya buluşma kararları kullanıcıların kendi sorumluluğundadır. Kullanıcılar güvenliklerini sağlamakla ve dikkatli davranmakla yükümlüdür.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>6. Şikayet ve Moderasyon{'\n'}</Text>
+                Kullanıcılar; ilan, gönderi, etkinlik veya profilleri şikayet edebilir. Yönetim, şikayetleri inceleyerek içeriği kaldırabilir, hesabı pasifleştirebilir veya gerekli gördüğü işlemleri uygulayabilir.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>7. Gizlilik ve Veri Kullanımı{'\n'}</Text>
+                Uygulamada verdiğiniz bilgiler hesabınızı oluşturmak, iletişim kurmak, güvenlik sağlamak ve platformu yönetmek amacıyla kullanılabilir. Hesap bilgilerinizin güvenliği için gerekli teknik önlemler alınır.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>8. Hesap Kısıtlama ve Kapatma{'\n'}</Text>
+                Kurallara aykırı davranan kullanıcıların içerikleri kaldırılabilir, hesabı geçici veya kalıcı olarak kısıtlanabilir. Sahte hesap, dolandırıcılık, taciz veya güvenliği tehdit eden davranışlarda hesap kapatılabilir.{'\n\n'}
+                <Text style={styles.modalSectionTitle}>9. Kabul{'\n'}</Text>
+                Üyelik oluşturarak bu şartları ve topluluk kurallarını okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz.
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -190,18 +335,32 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
+    paddingTop: 10,
   },
-  headerContainer: {
-    marginTop: 20,
-    marginBottom: 30,
+  customHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 10,
+    backgroundColor: Colors.background,
   },
-  title: {
-    ...Typography.header,
-    marginBottom: 8,
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
-  subtitle: {
+  backButton: {
+    marginRight: 12,
+  },
+  headerTitle: {
+    ...Typography.title,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  headerSubtitle: {
     ...Typography.body,
     color: Colors.textLight,
+    marginLeft: 36,
   },
   formContainer: {
     flex: 1,
@@ -253,6 +412,34 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: Colors.text,
   },
+  passwordContainer: {
+    marginVertical: 10,
+    width: '100%',
+  },
+  label: {
+    ...Typography.caption,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  passwordInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.cardBackground,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  eyeIcon: {
+    padding: 8,
+  },
   phoneInputGroup: {
     marginBottom: 16,
   },
@@ -283,6 +470,85 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+    paddingHorizontal: 4,
+  },
+  checkboxContainer: {
+    padding: 4,
+    marginRight: 8,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxActive: {
+    backgroundColor: Colors.primary,
+  },
+  termsText: {
+    ...Typography.body,
+    flex: 1,
+    color: Colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: Colors.cardBackground,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    ...Typography.title,
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  closeIcon: {
+    padding: 4,
+  },
+  modalScroll: {
+    marginBottom: 10,
+  },
+  modalText: {
+    ...Typography.body,
+    color: Colors.text,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  modalSectionTitle: {
+    fontWeight: 'bold',
     fontSize: 16,
     color: Colors.text,
   }

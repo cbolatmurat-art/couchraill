@@ -20,6 +20,8 @@ export interface User {
   ratingAverage?: number;
   ratingCount?: number;
   hiddenConversations?: string[];
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string;
 }
 
 export interface Review {

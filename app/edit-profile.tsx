@@ -342,14 +342,47 @@ export default function EditProfileScreen() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!name.trim() || !email.trim()) {
-      setErrorMsg('Ad Soyad ve E-posta alanları boş bırakılamaz.');
+    if (!name.trim()) {
+      setErrorMsg('Ad Soyad boş bırakılamaz.');
       return;
     }
 
-    if (phone.trim() && phone.trim().length !== 10) {
-      setErrorMsg('Telefon numarası 10 haneli olmalıdır.');
+    const trimmedEmail = email ? email.trim() : '';
+    if (!trimmedEmail) {
+      setErrorMsg('E-posta adresi gereklidir.');
       return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Geçerli bir e-posta adresi giriniz.');
+      return;
+    }
+
+    if (phone.trim()) {
+      const p = phone.trim();
+      if (!/^\d+$/.test(p) || p.length !== 10) {
+        setErrorMsg('Telefon numarası 10 haneli olmalıdır.');
+        return;
+      }
+      if (p[0] !== '5') {
+        setErrorMsg('Telefon numarası 5 ile başlamalıdır.');
+        return;
+      }
+      const phoneSeqUp = "01234567890123456789";
+      const phoneSeqDown = "98765432109876543210";
+      let hasPhoneSeq = false;
+      for (let i = 0; i <= p.length - 8; i++) {
+          if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+          if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+      }
+      if (hasPhoneSeq) {
+        setErrorMsg('Telefon numarası ardışık sayılardan oluşamaz.');
+        return;
+      }
+      if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
+        setErrorMsg('Telefon numarası geçerli görünmüyor.');
+        return;
+      }
     }
 
     if (username.trim() && username.trim().length < 3) {

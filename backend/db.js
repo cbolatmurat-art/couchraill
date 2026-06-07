@@ -121,7 +121,9 @@ const initDB = async () => {
         "isOnline" BOOLEAN DEFAULT false,
         avatar TEXT,
         "fullName" VARCHAR(255),
-        "livingCity" VARCHAR(255)
+        "livingCity" VARCHAR(255),
+        "termsAccepted" BOOLEAN DEFAULT false,
+        "termsAcceptedAt" TIMESTAMP
       )
     `);
 
@@ -435,7 +437,9 @@ const initDB = async () => {
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
-      `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`
+      `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAccepted" BOOLEAN DEFAULT false`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP`
     ];
     for (const alt of alters) {
       try {

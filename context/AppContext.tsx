@@ -837,9 +837,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
         if (updates.email && updates.email !== users[userIndex].email) {
           if (users.find(u => u.email === updates.email && u.id !== currentUser.id)) {
-            return { success: false, error: 'Bu e-posta adresi başka bir hesapta kullanılıyor.' };
+            return { success: false, error: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.' };
           }
           updates.emailVerified = false; // Reset verification on email change locally
+        }
+        if (updates.phone && updates.phone !== users[userIndex].phone) {
+          if (users.find(u => u.phone === updates.phone && u.id !== currentUser.id)) {
+            return { success: false, error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.' };
+          }
+          updates.phoneVerified = false;
+        }
+        if (updates.username && updates.username !== users[userIndex].username) {
+          if (users.find(u => u.username === updates.username && u.id !== currentUser.id)) {
+            return { success: false, error: 'Bu kullanıcı adı kullanılmaktadır. Lütfen farklı bir kullanıcı adı seçin.' };
+          }
         }
         const updatedUser = { ...users[userIndex], ...updates };
         users[userIndex] = updatedUser;

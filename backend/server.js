@@ -402,10 +402,66 @@ app.get('/api/debug/users-by-email', (req, res) => {
 // ---- AUTH & USERS ----
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name, phone, userType, city } = req.body;
+    const { email, password, name, phone, userType, city, termsAccepted, termsAcceptedAt } = req.body;
     
+    if (termsAccepted !== true) {
+      return res.status(400).json({ success: false, error: 'Üyelik oluşturmak için şartları kabul etmelisiniz.', message: 'Üyelik oluşturmak için şartları kabul etmelisiniz.' });
+    }
     if (!email || !password || !name || !phone) {
       return res.status(400).json({ success: false, error: 'Zorunlu alanlar eksik.', message: 'Zorunlu alanlar eksik.' });
+    }
+
+    const trimmedEmail = email ? String(email).trim() : '';
+    if (!trimmedEmail) {
+      return res.status(400).json({ success: false, error: 'E-posta adresi gereklidir.', message: 'E-posta adresi gereklidir.' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Şifre en az 6 karakter olmalıdır.', message: 'Şifre en az 6 karakter olmalıdır.' });
+    }
+    if (!/[a-zA-Z]/.test(password)) {
+      return res.status(400).json({ success: false, error: 'Şifre en az bir harf içermelidir.', message: 'Şifre en az bir harf içermelidir.' });
+    }
+    if (!/\d/.test(password)) {
+      return res.status(400).json({ success: false, error: 'Şifre en az bir rakam içermelidir.', message: 'Şifre en az bir rakam içermelidir.' });
+    }
+    const seqUp = "0123456789";
+    const seqDown = "9876543210";
+    let hasSeq = false;
+    for (let i = 0; i <= seqUp.length - 6; i++) {
+        if (password.includes(seqUp.substring(i, i+6))) hasSeq = true;
+        if (password.includes(seqDown.substring(i, i+6))) hasSeq = true;
+    }
+    if (hasSeq) {
+      return res.status(400).json({ success: false, error: 'Şifre ardışık sayılardan oluşamaz.', message: 'Şifre ardışık sayılardan oluşamaz.' });
+    }
+    if (/(.)\1{5}/.test(password)) {
+      return res.status(400).json({ success: false, error: 'Şifre aynı karakterlerin tekrarından oluşamaz.', message: 'Şifre aynı karakterlerin tekrarından oluşamaz.' });
+    }
+
+    const p = phone ? phone.replace('+90', '').trim() : '';
+    if (!/^\d+$/.test(p) || p.length !== 10) {
+      return res.status(400).json({ success: false, error: 'Telefon numarası 10 haneli olmalıdır.', message: 'Telefon numarası 10 haneli olmalıdır.' });
+    }
+    if (p[0] !== '5') {
+      return res.status(400).json({ success: false, error: 'Telefon numarası 5 ile başlamalıdır.', message: 'Telefon numarası 5 ile başlamalıdır.' });
+    }
+    const phoneSeqUp = "01234567890123456789";
+    const phoneSeqDown = "98765432109876543210";
+    let hasPhoneSeq = false;
+    for (let i = 0; i <= p.length - 8; i++) {
+        if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+        if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+    }
+    if (hasPhoneSeq) {
+      return res.status(400).json({ success: false, error: 'Telefon numarası ardışık sayılardan oluşamaz.', message: 'Telefon numarası ardışık sayılardan oluşamaz.' });
+    }
+    if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
+      return res.status(400).json({ success: false, error: 'Telefon numarası geçerli görünmüyor.', message: 'Telefon numarası geçerli görünmüyor.' });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -422,9 +478,9 @@ app.post('/api/auth/register', async (req, res) => {
     if (existingRows.length > 0) {
       const conflict = existingRows[0];
       if (conflict.email && conflict.email.toLowerCase() === normalizedEmail) {
-        return res.status(409).json({ success: false, error: 'Bu e-posta adresi zaten kullanılıyor.', message: 'Bu e-posta adresi zaten kullanılıyor.' });
+        return res.status(409).json({ success: false, error: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.', message: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.' });
       }
-      return res.status(409).json({ success: false, error: 'Bu telefon numarası zaten kullanılıyor.', message: 'Bu telefon numarası zaten kullanılıyor.' });
+      return res.status(409).json({ success: false, error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.', message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.' });
     }
 
     const username = await generateUniqueUsername(name);
@@ -438,12 +494,12 @@ app.post('/api/auth/register', async (req, res) => {
       INSERT INTO users (
         id, email, password, name, username, phone, "userType", city,
         verified, "joinedDate", "profileImage", "phoneVerified", "emailVerified", "identityVerificationStatus",
-        active, "isDeleted", "fullName"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        active, "isDeleted", "fullName", "termsAccepted", "termsAcceptedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     `, [
       newId, normalizedEmail, hashedPassword, name, username, normalizedPhone, userType || 'seeker', city || '',
       false, joinedDate, null, false, false, 'unverified',
-      true, false, name
+      true, false, name, termsAccepted, termsAcceptedAt || new Date().toISOString()
     ]);
 
     console.log(`[REGISTER_SUCCESS] inserted user id: ${newId}, email: ${normalizedEmail}`);
@@ -633,15 +689,26 @@ app.put('/api/users/profile', async (req, res) => {
       }
       const { rows: conflicts } = await query('SELECT id FROM users WHERE username = $1 AND id != $2', [rawUsername, userId]);
       if (conflicts.length > 0) {
-        return res.status(400).json({ success: false, error: 'Bu kullanıcı adı zaten alınmış.', message: 'Bu kullanıcı adı zaten alınmış.' });
+        return res.status(409).json({ success: false, error: 'Bu kullanıcı adı kullanılmaktadır. Lütfen farklı bir kullanıcı adı seçin.', message: 'Bu kullanıcı adı kullanılmaktadır. Lütfen farklı bir kullanıcı adı seçin.' });
       }
       updates.username = rawUsername;
     }
 
-    if (updates.email && updates.email.trim().toLowerCase() !== user.email?.trim().toLowerCase()) {
-      const normalizedNewEmail = updates.email.trim().toLowerCase();
+    if (updates.email !== undefined) {
+      const trimmedEmail = updates.email ? String(updates.email).trim() : '';
+      if (!trimmedEmail) {
+        return res.status(400).json({ success: false, error: 'E-posta adresi gereklidir.', message: 'E-posta adresi gereklidir.' });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
+      }
+      updates.email = trimmedEmail;
+      
+      if (trimmedEmail.toLowerCase() !== user.email?.trim().toLowerCase()) {
+        const normalizedNewEmail = trimmedEmail.toLowerCase();
 
-      const { rows: activeConflicts } = await query(`
+        const { rows: activeConflicts } = await query(`
         SELECT * FROM users 
         WHERE LOWER(email) = $1 AND id != $2 AND "isDeleted" = false AND active = true
       `, [normalizedNewEmail, userId]);
@@ -654,8 +721,8 @@ app.put('/api/users/profile', async (req, res) => {
         } else {
           return res.status(409).json({
             success: false,
-            error: 'Bu e-posta aktif bir kullanıcı tarafından kullanılıyor.',
-            message: 'Bu e-posta aktif bir kullanıcı tarafından kullanılıyor.',
+            error: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.',
+            message: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.',
             conflictUser: {
               id: existingUser.id,
               email: existingUser.email,
@@ -681,10 +748,39 @@ app.put('/api/users/profile', async (req, res) => {
       await query('DELETE FROM deleted_users WHERE LOWER(email) = $1', [normalizedNewEmail]);
 
       updates.emailVerified = false;
+      }
     }
 
-    if (updates.phone && updates.phone.trim() !== user.phone?.trim()) {
-      updates.phoneVerified = false;
+    if (updates.phone !== undefined) {
+      const p = updates.phone ? updates.phone.replace('+90', '').trim() : '';
+      if (p) {
+        if (!/^\d+$/.test(p) || p.length !== 10) {
+          return res.status(400).json({ success: false, error: 'Telefon numarası 10 haneli olmalıdır.', message: 'Telefon numarası 10 haneli olmalıdır.' });
+        }
+        if (p[0] !== '5') {
+          return res.status(400).json({ success: false, error: 'Telefon numarası 5 ile başlamalıdır.', message: 'Telefon numarası 5 ile başlamalıdır.' });
+        }
+        const phoneSeqUp = "01234567890123456789";
+        const phoneSeqDown = "98765432109876543210";
+        let hasPhoneSeq = false;
+        for (let i = 0; i <= p.length - 8; i++) {
+            if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+            if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+        }
+        if (hasPhoneSeq) {
+          return res.status(400).json({ success: false, error: 'Telefon numarası ardışık sayılardan oluşamaz.', message: 'Telefon numarası ardışık sayılardan oluşamaz.' });
+        }
+        if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
+          return res.status(400).json({ success: false, error: 'Telefon numarası geçerli görünmüyor.', message: 'Telefon numarası geçerli görünmüyor.' });
+        }
+      }
+      if (updates.phone.trim() !== user.phone?.trim()) {
+        const { rows: phoneConflicts } = await query('SELECT id FROM users WHERE phone = $1 AND id != $2 AND "isDeleted" = false', [updates.phone.trim(), userId]);
+        if (phoneConflicts.length > 0) {
+          return res.status(409).json({ success: false, error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.', message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.' });
+        }
+        updates.phoneVerified = false;
+      }
     }
 
     if (updates.name) {

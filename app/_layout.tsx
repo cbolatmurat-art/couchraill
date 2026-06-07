@@ -49,7 +49,7 @@ function RootLayoutContent() {
       {/* Giriş ekranı */}
       <Stack.Screen name="(auth)/login" options={{ title: 'Giriş Yap', headerShown: false }} />
       <Stack.Screen name="(auth)/role-selection" options={{ title: 'Hesap Tipi Seçimi', headerShadowVisible: false }} />
-      <Stack.Screen name="(auth)/register" options={{ title: 'Kayıt Ol', headerShadowVisible: false }} />
+      <Stack.Screen name="(auth)/register" options={{ headerShown: false }} />
 
       {/* Ana tab bar navigasyonu */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
