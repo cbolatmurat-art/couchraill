@@ -4106,6 +4106,19 @@ app.post('/api/events', async (req, res) => {
     }
   }
 
+  // Safe Date Parsing (DD/MM/YYYY -> YYYY-MM-DD)
+  let safeDate = req.body.date;
+  if (safeDate && safeDate.includes('/')) {
+    const parts = safeDate.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      let year = parts[2];
+      if (year.length === 2) year = '20' + year; // 26 -> 2026
+      safeDate = `${year}-${month}-${day}`;
+    }
+  }
+
   try {
     await query(`
       INSERT INTO posts (
@@ -4123,9 +4136,9 @@ app.post('/api/events', async (req, res) => {
       req.body.city,
       req.body.district,
       req.body.neighborhood,
-      req.body.date,
+      safeDate,
       req.body.time,
-      req.body.date,
+      safeDate,
       req.body.time,
       req.body.description,
       req.body.description,
