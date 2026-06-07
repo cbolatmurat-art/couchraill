@@ -3291,19 +3291,32 @@ app.post('/api/social/follow/:userId', async (req, res) => {
     return res.status(403).json({ success: false, error: 'Bu kullanıcıyı takip edemezsiniz.' });
   }
 
-  const alreadyFollows = db.follows.some(f => f.followerUserId === currentUserId && f.followingUserId === userId);
-  if (alreadyFollows) {
-    return res.status(400).json({ success: false, error: 'Bu kullanıcıyı zaten takip ediyorsunuz.' });
+  // Check in postgres
+  try {
+    const { rows } = await query(`SELECT 1 FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [currentUserId, userId]);
+    if (rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'Bu kullanıcıyı zaten takip ediyorsunuz.' });
+    }
+
+    await query(`
+      INSERT INTO follows ("followerUserId", "followingUserId")
+      VALUES ($1, $2)
+    `, [currentUserId, userId]);
+  } catch (err) {
+    console.error('[FOLLOW_DB_ERROR]', err);
   }
 
-  const followRecord = {
-    id: `f_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    followerUserId: currentUserId,
-    followingUserId: userId,
-    createdAt: new Date().toISOString()
-  };
-
-  db.follows.push(followRecord);
+  // Legacy json update
+  const alreadyFollows = db.follows.some(f => f.followerUserId === currentUserId && f.followingUserId === userId);
+  if (!alreadyFollows) {
+    db.follows.push({
+      id: `f_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      followerUserId: currentUserId,
+      followingUserId: userId,
+      createdAt: new Date().toISOString()
+    });
+    writeDB(db);
+  }
 
   // Send real-time notification
   createAndSendSocialNotification(db, {
@@ -3318,17 +3331,25 @@ app.post('/api/social/follow/:userId', async (req, res) => {
 });
 
 // DELETE Unfollow a user
-app.delete('/api/social/follow/:userId', (req, res) => {
+app.delete('/api/social/follow/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.body?.currentUserId || req.query?.currentUserId;
 
   if (!currentUserId) return res.status(400).json({ success: false, error: 'currentUserId required' });
 
+  let postgresDeleted = false;
+  try {
+    const { rowCount } = await query(`DELETE FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [currentUserId, userId]);
+    if (rowCount > 0) postgresDeleted = true;
+  } catch (err) {
+    console.error('[UNFOLLOW_DB_ERROR]', err);
+  }
+
   const db = readDB();
   const initialCount = db.follows.length;
   db.follows = db.follows.filter(f => !(f.followerUserId === currentUserId && f.followingUserId === userId));
 
-  if (db.follows.length === initialCount) {
+  if (db.follows.length === initialCount && !postgresDeleted) {
     return res.status(400).json({ success: false, error: 'Zaten takip etmiyorsunuz.' });
   }
 

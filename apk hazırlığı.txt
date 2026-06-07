@@ -1,3 +1,5 @@
+npx expo start -c
+
 APK hazırlığı için projeyi canlı backend kullanımına hazırla.
 
 Kontrol et:

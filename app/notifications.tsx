@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, SafeAreaView, TouchableOpacity, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Modal, Alert, Platform, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';

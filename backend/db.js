@@ -392,7 +392,10 @@ const initDB = async () => {
       `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP`,
       `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255)`,
       `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS text TEXT`
+      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS text TEXT`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "taggedFriends" JSONB`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS location JSONB`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS text TEXT`
     ];
     for (const alt of alters) {
       try {

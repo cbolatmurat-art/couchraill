@@ -140,7 +140,7 @@ export default function ProfileScreen() {
     checkLocalData();
   }, []);
 
-  if (authLoading) {
+  if (authLoading && !currentUser) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ marginTop: 16, color: Colors.textLight, fontSize: 16 }}>Profil yükleniyor...</Text>
