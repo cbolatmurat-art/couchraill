@@ -9,7 +9,10 @@ import { useAppContext } from '../../context/AppContext';
 import { API_BASE_URL } from '../../constants/config';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function ListingDetailsScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
@@ -51,7 +54,7 @@ export default function ListingDetailsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}>
       <Card style={styles.card}>
         <Text style={styles.title}>{listing.title || 'İlan Detayı'}</Text>
         

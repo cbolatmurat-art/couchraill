@@ -468,7 +468,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <ScrollView 
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 8, 16) }]} 
+        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 8, 16), paddingBottom: Math.max(insets.bottom + 20, 20) }]} 
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.profileHeader}>

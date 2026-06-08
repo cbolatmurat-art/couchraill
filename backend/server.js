@@ -4805,6 +4805,83 @@ app.post('/api/admin/reports/:id/resolve', checkAdminAuth, async (req, res) => {
   }
 });
 
+// PATCH Reject Report
+app.patch('/api/admin/reports/:reportId/reject', checkAdminAuth, async (req, res) => {
+  console.log(`[API REQUEST] ${req.method} ${req.originalUrl}`);
+  console.log('[API BODY]', req.body);
+  
+  try {
+    const reportId = req.params.reportId;
+    console.log('[REJECT REPORT] reportId:', reportId);
+    
+    // 1. Şikayet bilgilerini ve raporlayan kullanıcıyı getir
+    const { rows } = await query(`SELECT * FROM reports WHERE id = $1`, [reportId]);
+    if (rows.length === 0) {
+      console.log('[REJECT REPORT] Şikayet bulunamadı:', reportId);
+      const responseBody = { success: false, error: 'Şikayet bulunamadı.' };
+      console.log(`[API RESPONSE] 404`, responseBody);
+      return res.status(404).json(responseBody);
+    }
+    const report = rows[0];
+    console.log('[REJECT REPORT] Found report:', report);
+
+    // 2. Şikayeti reddedildi olarak işaretle
+    await query(`UPDATE reports SET status = 'rejected' WHERE id = $1`, [reportId]);
+    report.status = 'rejected';
+    console.log('[REJECT REPORT] Status updated to rejected');
+
+    // 3. PostgreSQL'de Bildirim Oluştur (Hata fırlatmaması için try/catch içinde)
+    try {
+      if (report.reporterUserId) {
+        const notifId = `n_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const createdAt = new Date().toISOString();
+        const title = 'Şikayetiniz İncelendi';
+        const message = 'Yaptığınız şikayet moderasyon ekibimiz tarafından incelendi. Yapılan değerlendirme sonucunda ilgili içerikte topluluk kurallarını veya platform politikalarını ihlal eden bir durum tespit edilmedi.';
+        
+        await query(`
+          INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+        `, [notifId, report.reporterUserId, 'report_rejected', title, message, report.contentId, report.contentType, createdAt]);
+        console.log('[REJECT REPORT] Notification inserted to Postgres');
+
+        // 4. Eğer kullanıcı aktifse Socket.io üzerinden canlı bildirim gönder
+        if (typeof activeUsers !== 'undefined' && typeof io !== 'undefined') {
+          const receiverSocketId = activeUsers.get(report.reporterUserId);
+          if (receiverSocketId && io.sockets.sockets.get(receiverSocketId)) {
+            const liveNotif = {
+              id: notifId,
+              userId: report.reporterUserId,
+              type: 'report_rejected',
+              title,
+              message,
+              relatedId: report.contentId,
+              relatedType: report.contentType,
+              read: false,
+              createdAt
+            };
+            io.to(receiverSocketId).emit('social_notification', liveNotif);
+            console.log('[REJECT REPORT] Live notification emitted via socket.io');
+          }
+        }
+      } else {
+         console.log('[REJECT REPORT] reporterUserId is empty or missing. Skipping notification.');
+      }
+    } catch (notifError) {
+      console.error('[REJECT REPORT] Bildirim oluşturulurken hata oluştu:', notifError);
+      // Failsafe: Bildirim hatası işlemi iptal etmesin
+    }
+
+    const responseBody = { success: true, report };
+    console.log(`[API RESPONSE] 200`, responseBody);
+    res.json(responseBody);
+  } catch (error) {
+    console.error('[ADMIN_REPORT_REJECT_ERROR]', error);
+    const responseBody = { success: false, error: 'Şikayet reddedilemedi.' };
+    console.log(`[API RESPONSE] 500`, responseBody);
+    res.status(500).json(responseBody);
+  }
+});
+
 // POST Hide Content
 app.post('/api/admin/moderate/hide-content', checkAdminAuth, async (req, res) => {
   try {

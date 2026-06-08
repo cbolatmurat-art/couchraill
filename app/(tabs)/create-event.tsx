@@ -10,7 +10,10 @@ import { API_BASE_URL } from '../../constants/config';
 import { CityPicker } from '../../components/CityPicker';
 import { Input } from '../../components/Input';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function CreateEventScreen() {
+  const insets = useSafeAreaInsets();
   const { currentUser, fetchListingsAndRequests } = useAppContext();
   const router = useRouter();
   
@@ -279,7 +282,7 @@ export default function CreateEventScreen() {
             )}
           </Pressable>
           
-          <View style={{ height: 60 }} />
+          <View style={{ height: Math.max(insets.bottom + 20, 60) }} />
         </ScrollView>
       </KeyboardAvoidingView>
 

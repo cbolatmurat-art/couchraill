@@ -12,8 +12,10 @@ import { EventCard } from '../../components/EventCard';
 import { ReportModal } from '../../components/ReportModal';
 import { normalizeCity } from '../../utils/normalizeCity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DiscoverScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { currentUser } = useAppContext();
   const [activeTab, setActiveTab] = useState<'matches' | 'events'>('matches');
@@ -628,7 +630,6 @@ export default function DiscoverScreen() {
         </View>
       )}
 
-      {/* Comments Bottom Modal */}
       <Modal
         visible={commentsModalVisible}
         animationType="slide"
@@ -641,7 +642,7 @@ export default function DiscoverScreen() {
         >
           <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={closeComments} />
           
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
               <TouchableOpacity onPress={closeComments} style={styles.modalCloseBtn}>
@@ -747,7 +748,7 @@ const styles = StyleSheet.create({
   
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalBackground: { ...StyleSheet.absoluteFillObject },
-  modalContent: { backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '75%', paddingBottom: Platform.OS === 'ios' ? 24 : 0 },
+  modalContent: { backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '75%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
   modalTitle: { ...Typography.subtitle, fontWeight: 'bold' },
   modalCloseBtn: { padding: 4 },

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Platform, Modal, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Card } from '../components/Card';
@@ -12,6 +13,7 @@ import { AlertHelper } from '../utils/AlertHelper';
 export default function PrivacyScreen() {
   const { currentUser, deleteAccount, deleteVerificationData } = useAppContext();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   
   const [isDeletingData, setIsDeletingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -121,17 +123,22 @@ export default function PrivacyScreen() {
   }, null, 2);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Gizlilik</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={[styles.content, { paddingBottom: 180 }]} 
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+      >
         <View style={styles.infoBanner}>
           <Ionicons name="shield-checkmark" size={24} color={Colors.primary} style={{ marginRight: 12 }} />
           <Text style={styles.infoBannerText}>
@@ -221,6 +228,9 @@ export default function PrivacyScreen() {
             <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
           </Pressable>
         </Card>
+        
+        {/* En alta görünür boş alan eklendi - Kesin çözüm */}
+        <View style={{ height: 260, backgroundColor: 'transparent' }} />
       </ScrollView>
 
       {/* JSON Veri Modal */}
@@ -245,7 +255,7 @@ export default function PrivacyScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -258,7 +268,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 48 : 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,

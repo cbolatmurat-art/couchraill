@@ -6,8 +6,10 @@ import { Typography } from '../../constants/Typography';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { useAppContext } from '../../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function RequestDetailsScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { requests, currentUser, updateRequestStatus, startConversation } = useAppContext();
   const router = useRouter();
@@ -56,7 +58,7 @@ export default function RequestDetailsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}>
       <Card style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Talep Detayları</Text>

@@ -331,6 +331,29 @@ export default function AdminScreen() {
     }
   };
 
+  const handleRejectComplaint = async (id: string, isSilent = false) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/${id}/reject`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (!isSilent) AlertHelper.alert('Başarılı', 'Şikayet reddedildi ve kullanıcıya bildirildi.');
+        setSelectedComplaint(null);
+        fetchReports(undefined, reportTypeFilter);
+      } else {
+        if (!isSilent) AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      if (!isSilent) AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthorized && (activeTab === 'moderation' || activeTab === 'overview')) {
       fetchReports(undefined, reportTypeFilter);
@@ -533,10 +556,27 @@ export default function AdminScreen() {
                       <Text style={styles.outlineBtnText}>Detay Gör</Text>
                     </Pressable>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {c.status !== 'resolved' && (
-                        <Pressable style={[styles.solidBtn, { backgroundColor: '#10B981' }]} onPress={() => AlertHelper.alert('Bilgi', 'Durum güncelleme apisi henüz bağlanmadı.')}>
-                          <Text style={styles.solidBtnText}>Çözüldü Yap</Text>
-                        </Pressable>
+                      {c.status === 'pending' && (
+                        <>
+                          <Pressable 
+                            style={[styles.solidBtn, { backgroundColor: '#EF4444' }]} 
+                            onPress={() => {
+                              AlertHelper.confirm(
+                                'Şikayeti Reddet',
+                                'Bu şikayeti reddetmek istediğinize emin misiniz?',
+                                () => handleRejectComplaint(c.id)
+                              );
+                            }}
+                          >
+                            <Text style={styles.solidBtnText}>Reddet</Text>
+                          </Pressable>
+                          <Pressable 
+                            style={[styles.solidBtn, { backgroundColor: '#10B981' }]} 
+                            onPress={() => handleResolveComplaint(c.id)}
+                          >
+                            <Text style={styles.solidBtnText}>Çözüldü Yap</Text>
+                          </Pressable>
+                        </>
                       )}
                     </View>
                   </View>
@@ -926,11 +966,31 @@ export default function AdminScreen() {
               ) : null}
             </ScrollView>
             <View style={styles.detailedModalFooter}>
-              <Pressable style={styles.outlineBtn} onPress={() => setSelectedComplaint(null)}>
+              <View style={{ flex: 1, flexDirection: 'row', gap: 12 }}>
+                <Pressable 
+                  style={[styles.solidBtn, { backgroundColor: '#EF4444', flex: 1 }]} 
+                  onPress={() => {
+                    AlertHelper.confirm(
+                      'Şikayeti Reddet',
+                      'Bu şikayeti reddetmek istediğinize emin misiniz?',
+                      () => handleRejectComplaint(selectedComplaint.id)
+                    );
+                  }}
+                  disabled={actionInProgress || complaintDetailsLoading}
+                >
+                  <Text style={styles.solidBtnText}>Reddet</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={[styles.solidBtn, { backgroundColor: '#10B981', flex: 1 }]} 
+                  onPress={() => handleResolveComplaint(selectedComplaint.id)} 
+                  disabled={actionInProgress || complaintDetailsLoading}
+                >
+                  {actionInProgress ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.solidBtnText}>Çözüldü İşaretle</Text>}
+                </Pressable>
+              </View>
+              <Pressable style={[styles.outlineBtn, { marginLeft: 12, justifyContent: 'center' }]} onPress={() => setSelectedComplaint(null)}>
                 <Text style={styles.outlineBtnText}>Kapat</Text>
-              </Pressable>
-              <Pressable style={[styles.solidBtn, { backgroundColor: '#10B981' }]} onPress={() => handleResolveComplaint(selectedComplaint.id)} disabled={actionInProgress || complaintDetailsLoading}>
-                {actionInProgress ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.solidBtnText}>Çözüldü İşaretle</Text>}
               </Pressable>
             </View>
           </View>

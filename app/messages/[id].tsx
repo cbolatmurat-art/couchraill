@@ -383,7 +383,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={0}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/messages')} style={styles.backButton}>
@@ -434,11 +434,19 @@ export default function ChatScreen() {
         />
 
         {isBlocked ? (
-          <View style={styles.blockedContainer}>
+          <View style={[styles.blockedContainer, { 
+            paddingBottom: Platform.OS === 'android' && keyboardHeight > 0 
+              ? keyboardHeight + insets.bottom + 8 
+              : Math.max(insets.bottom, 16)
+          }]}>
             <Text style={styles.blockedText}>Bu kullanıcıyla mesajlaşamazsınız.</Text>
           </View>
         ) : (
-          <View style={[styles.inputWrapper, { paddingBottom: Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight + 10 : 0 }]}>
+          <View style={[styles.inputWrapper, { 
+            paddingBottom: Platform.OS === 'android' && keyboardHeight > 0 
+              ? keyboardHeight + insets.bottom + 8 
+              : insets.bottom + 8 
+          }]}>
             {replyingToMessage && (
             <View style={styles.replyPreviewContainer}>
               {console.log("REPLY_BAR_SELECTED:", replyingToMessage)}
@@ -654,7 +662,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     backgroundColor: Colors.cardBackground,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
@@ -707,7 +714,6 @@ const styles = StyleSheet.create({
   },
   blockedContainer: {
     padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
     backgroundColor: Colors.cardBackground,
     borderTopWidth: 1,
     borderTopColor: Colors.border,

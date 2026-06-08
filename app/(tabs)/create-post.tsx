@@ -11,8 +11,10 @@ import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { CityPicker } from '../../components/CityPicker';
 import * as Location from 'expo-location';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CreatePostScreen() {
+  const insets = useSafeAreaInsets();
   const { currentUser, getSocialList, fetchListingsAndRequests } = useAppContext();
   const router = useRouter();
   const [text, setText] = useState('');
@@ -421,7 +423,7 @@ export default function CreatePostScreen() {
             {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.mainShareBtnText}>Paylaş</Text>}
           </TouchableOpacity>
           
-          <View style={{ height: 40 }} />
+          <View style={{ height: Math.max(insets.bottom + 20, 40) }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -506,7 +508,7 @@ export default function CreatePostScreen() {
                 }}
               />
             )}
-            <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: Colors.border }}>
+            <View style={{ padding: 16, paddingBottom: Math.max(insets.bottom, 16), borderTopWidth: 1, borderTopColor: Colors.border }}>
               <Button title="Tamam" onPress={() => setIsTagModalVisible(false)} />
             </View>
           </View>

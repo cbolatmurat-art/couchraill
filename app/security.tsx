@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Modal, Pressable, Image, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Card } from '../components/Card';
@@ -221,7 +222,8 @@ export default function SecurityScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={true}>
       
       <View style={styles.header}>
         <Ionicons name="shield-checkmark" size={64} color={Colors.success} />
@@ -368,6 +370,9 @@ export default function SecurityScreen() {
           Sizi rahatsız eden kullanıcıları sohbet ekranından engelleyebilir veya şikayet edebilirsiniz. Engellediğiniz kullanıcılar size bir daha ulaşamaz.
         </Text>
       </Card>
+
+      {/* En alta görünür boş alan eklendi - Kesin çözüm */}
+      <View style={{ height: 260, backgroundColor: 'transparent' }} />
 
       {/* Identity Verification Modal */}
       <Modal
@@ -569,7 +574,8 @@ export default function SecurityScreen() {
         </ScrollView>
       </Modal>
 
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

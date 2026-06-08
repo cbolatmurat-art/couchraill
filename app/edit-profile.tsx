@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, Image, Modal, TextInput } from 'react-native';
 import { useRouter, Stack, Redirect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Input } from '../components/Input';
@@ -13,6 +13,7 @@ import { CityPicker } from '../components/CityPicker';
 import { AlertHelper } from '../utils/AlertHelper';
 
 export default function EditProfileScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { currentUser, updateProfile, authLoading } = useAppContext();
 
@@ -540,7 +541,7 @@ export default function EditProfileScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView 
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.avatarSection}>
