@@ -2123,9 +2123,11 @@ app.get('/api/conversations/:userId', async (req, res) => {
   
   try {
     const { rows: userConversations } = await query(`
-      SELECT * FROM conversations
-      WHERE "participantIds" @> $1::jsonb
-      ORDER BY COALESCE("lastMessageTime", "updatedAt") DESC
+      SELECT c.*,
+             (SELECT row_to_json(m) FROM (SELECT * FROM messages WHERE "conversationId" = c.id ORDER BY "createdAt" DESC LIMIT 1) m) as "lastMessageObj"
+      FROM conversations c
+      WHERE c."participantIds" @> $1::jsonb
+      ORDER BY COALESCE(c."lastMessageTime", c."updatedAt") DESC
     `, [JSON.stringify([userId])]);
 
     const populated = await Promise.all(userConversations.map(async c => {
@@ -2157,6 +2159,8 @@ app.get('/api/conversations/:userId', async (req, res) => {
           [otherUserId]: otherUser ? (otherUser.profileImage || otherUser.avatar || null) : null,
           [userId]: currentUserInfo ? (currentUserInfo.profileImage || currentUserInfo.avatar || null) : null
         },
+        lastMessage: c.lastMessageObj ? c.lastMessageObj.text : c.lastMessage,
+        lastMessageAt: c.lastMessageObj ? c.lastMessageObj.createdAt : c.lastMessageAt,
         otherUserStatus: otherUser ? {
           isOnline: otherUser.isOnline || false,
           lastSeen: otherUser.lastSeen || null
