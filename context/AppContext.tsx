@@ -291,7 +291,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       } else {
         // Fallback to local storage
         const storedConversations = await AsyncStorage.getItem('misafirimol_conversations');
-        if (storedConversations) setConversations(JSON.parse(storedConversations));
+        if (storedConversations) {
+          const parsed = JSON.parse(storedConversations);
+          const resetConvs = parsed.map((c: any) => ({
+            ...c,
+            otherUserStatus: c.otherUserStatus ? { ...c.otherUserStatus, isOnline: false } : { isOnline: false, lastSeen: null }
+          }));
+          setConversations(resetConvs);
+        }
         
         const storedMessages = await AsyncStorage.getItem('misafirimol_messages');
         if (storedMessages) setMessages(JSON.parse(storedMessages));
@@ -462,6 +469,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     newSocket.on('user_status_changed', (data: { userId: string; isOnline: boolean; lastSeen: string }) => {
       console.log('[SOCKET] user_status_changed:', data);
+      
+      // Kendi durumumuzu başkalarının otherUserStatus nesnesine yazmamak için ignore ediyoruz
+      if (data.userId === currentUser.id) return;
+      
       setConversations(prevConvs => {
         return prevConvs.map(c => {
           if (c.participantIds.includes(data.userId)) {
@@ -1376,10 +1387,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Optimistic remove from global array
-      setConversations(prev => {
-        const next = prev.filter(c => c.id !== conversationId);
-        return next;
-      });
+      // DO NOT filter it out from the main conversations array, so it can be easily restored!
+      // setConversations(prev => prev.filter(c => c.id !== conversationId));
 
       // Try saving to backend profile silently
       const hiddenConversations = Array.isArray(currentUser.hiddenConversations)

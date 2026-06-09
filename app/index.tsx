@@ -38,7 +38,7 @@ export default function WelcomeScreen() {
           <Button 
             title="Üye Ol" 
             variant="secondary"
-            onPress={() => router.push('/(auth)/role-selection')} 
+            onPress={() => router.push('/(auth)/register')} 
           />
         </View>
       </View>

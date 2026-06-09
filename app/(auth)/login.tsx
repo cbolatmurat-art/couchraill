@@ -258,7 +258,7 @@ export default function LoginScreen() {
               </Text>
               <TouchableOpacity
                 style={styles.registerButton}
-                onPress={() => router.push('/(auth)/role-selection')}
+                onPress={() => router.push('/(auth)/register')}
               >
                 <Text style={styles.registerButtonText}>Üye Ol</Text>
               </TouchableOpacity>

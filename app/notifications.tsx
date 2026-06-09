@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Modal, Alert, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Modal, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
@@ -17,11 +17,24 @@ export default function NotificationsScreen() {
     clearNotifications,
     acceptFriendRequest,
     rejectFriendRequest,
-    pokeUser
+    pokeUser,
+    refreshData
   } = useAppContext();
   const [clearModalVisible, setClearModalVisible] = useState(false);
   const [processedRequests, setProcessedRequests] = useState<{[requestId: string]: 'accepted' | 'rejected'}>({});
   const [pokedUsers, setPokedUsers] = useState<{[userId: string]: boolean}>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (error) {
+      Alert.alert('Hata', 'Bildirimler yenilenemedi.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleAccept = async (requestId: string) => {
     const res = await acceptFriendRequest(requestId);
@@ -240,6 +253,14 @@ export default function NotificationsScreen() {
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-off-outline" size={64} color={Colors.border} />

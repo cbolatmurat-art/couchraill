@@ -11,8 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { type } = useLocalSearchParams(); // 'seeker' veya 'host'
-  const { register } = useAppContext();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,8 +20,6 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
-
-  const isHost = type === 'host';
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -112,41 +108,18 @@ export default function RegisterScreen() {
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-
-      const result = await register({
+    // Validasyonlar başarılı, Kurulum ekranına yönlendir
+    router.push({
+      pathname: '/(auth)/setup',
+      params: {
         name,
         email,
         password,
         phone: `+90${phone}`,
-        userType: isHost ? 'host' : 'seeker',
-        city: city,
-        acceptsGuests: false,
-        termsAccepted: termsAccepted,
-        termsAcceptedAt: new Date().toISOString(),
-      });
-
-      if (result.success) {
-        setSuccessMsg('Kayıt başarıyla oluşturuldu.');
-        Alert.alert('Başarılı', 'Kayıt başarıyla oluşturuldu.');
-        setName('');
-        setEmail('');
-        setPassword('');
-        setPhone('');
-        setCity('');
-        
-        setTimeout(() => {
-          router.replace('/(auth)/login');
-        }, 700);
-      } else {
-        setErrorMsg(result.error || 'Kayıt sırasında bir hata oluştu.');
+        city,
+        termsAccepted: termsAccepted ? 'true' : 'false'
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Kayıt oluşturulamadı.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
   return (
@@ -159,7 +132,7 @@ export default function RegisterScreen() {
           <Text style={styles.headerTitle}>Kayıt Ol</Text>
         </View>
         <Text style={styles.headerSubtitle}>
-          {isHost ? 'Ev sahibi profilinizi oluşturun.' : 'Misafir profilinizi oluşturun.'}
+          Hesabınızı oluşturmak için bilgilerinizi girin.
         </Text>
       </View>
 
@@ -276,7 +249,7 @@ export default function RegisterScreen() {
                 disabled={isSubmitting}
               >
                 <Text style={styles.submitBtnText}>
-                  {isSubmitting ? "Kaydediliyor..." : "Kaydı Tamamla"}
+                  {isSubmitting ? "Lütfen bekleyin..." : "Devam Et"}
                 </Text>
               </Pressable>
             </View>

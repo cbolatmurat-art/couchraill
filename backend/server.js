@@ -2237,49 +2237,60 @@ app.post('/api/conversations/start', async (req, res) => {
   }
 });
 
-app.post('/api/conversations/:conversationId/mute', (req, res) => {
+app.post('/api/conversations/:conversationId/mute', async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { userId } = req.body;
 
-    const db = readDB();
-    const conversation = db.conversations.find(c => c.id === conversationId);
-    if (!conversation) {
+    const { rows } = await query(`SELECT * FROM conversations WHERE id = $1`, [conversationId]);
+    if (rows.length === 0) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    conversation.mutedBy = Array.isArray(conversation.mutedBy) ? conversation.mutedBy : [];
+    let conversation = rows[0];
+    let mutedBy = conversation.mutedBy || [];
+    if (typeof mutedBy === 'string') mutedBy = JSON.parse(mutedBy);
 
-    if (!conversation.mutedBy.includes(userId)) {
-      conversation.mutedBy.push(userId);
+    if (!mutedBy.includes(userId)) {
+      mutedBy.push(userId);
     }
 
-    writeDB(db);
+    const updateResult = await query(
+      `UPDATE conversations SET "mutedBy" = $1::jsonb WHERE id = $2 RETURNING *`,
+      [JSON.stringify(mutedBy), conversationId]
+    );
 
-    res.json({ success: true, conversation });
+    let updatedConv = updateResult.rows[0];
+    res.json({ success: true, conversation: updatedConv });
   } catch (error) {
     console.error('mute conversation error:', error);
     res.status(500).json({ error: 'Mute conversation failed' });
   }
 });
 
-app.post('/api/conversations/:conversationId/unmute', (req, res) => {
+app.post('/api/conversations/:conversationId/unmute', async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { userId } = req.body;
 
-    const db = readDB();
-    const conversation = db.conversations.find(c => c.id === conversationId);
-    if (!conversation) {
+    const { rows } = await query(`SELECT * FROM conversations WHERE id = $1`, [conversationId]);
+    if (rows.length === 0) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    conversation.mutedBy = Array.isArray(conversation.mutedBy) ? conversation.mutedBy : [];
-    conversation.mutedBy = conversation.mutedBy.filter(id => id !== userId);
+    let conversation = rows[0];
+    let mutedBy = conversation.mutedBy || [];
+    if (typeof mutedBy === 'string') mutedBy = JSON.parse(mutedBy);
 
-    writeDB(db);
+    mutedBy = mutedBy.filter(id => id !== userId);
 
-    res.json({ success: true, conversation });
+    const updateResult = await query(
+      `UPDATE conversations SET "mutedBy" = $1::jsonb WHERE id = $2 RETURNING *`,
+      [JSON.stringify(mutedBy), conversationId]
+    );
+
+    let updatedConv = updateResult.rows[0];
+    res.json({ success: true, conversation: updatedConv });
   } catch (error) {
     console.error('unmute conversation error:', error);
     res.status(500).json({ error: 'Unmute conversation failed' });

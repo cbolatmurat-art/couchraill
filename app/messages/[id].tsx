@@ -112,7 +112,10 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (conversation?.otherUserStatus) {
-      setLocalOtherUserStatus(conversation.otherUserStatus);
+      setLocalOtherUserStatus(prev => ({
+        isOnline: conversation.otherUserStatus.isOnline !== undefined ? conversation.otherUserStatus.isOnline : prev.isOnline,
+        lastSeen: conversation.otherUserStatus.lastSeen || prev.lastSeen
+      }));
     }
   }, [conversation?.otherUserStatus]);
 
@@ -121,10 +124,10 @@ export default function ChatScreen() {
     const fetchOtherUserStatus = async () => {
       const res = await getPublicProfile(otherUserId);
       if (res && res.success && res.profile) {
-        setLocalOtherUserStatus({
-          isOnline: res.profile.isOnline || false,
-          lastSeen: res.profile.lastSeen || null
-        });
+        setLocalOtherUserStatus(prev => ({
+          isOnline: res.profile.isOnline !== undefined ? res.profile.isOnline : prev.isOnline,
+          lastSeen: res.profile.lastSeen || prev.lastSeen
+        }));
       }
     };
     
@@ -206,7 +209,7 @@ export default function ChatScreen() {
   };
 
   const formatLastSeen = (timestamp?: string | null) => {
-    if (!timestamp) return 'Son görülme: bilinmiyor';
+    if (!timestamp) return '';
     try {
       const date = new Date(timestamp);
       const now = new Date();
@@ -232,7 +235,7 @@ export default function ChatScreen() {
         return `Son görülme: ${day}.${month} ${timeStr}`;
       }
     } catch (e) {
-      return 'Son görülme: bilinmiyor';
+      return '';
     }
   };
 
@@ -267,12 +270,14 @@ export default function ChatScreen() {
           return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dy) < 20;
         },
         onPanResponderMove: (_, gestureState) => {
-          if (gestureState.dx > 0) {
+          if (isMine && gestureState.dx < 0) {
+            pan.setValue({ x: Math.max(gestureState.dx, -100), y: 0 });
+          } else if (!isMine && gestureState.dx > 0) {
             pan.setValue({ x: Math.min(gestureState.dx, 100), y: 0 });
           }
         },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx > 60) {
+          if ((isMine && gestureState.dx < -60) || (!isMine && gestureState.dx > 60)) {
             console.log("REPLY_SELECTED_MESSAGE:", item);
             setReplyingToMessage(item);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -288,10 +293,15 @@ export default function ChatScreen() {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Animated.View style={[styles.swipeReplyAction, { 
-          position: 'absolute', left: 0,
-          opacity: pan.x.interpolate({ inputRange: [0, 60], outputRange: [0, 1] })
+          position: 'absolute',
+          left: isMine ? undefined : 0,
+          right: isMine ? 0 : undefined,
+          opacity: pan.x.interpolate({ 
+            inputRange: isMine ? [-60, 0] : [0, 60], 
+            outputRange: isMine ? [1, 0] : [0, 1] 
+          })
         }]}>
-          <Ionicons name="arrow-undo" size={24} color={Colors.primary} />
+          <Ionicons name="arrow-undo" size={24} color={Colors.primary} style={isMine ? { transform: [{ scaleX: -1 }] } : undefined} />
         </Animated.View>
         <Animated.View 
           style={[{ flex: 1, transform: [{ translateX: pan.x }] }]}
@@ -405,11 +415,11 @@ export default function ChatScreen() {
                   <View style={styles.onlineDot} />
                   <Text style={styles.onlineStatus}>Çevrimiçi</Text>
                 </View>
-              ) : (
+              ) : formatLastSeen(localOtherUserStatus.lastSeen) ? (
                 <Text style={styles.offlineStatus}>
                   {formatLastSeen(localOtherUserStatus.lastSeen)}
                 </Text>
-              )}
+              ) : null}
             </View>
           </TouchableOpacity>
         </View>
@@ -452,7 +462,7 @@ export default function ChatScreen() {
               {console.log("REPLY_BAR_SELECTED:", replyingToMessage)}
               <View style={styles.replyPreviewContent}>
                 <Text style={styles.replyPreviewSender}>
-                  {replyingToMessage.senderId === currentUser?.id ? 'Siz' : (otherUserName || "Kullanıcı")}
+                  {replyingToMessage.senderId === currentUser?.id ? 'Kendi mesajına yanıt veriyorsun' : (replyingToMessage.senderName || otherUserName || "Kullanıcı")}
                 </Text>
                 <Text style={styles.replyPreviewText} numberOfLines={1}>
                   {replyingToMessage.text}

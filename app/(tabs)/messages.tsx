@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, DeviceEventEmitter, TextInput, Modal, Animated, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, DeviceEventEmitter, TextInput, Modal, Animated, Alert, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
@@ -7,6 +7,7 @@ import { useAppContext } from '../../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Conversation } from '../../data/MockData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 export default function MessagesScreen() {
   const router = useRouter();
@@ -14,11 +15,31 @@ export default function MessagesScreen() {
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
-  const [selectedConversation, setSelectedConversation] = React.useState<Conversation | null>(null);
-  const slideAnim = React.useRef(new Animated.Value(300)).current;
+  const swipeableRefs = React.useRef(new Map<string, any>());
   const [hiddenConversationIds, setHiddenConversationIds] = React.useState<string[]>([]);
-  const [showConfirmDelete, setShowConfirmDelete] = React.useState(false);
+
+  const closeOtherSwipeables = (id: string) => {
+    swipeableRefs.current.forEach((ref, key) => {
+      if (key !== id && ref) {
+        ref.close();
+      }
+    });
+  };
   const baseConversations = getConversationsForCurrentUser();
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      if (refreshData) {
+        await refreshData();
+      }
+    } catch (error) {
+      Alert.alert('', 'Mesajlar yenilenemedi.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   React.useEffect(() => {
     const loadDeletedConversations = async () => {
@@ -62,48 +83,12 @@ export default function MessagesScreen() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  const openMenu = (conv: Conversation) => {
-    console.log("LONG_PRESS_SELECTED_CONVERSATION:", conv);
-    setSelectedConversation(conv);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const closeMenu = () => {
-    Animated.timing(slideAnim, {
-      toValue: 300,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setSelectedConversation(null);
-    });
-  };
-
-  const handleDelete = () => {
-    if (!selectedConversation?.id) {
-      alert("Hata: Sohbet ID bulunamadı");
-      return;
-    }
-    
-    // Instead of Alert.alert which blocks web and subagents, use a custom modal state
-    setShowConfirmDelete(true);
-  };
-
-  const confirmDelete = () => {
-    if (!selectedConversation?.id) return;
-    const conversationId = selectedConversation.id;
-
-    // Immediately hide from local state
+  const confirmDelete = (conversationId: string) => {
     setHiddenConversationIds(prev => {
       const next = prev.includes(conversationId) ? prev : [...prev, conversationId];
-      console.log("HIDDEN_IDS_AFTER_DELETE:", next);
       return next;
     });
 
-    // Persist to AsyncStorage immediately
     if (currentUser?.id) {
       const key = `deleted_conversations_${currentUser.id}`;
       AsyncStorage.getItem(key).then(raw => {
@@ -114,37 +99,22 @@ export default function MessagesScreen() {
       }).catch(() => {});
     }
 
-    // Sync with context/backend (do not wait for it to block UI)
     hideConversationForCurrentUser(conversationId).catch(e => {
       console.log("Delete api error:", e);
     });
 
-    setShowConfirmDelete(false);
-    setSelectedConversation(null);
-    closeMenu();
+    swipeableRefs.current.delete(conversationId);
   };
 
-  const cancelDelete = () => {
-    setShowConfirmDelete(false);
-  };
-
-  const handleMuteToggle = async () => {
-    if (!selectedConversation) return;
-    
-    const isMuted = selectedConversation.mutedBy?.includes(currentUser.id);
-    let res;
-    
+  const handleToggleMute = async (conversationId: string, isMuted: boolean) => {
+    swipeableRefs.current.get(conversationId)?.close();
     if (isMuted) {
-      res = await unmuteConversation(selectedConversation.id);
+      const res = await unmuteConversation(conversationId);
+      if (!res.success) Alert.alert("Hata", res.error || "İşlem yapılamadı.");
     } else {
-      res = await muteConversation(selectedConversation.id);
+      const res = await muteConversation(conversationId);
+      if (!res.success) Alert.alert("Hata", res.error || "İşlem yapılamadı.");
     }
-    
-    if (!res.success) {
-      Alert.alert("Hata", res.error || "İşlem yapılamadı, tekrar deneyin.");
-    }
-    
-    closeMenu();
   };
 
   React.useEffect(() => {
@@ -209,50 +179,109 @@ export default function MessagesScreen() {
     const unreadCount = messages.filter(m => m.conversationId === item.id && m.receiverId === currentUser.id && m.read === false).length;
     const hasUnread = unreadCount > 0;
 
-    const otherUserStatus = item.otherUserStatus || { isOnline: false, lastSeen: null };
-    const isOnline = otherUserStatus.isOnline;
+    const isOnline = item.otherUserStatus?.isOnline;
+    const badgeColor = isOnline === true ? Colors.success : Colors.danger;
     const isTyping = typingStatuses[item.id]?.[otherUserId] || false;
 
     const isMuted = item.mutedBy?.includes(currentUser.id);
 
+    const renderLeftActions = (progress: any, dragX: any) => {
+      const trans = dragX.interpolate({
+        inputRange: [0, 80],
+        outputRange: [-30, 0],
+        extrapolate: 'clamp',
+      });
+      const opacity = dragX.interpolate({
+        inputRange: [0, 40, 80],
+        outputRange: [0, 0.5, 1],
+        extrapolate: 'clamp',
+      });
+      return (
+        <View style={styles.leftAction}>
+          <Animated.View style={[styles.actionContent, { opacity, transform: [{ translateX: trans }] }]}>
+            <Ionicons name="trash" size={24} color="white" />
+            <Text style={styles.actionText}>Sil</Text>
+          </Animated.View>
+        </View>
+      );
+    };
+
+    const renderRightActions = (progress: any, dragX: any) => {
+      const trans = dragX.interpolate({
+        inputRange: [-80, 0],
+        outputRange: [0, 30],
+        extrapolate: 'clamp',
+      });
+      const opacity = dragX.interpolate({
+        inputRange: [-80, -40, 0],
+        outputRange: [1, 0.5, 0],
+        extrapolate: 'clamp',
+      });
+      return (
+        <View style={[styles.rightAction, { backgroundColor: isMuted ? Colors.warning : Colors.textLight }]}>
+          <Animated.View style={[styles.actionContent, { opacity, transform: [{ translateX: trans }] }]}>
+            <Ionicons name={isMuted ? "volume-medium" : "volume-mute"} size={24} color="white" />
+            <Text style={styles.actionText}>{isMuted ? "Sesi Aç" : "Sessiz"}</Text>
+          </Animated.View>
+        </View>
+      );
+    };
+
     return (
-      <Pressable 
-        style={[styles.chatItem, hasUnread && styles.chatItemUnread]}
-        onPress={() => router.push(`/messages/${item.id}`)}
-        onLongPress={() => openMenu(item)}
+      <Swipeable
+        ref={ref => {
+          if (ref) {
+            swipeableRefs.current.set(item.id, ref);
+          } else {
+            swipeableRefs.current.delete(item.id);
+          }
+        }}
+        renderLeftActions={renderLeftActions}
+        renderRightActions={renderRightActions}
+        onSwipeableWillOpen={() => closeOtherSwipeables(item.id)}
+        onSwipeableLeftOpen={() => confirmDelete(item.id)}
+        onSwipeableRightOpen={() => handleToggleMute(item.id, isMuted || false)}
+        friction={2}
+        leftThreshold={60}
+        rightThreshold={60}
       >
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
-          </View>
-          {isOnline && <View style={styles.onlineBadge} />}
-        </View>
-        <View style={styles.chatInfo}>
-          <View style={styles.chatHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.userName, hasUnread && styles.boldText]}>{otherUserName}</Text>
-              {isMuted && <Ionicons name="volume-mute" size={16} color={Colors.textLight} style={{ marginLeft: 6 }} />}
+        <Pressable 
+          style={[styles.chatItem, hasUnread && styles.chatItemUnread]}
+          onPress={() => router.push(`/messages/${item.id}`)}
+        >
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
             </View>
-            <Text style={[styles.timeText, hasUnread && styles.boldText]}>{dateString}</Text>
+            <View style={[styles.onlineBadge, { backgroundColor: badgeColor }]} />
           </View>
-          <View style={styles.messageRow}>
-            {isTyping ? (
-              <Text style={[styles.typingText, { flex: 1 }]} numberOfLines={1}>
-                Yazıyor...
-              </Text>
-            ) : (
-              <Text style={[styles.lastMessage, hasUnread && styles.boldText, { flex: 1 }]} numberOfLines={1}>
-                {item.lastMessage || 'Yeni sohbet oluşturuldu'}
-              </Text>
-            )}
-            {hasUnread && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+          <View style={styles.chatInfo}>
+            <View style={styles.chatHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.userName, hasUnread && styles.boldText]}>{otherUserName}</Text>
+                {isMuted && <Ionicons name="volume-mute" size={16} color={Colors.textLight} style={{ marginLeft: 6 }} />}
               </View>
-            )}
+              <Text style={[styles.timeText, hasUnread && styles.boldText]}>{dateString}</Text>
+            </View>
+            <View style={styles.messageRow}>
+              {isTyping ? (
+                <Text style={[styles.typingText, { flex: 1 }]} numberOfLines={1}>
+                  Yazıyor...
+                </Text>
+              ) : (
+                <Text style={[styles.lastMessage, hasUnread && styles.boldText, { flex: 1 }]} numberOfLines={1}>
+                  {item.lastMessage || 'Yeni sohbet oluşturuldu'}
+                </Text>
+              )}
+              {hasUnread && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </Swipeable>
     );
   };
 
@@ -280,6 +309,14 @@ export default function MessagesScreen() {
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             {debouncedQuery.trim() ? (
@@ -294,115 +331,33 @@ export default function MessagesScreen() {
         }
       />
 
-      {/* Bottom Sheet Menu for Long Press */}
-      <Modal visible={!!selectedConversation} transparent animationType="fade" onRequestClose={closeMenu}>
-        <Pressable style={styles.modalOverlay} onPress={closeMenu}>
-          <Animated.View 
-            style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}
-            onStartShouldSetResponder={() => true} // Prevent bubbling to overlay
-            onTouchEnd={(e) => e.stopPropagation()} 
-          >
-            <View style={styles.bottomSheetHeader}>
-              <View style={styles.bottomSheetHandle} />
-            </View>
-            <Pressable 
-              style={styles.menuItem} 
-              onPress={(e) => {
-                if (e && e.stopPropagation) e.stopPropagation();
-                handleDelete();
-              }}
-            >
-              <Ionicons name="trash-outline" size={24} color={Colors.danger} style={styles.menuIcon} />
-              <Text style={[styles.menuItemText, { color: Colors.danger }]}>Sil</Text>
-            </Pressable>
-            <Pressable 
-              style={styles.menuItem} 
-              onPress={(e) => {
-                if (e && e.stopPropagation) e.stopPropagation();
-                handleMuteToggle();
-              }}
-            >
-              <Ionicons 
-                name={selectedConversation?.mutedBy?.includes(currentUser.id) ? "volume-high-outline" : "volume-mute-outline"} 
-                size={24} color={Colors.text} style={styles.menuIcon} 
-              />
-              <Text style={styles.menuItemText}>
-                {selectedConversation?.mutedBy?.includes(currentUser.id) ? "Mesajın Sesini Aç" : "Mesajı Sessize Al"}
-              </Text>
-            </Pressable>
-          </Animated.View>
-        </Pressable>
-      </Modal>
-      {/* Custom Confirm Delete Modal for Cross-Platform Reliability */}
-      <Modal visible={showConfirmDelete} transparent animationType="fade" onRequestClose={cancelDelete}>
-        <View style={styles.confirmModalOverlay}>
-          <View style={styles.confirmModalContent}>
-            <Text style={styles.confirmModalTitle}>Sohbet silinsin mi?</Text>
-            <Text style={styles.confirmModalText}>Bu sohbet sadece senden silinir.</Text>
-            <View style={styles.confirmModalButtons}>
-              <TouchableOpacity style={styles.confirmModalButton} onPress={cancelDelete}>
-                <Text style={styles.confirmModalButtonText}>Vazgeç</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.confirmModalButton, styles.confirmModalButtonDanger]} onPress={confirmDelete}>
-                <Text style={[styles.confirmModalButtonText, styles.confirmModalButtonTextDanger]}>Sil</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  confirmModalOverlay: {
+  leftAction: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  confirmModalContent: {
-    backgroundColor: Colors.background,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  confirmModalTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  confirmModalText: {
-    ...Typography.body,
-    color: Colors.textLight,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  confirmModalButtons: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
-  confirmModalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: Colors.border,
-    alignItems: 'center',
-  },
-  confirmModalButtonDanger: {
     backgroundColor: Colors.danger,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 24,
   },
-  confirmModalButtonText: {
-    ...Typography.button,
-    color: Colors.text,
+  rightAction: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 24,
   },
-  confirmModalButtonTextDanger: {
+  actionContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionText: {
     color: 'white',
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: Typography.semiBold
   },
   container: {
     flex: 1,
@@ -440,6 +395,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
+    backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },

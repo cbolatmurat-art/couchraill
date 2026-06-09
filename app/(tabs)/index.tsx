@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, Animated, Dimensions, Alert, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, Animated, Dimensions, Alert, DeviceEventEmitter, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
@@ -26,6 +26,67 @@ export default function FeedScreen() {
   const [errorMsg, setErrorMsg] = useState('');
   const [activeTab, setActiveTab] = useState<'hosts' | 'community' | 'events'>('hosts');
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    if (!currentUser) return;
+    setRefreshing(true);
+    try {
+      if (activeTab === 'hosts') {
+        const feedRes = await fetch(`${API_BASE_URL}/feed?userId=${currentUser.id}`);
+        const text = await feedRes.text();
+        const feedData = JSON.parse(text);
+        if (feedData.success && feedData.items) {
+          setFeed(prev => {
+            const others = prev.filter((item: any) => {
+              const itemType = String(item.type || item.contentType || "").toLowerCase();
+              return !(itemType === "listing" || itemType === "host_listing" || item.isListing === true);
+            });
+            const newCombined = [...others, ...feedData.items];
+            newCombined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            return newCombined;
+          });
+        }
+      } else if (activeTab === 'community') {
+        const postsRes = await fetch(`${API_BASE_URL}/posts/feed?userId=${currentUser.id}`);
+        const text = await postsRes.text();
+        const postsData = JSON.parse(text);
+        if (postsData.success && postsData.items) {
+          setFeed(prev => {
+            const others = prev.filter((item: any) => {
+              const itemType = String(item.type || item.contentType || "").toLowerCase();
+              const isListing = itemType === "listing" || itemType === "host_listing" || item.isListing === true;
+              const isEvent = itemType === "event" || item.isEvent === true;
+              const isPost = itemType === "post" || item.isPost === true || (!isListing && !isEvent);
+              return !isPost;
+            });
+            const newCombined = [...others, ...postsData.items];
+            newCombined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            return newCombined;
+          });
+        }
+      } else if (activeTab === 'events') {
+        const eventsRes = await fetch(`${API_BASE_URL}/events/feed?userId=${currentUser.id}`);
+        const text = await eventsRes.text();
+        const eventsData = JSON.parse(text);
+        if (eventsData.success && eventsData.items) {
+          setFeed(prev => {
+            const others = prev.filter((item: any) => {
+              const itemType = String(item.type || item.contentType || "").toLowerCase();
+              return !(itemType === "event" || item.isEvent === true);
+            });
+            const newCombined = [...others, ...eventsData.items];
+            newCombined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            return newCombined;
+          });
+        }
+      }
+    } catch (err) {
+      Alert.alert('', 'Yenileme başarısız oldu.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Post Menu State
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
@@ -579,6 +640,14 @@ export default function FeedScreen() {
               </View>
             }
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[Colors.primary]}
+                tintColor={Colors.primary}
+              />
+            }
           />
         );
       })() : activeTab === 'events' ? (
@@ -603,6 +672,14 @@ export default function FeedScreen() {
               <Text style={styles.emptyTitle}>Henüz etkinlik paylaşılmamış.</Text>
               <Text style={styles.emptyText}>Yeni etkinlikler paylaşıldığında burada görünecek.</Text>
             </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
           }
         />
       ) : (
@@ -655,6 +732,14 @@ export default function FeedScreen() {
           contentContainerStyle={displayFeed.length === 0 ? styles.listEmpty : styles.listContent}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
         />
       )}
 
