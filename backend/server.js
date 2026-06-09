@@ -4746,7 +4746,7 @@ app.get('/api/admin/reports/:id/details', checkAdminAuth, async (req, res) => {
     const { rows: reportRows } = await query(`
       SELECT r.*, 
         u1.name as reporter_name, u1.username as reporter_username, u1."profileImage" as reporter_avatar,
-        u2.name as reported_name, u2.username as reported_username, u2."profileImage" as reported_avatar
+        u2.name as reported_name, u2.username as reported_username, u2."profileImage" as reported_avatar, u2.active as reported_active
       FROM reports r
       LEFT JOIN users u1 ON r."reporterUserId" = u1.id
       LEFT JOIN users u2 ON r."reportedUserId" = u2.id
@@ -4963,6 +4963,18 @@ app.post('/api/admin/moderate/deactivate-user', checkAdminAuth, async (req, res)
   } catch (error) {
     console.error('[ADMIN_MODERATE_DEACTIVATE_ERROR]', error);
     res.status(500).json({ success: false, error: 'Kullanıcı pasifleştirilemedi.' });
+  }
+});
+
+// POST Activate User
+app.post('/api/admin/moderate/activate-user', checkAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    await query(`UPDATE users SET active = true WHERE id = $1`, [userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ADMIN_MODERATE_ACTIVATE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Kullanıcı aktif edilemedi.' });
   }
 });
 

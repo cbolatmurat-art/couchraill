@@ -308,6 +308,29 @@ export default function AdminScreen() {
     }
   };
 
+  const handleActivateUser = async (userId: string) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/moderate/activate-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', 'Kullanıcı aktif edildi.');
+        if (selectedComplaint) fetchComplaintDetails(selectedComplaint.id);
+      } else {
+        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
   const handleResolveComplaint = async (id: string, isSilent = false) => {
     if (!adminToken) return;
     setActionInProgress(true);
@@ -957,10 +980,17 @@ export default function AdminScreen() {
                       <Ionicons name="trash-outline" size={20} color="#EF4444" />
                       <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>İçeriği Kaldır</Text>
                     </Pressable>
-                    <Pressable style={styles.actionGridBtn} onPress={() => handleDeactivateUser(complaintDetails.report.reportedUserId)} disabled={actionInProgress}>
-                      <Ionicons name="person-remove-outline" size={20} color="#EF4444" />
-                      <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>Kullanıcıyı Pasifleştir</Text>
-                    </Pressable>
+                    {complaintDetails.report.reported_active === false ? (
+                      <Pressable style={styles.actionGridBtn} onPress={() => handleActivateUser(complaintDetails.report.reportedUserId)} disabled={actionInProgress}>
+                        <Ionicons name="person-add-outline" size={20} color="#10B981" />
+                        <Text style={[styles.actionGridBtnText, { color: '#10B981' }]}>Kullanıcıyı Aktif Et</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable style={styles.actionGridBtn} onPress={() => handleDeactivateUser(complaintDetails.report.reportedUserId)} disabled={actionInProgress}>
+                        <Ionicons name="person-remove-outline" size={20} color="#EF4444" />
+                        <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>Kullanıcıyı Pasifleştir</Text>
+                      </Pressable>
+                    )}
                   </View>
                 </>
               ) : null}
