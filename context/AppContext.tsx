@@ -3,64 +3,13 @@ import { Alert, DeviceEventEmitter, AppState, AppStateStatus, Animated, Pressabl
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { User, AccommodationRequest, Message, Conversation, Listing, AppNotification, Review } from '../data/MockData';
 import { API_BASE_URL } from '../constants/config';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import io from 'socket.io-client/dist/socket.io.js';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
-async function registerForPushNotificationsAsync(): Promise<string | null> {
-  if (Platform.OS === 'web') return null;
-
-  const isExpoGo = Constants.executionEnvironment === 'store-client';
-  if (isExpoGo) {
-    console.warn("Expo Go ortamında push bildirimleri devre dışı.");
-    return null;
-  }
-
-  try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
-      return null;
-    }
-
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId;
-
-    if (!projectId) {
-      console.warn('Project ID not found in expo config, cannot get push token');
-      return null;
-    }
-
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
-
-    return token.data;
-  } catch (error) {
-    console.error('Error registering for push notifications:', error);
-    return null;
-  }
-}
+import { setupPushNotifications } from '../utils/pushNotifications';
 
 const SESSION_STORAGE_KEY = 'misafirimol_session';
 const USERS_STORAGE_KEY = 'misafirimol_users';
@@ -500,37 +449,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Register push notifications when currentUser is set
   useEffect(() => {
     if (currentUser) {
-      registerForPushNotificationsAsync().then(token => {
-        if (token && token !== currentUser.pushToken) {
-          console.log('[PUSH] Registering/updating push token:', token);
-          updateProfile({ pushToken: token }).catch(err => {
-            console.error('[PUSH] Failed to save push token to server:', err);
-          });
-        }
-      });
+      const cleanup = setupPushNotifications(currentUser, updateProfile);
+      return () => {
+        if (cleanup) cleanup();
+      };
     }
   }, [currentUser?.id]);
-
-  // Handle notification tap / click response
-  useEffect(() => {
-    const isExpoGo = Constants.executionEnvironment === 'store-client';
-    if (isExpoGo) {
-      return;
-    }
-
-    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
-      console.log('[NOTIFICATION CLICKED] payload:', data);
-      
-      if (data && data.conversationId) {
-        setTimeout(() => {
-          router.push(`/messages/${data.conversationId}`);
-        }, 100);
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
 
   useEffect(() => {
     if (!currentUser) {
