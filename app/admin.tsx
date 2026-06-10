@@ -89,6 +89,13 @@ export default function AdminScreen() {
   const [complaintDetailsLoading, setComplaintDetailsLoading] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
 
+  // Broadcast notification state
+  const [isBroadcastModalVisible, setIsBroadcastModalVisible] = useState(false);
+  const [broadcastTargetGroup, setBroadcastTargetGroup] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+
   const clearAdminSession = async () => {
     localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt');
     try {
@@ -447,6 +454,42 @@ export default function AdminScreen() {
     }
   };
 
+  const handleBroadcastNotification = async () => {
+    if (!broadcastTitle.trim() || !broadcastMessage.trim()) {
+      AlertHelper.alert('Hata', 'Başlık ve mesaj alanları boş bırakılamaz.');
+      return;
+    }
+    setBroadcastLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/notifications/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken || ''}`
+        },
+        body: JSON.stringify({
+          targetGroup: broadcastTargetGroup,
+          title: broadcastTitle.trim(),
+          message: broadcastMessage.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', data.message || `Bildirim ${data.sentCount} kullanıcıya gönderildi.`);
+        setIsBroadcastModalVisible(false);
+        setBroadcastTitle('');
+        setBroadcastMessage('');
+        setBroadcastTargetGroup('all');
+      } else {
+        AlertHelper.alert('Hata', data.error || 'Bildirim gönderilemedi.');
+      }
+    } catch (e: any) {
+      AlertHelper.alert('Hata', 'Bildirim gönderilemedi.');
+    } finally {
+      setBroadcastLoading(false);
+    }
+  };
+
   const renderSidebarItem = (id: string, title: string, icon: keyof typeof Ionicons.glyphMap) => (
     <Pressable
       style={[styles.sidebarItem, activeTab === id && styles.sidebarItemActive]}
@@ -494,6 +537,26 @@ export default function AdminScreen() {
           <Text style={styles.metricValue}>0</Text>
           <Text style={styles.metricLabel}>Etkinlik Sayısı</Text>
         </View>
+      </View>
+
+      {/* Bildirim Gönder Card */}
+      <View style={styles.broadcastCard}>
+        <View style={styles.broadcastCardHeader}>
+          <View style={[styles.metricIconBox, { backgroundColor: '#EDE9FE' }]}>
+            <Ionicons name="megaphone" size={24} color="#7C3AED" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 16 }}>
+            <Text style={styles.broadcastCardTitle}>Bildirim Gönder</Text>
+            <Text style={styles.broadcastCardDesc}>Kullanıcılara sistem bildirimi gönderin.</Text>
+          </View>
+        </View>
+        <Pressable
+          style={styles.broadcastBtn}
+          onPress={() => setIsBroadcastModalVisible(true)}
+        >
+          <Ionicons name="create-outline" size={18} color="#FFF" style={{ marginRight: 8 }} />
+          <Text style={styles.broadcastBtnText}>Bildirim Oluştur</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -1058,6 +1121,94 @@ export default function AdminScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Broadcast Notification Modal */}
+      <Modal visible={isBroadcastModalVisible} transparent={true} animationType="fade" onRequestClose={() => setIsBroadcastModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailedModal}>
+            <View style={styles.detailedModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="megaphone" size={22} color="#7C3AED" style={{ marginRight: 10 }} />
+                <Text style={styles.detailedModalTitle}>Bildirim Oluştur</Text>
+              </View>
+              <Pressable onPress={() => setIsBroadcastModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.detailedModalBody}>
+              <Text style={styles.detailLabel}>Hedef Kitle</Text>
+              <View style={styles.broadcastTargetRow}>
+                {[
+                  { id: 'all' as const, label: 'Hepsi', icon: 'people' as const },
+                  { id: 'verified' as const, label: 'Doğrulanmış', icon: 'checkmark-circle' as const },
+                  { id: 'unverified' as const, label: 'Doğrulanmamış', icon: 'alert-circle' as const }
+                ].map(opt => (
+                  <Pressable
+                    key={opt.id}
+                    style={[
+                      styles.broadcastTargetBtn,
+                      broadcastTargetGroup === opt.id && styles.broadcastTargetBtnActive
+                    ]}
+                    onPress={() => setBroadcastTargetGroup(opt.id)}
+                  >
+                    <Ionicons
+                      name={opt.icon}
+                      size={18}
+                      color={broadcastTargetGroup === opt.id ? '#FFF' : '#64748B'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[
+                      styles.broadcastTargetBtnText,
+                      broadcastTargetGroup === opt.id && styles.broadcastTargetBtnTextActive
+                    ]}>{opt.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={[styles.detailLabel, { marginTop: 20 }]}>Bildirim Başlığı</Text>
+              <TextInput
+                style={styles.modNoteInput}
+                placeholder="Örn: Güvenlik hatırlatması"
+                placeholderTextColor="#94A3B8"
+                value={broadcastTitle}
+                onChangeText={setBroadcastTitle}
+                maxLength={100}
+              />
+
+              <Text style={[styles.detailLabel, { marginTop: 16 }]}>Bildirim Mesajı</Text>
+              <TextInput
+                style={[styles.modNoteInput, { minHeight: 120 }]}
+                placeholder="Bildirim mesajınızı yazın..."
+                placeholderTextColor="#94A3B8"
+                value={broadcastMessage}
+                onChangeText={setBroadcastMessage}
+                multiline
+                numberOfLines={5}
+                maxLength={500}
+              />
+              <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, textAlign: 'right' }}>
+                {broadcastMessage.length}/500
+              </Text>
+            </ScrollView>
+            <View style={styles.detailedModalFooter}>
+              <Pressable style={styles.outlineBtn} onPress={() => setIsBroadcastModalVisible(false)}>
+                <Text style={styles.outlineBtnText}>İptal</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.solidBtn, { backgroundColor: '#7C3AED', opacity: broadcastLoading ? 0.7 : 1 }]}
+                onPress={handleBroadcastNotification}
+                disabled={broadcastLoading}
+              >
+                {broadcastLoading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.solidBtnText}>Gönder</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1193,5 +1344,18 @@ const styles = StyleSheet.create({
   previewDate: { fontSize: 12, color: '#94A3B8', marginTop: 8, marginBottom: 12 },
   previewBtn: { backgroundColor: '#EEF2FF', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   previewBtnText: { color: '#4F46E5', fontWeight: '600', fontSize: 14 },
-  previewPostImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 8, backgroundColor: '#E2E8F0' }
+  previewPostImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 8, backgroundColor: '#E2E8F0' },
+
+  // Broadcast Notification Styles
+  broadcastCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 20, marginTop: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2, borderWidth: 1, borderColor: '#E2E8F0' },
+  broadcastCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  broadcastCardTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  broadcastCardDesc: { fontSize: 14, color: '#64748B' },
+  broadcastBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10 },
+  broadcastBtnText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  broadcastTargetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  broadcastTargetBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  broadcastTargetBtnActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  broadcastTargetBtnText: { fontSize: 14, fontWeight: '500', color: '#475569' },
+  broadcastTargetBtnTextActive: { color: '#FFF' }
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity, Modal, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, SectionList, Pressable, TouchableOpacity, Modal, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
@@ -129,6 +129,7 @@ export default function NotificationsScreen() {
       case 'poke': return 'hand-right-outline';
       case 'friend_request': return 'people-outline';
       case 'friend_request_accepted': return 'people-circle-outline';
+      case 'system': return 'megaphone-outline';
       default: return 'notifications';
     }
   };
@@ -151,6 +152,7 @@ export default function NotificationsScreen() {
       case 'poke': return '#FF9800';
       case 'friend_request': return '#2196F3';
       case 'friend_request_accepted': return '#4CAF50';
+      case 'system': return '#6366F1';
       default: return Colors.primary;
     }
   };
@@ -225,6 +227,21 @@ export default function NotificationsScreen() {
     );
   };
 
+  const systemNotifications = notifications.filter(n => n.type === 'system');
+  const otherNotifications = notifications.filter(n => n.type !== 'system');
+
+  const sections = [
+    ...(systemNotifications.length > 0 ? [{ title: 'Sistem Bildirimleri', icon: 'megaphone-outline' as const, data: systemNotifications }] : []),
+    ...(otherNotifications.length > 0 ? [{ title: 'Bildirimler', icon: 'notifications-outline' as const, data: otherNotifications }] : []),
+  ];
+
+  const renderSectionHeader = ({ section }: { section: { title: string; icon: string } }) => (
+    <View style={styles.sectionHeaderContainer}>
+      <Ionicons name={section.icon as any} size={18} color={section.title === 'Sistem Bildirimleri' ? '#6366F1' : Colors.primary} style={{ marginRight: 8 }} />
+      <Text style={[styles.sectionHeaderText, section.title === 'Sistem Bildirimleri' && { color: '#6366F1' }]}>{section.title}</Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -248,26 +265,29 @@ export default function NotificationsScreen() {
         )}
       </View>
 
-      <FlatList
-        data={notifications}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={64} color={Colors.border} />
-            <Text style={styles.emptyText}>Henüz bildiriminiz yok.</Text>
-          </View>
-        }
-      />
+      {notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="notifications-off-outline" size={64} color={Colors.border} />
+          <Text style={styles.emptyText}>Henüz bildiriminiz yok.</Text>
+        </View>
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
+        />
+      )}
 
       <Modal
         visible={clearModalVisible}
@@ -494,5 +514,20 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  sectionHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  sectionHeaderText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: 0.3,
   },
 });

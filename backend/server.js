@@ -4978,6 +4978,74 @@ app.post('/api/admin/moderate/activate-user', checkAdminAuth, async (req, res) =
   }
 });
 
+// POST Admin Broadcast Notification
+app.post('/api/admin/notifications/broadcast', checkAdminAuth, async (req, res) => {
+  try {
+    const { targetGroup, title, message } = req.body;
+
+    if (!targetGroup || !title || !message) {
+      return res.status(400).json({ success: false, error: 'Eksik parametreler: targetGroup, title ve message gereklidir.' });
+    }
+
+    if (!['all', 'verified', 'unverified'].includes(targetGroup)) {
+      return res.status(400).json({ success: false, error: 'Geçersiz targetGroup. all, verified veya unverified olmalıdır.' });
+    }
+
+    let usersQuery;
+    if (targetGroup === 'all') {
+      usersQuery = await query(`
+        SELECT id FROM users 
+        WHERE active = true AND "isDeleted" = false
+      `);
+    } else if (targetGroup === 'verified') {
+      usersQuery = await query(`
+        SELECT id FROM users 
+        WHERE active = true AND "isDeleted" = false
+        AND "emailVerified" = true 
+        AND "phoneVerified" = true 
+        AND "identityVerificationStatus" = 'verified'
+      `);
+    } else {
+      // unverified: at least one verification is missing
+      usersQuery = await query(`
+        SELECT id FROM users 
+        WHERE active = true AND "isDeleted" = false
+        AND (
+          "emailVerified" = false 
+          OR "phoneVerified" = false 
+          OR "identityVerificationStatus" != 'verified'
+          OR "emailVerified" IS NULL
+          OR "phoneVerified" IS NULL
+          OR "identityVerificationStatus" IS NULL
+        )
+      `);
+    }
+
+    const targetUsers = usersQuery.rows;
+    const sentCount = targetUsers.length;
+
+    if (sentCount === 0) {
+      return res.json({ success: true, sentCount: 0, message: 'Hedef kitlede kullanıcı bulunamadı.' });
+    }
+
+    // Create a notification for each target user
+    const createdAt = new Date().toISOString();
+    for (const user of targetUsers) {
+      const notifId = `n${Date.now()}_${Math.random().toString(36).substr(2, 7)}`;
+      await query(`
+        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [notifId, user.id, 'system', title, message, null, 'system', false, createdAt]);
+    }
+
+    console.log(`[ADMIN_BROADCAST] ${sentCount} users notified. targetGroup: ${targetGroup}, title: "${title}"`);
+    res.json({ success: true, sentCount, message: `Bildirim ${sentCount} kullanıcıya gönderildi.` });
+  } catch (error) {
+    console.error('[ADMIN_BROADCAST_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Bildirim gönderilemedi.' });
+  }
+});
+
 // POST Submit Report
 app.post('/api/reports', async (req, res) => {
   const { reporterUserId, contentType, contentId, reason, description } = req.body;

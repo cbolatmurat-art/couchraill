@@ -100,7 +100,7 @@ export interface Conversation {
 export interface AppNotification {
   id: string;
   userId: string;
-  type: 'request_created' | 'request_accepted' | 'request_rejected' | 'message_received' | 'message_reaction' | 'message_reply' | 'listing_removed' | 'profile_verified' | 'identity_approved' | 'identity_rejected' | 'email_verified' | 'phone_verified' | 'new_follower' | 'poke' | 'friend_request' | 'friend_request_accepted';
+  type: 'request_created' | 'request_accepted' | 'request_rejected' | 'message_received' | 'message_reaction' | 'message_reply' | 'listing_removed' | 'profile_verified' | 'identity_approved' | 'identity_rejected' | 'email_verified' | 'phone_verified' | 'new_follower' | 'poke' | 'friend_request' | 'friend_request_accepted' | 'system';
   title: string;
   message: string;
   relatedId?: string;
