@@ -798,6 +798,7 @@ app.put('/api/users/profile', async (req, res) => {
       phoneVerified: '"phoneVerified"',
       fullName: '"fullName"',
       livingCity: '"livingCity"',
+      pushToken: '"pushToken"',
       avatar: 'avatar',
       city: 'city',
       name: 'name',
@@ -2385,10 +2386,25 @@ app.post('/api/messages', async (req, res) => {
           status: 'delivered'
         });
       }
-    } else if (!isMuted) {
-      const participantNames = conv.participantNames || {};
-      const senderName = participantNames[senderId] || 'Birisi';
-      sendPushNotification(receiverId, senderName, text, { conversationId });
+    }
+
+    // Always send push notification if not muted
+    if (!isMuted) {
+      let senderDisplayName = 'Birisi';
+      try {
+        const { rows: senderRows } = await query(`SELECT name, username FROM users WHERE id = $1`, [senderId]);
+        if (senderRows.length > 0) {
+          const senderObj = senderRows[0];
+          senderDisplayName = senderObj.username ? `@${senderObj.username}` : senderObj.name;
+        }
+      } catch (err) {
+        console.error('[GET_SENDER_DISPLAY_NAME_ERROR]', err);
+      }
+
+      sendPushNotification(receiverId, senderDisplayName, 'Sana bir mesaj gönderdi', { 
+        type: 'message_received', 
+        conversationId 
+      });
     }
 
     // Insert message into Postgres
@@ -2406,19 +2422,6 @@ app.post('/api/messages', async (req, res) => {
       UPDATE conversations SET "lastMessageTime" = $1, "updatedAt" = $1
       WHERE id = $2
     `, [newMessage.createdAt, conversationId]);
-    
-    if (!isMuted) {
-      const participantNames = conv.participantNames || {};
-      const senderName = participantNames[senderId] || 'Birisi';
-      // Use Postgres for notifications
-      await query(`
-        INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
-      `, [
-        `n_${Date.now()}`, receiverId, 'message_received', 'Yeni Mesaj',
-        `${senderName} size bir mesaj gönderdi.`, conversationId, 'conversation', new Date().toISOString()
-      ]);
-    }
 
     res.json({ success: true, message: newMessage, conversation: { ...conv, lastMessageTime: newMessage.createdAt } });
   } catch (error) {
