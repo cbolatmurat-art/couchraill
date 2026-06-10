@@ -4900,57 +4900,109 @@ app.patch('/api/admin/reports/:reportId/reject', checkAdminAuth, async (req, res
 // POST Hide Content
 app.post('/api/admin/moderate/hide-content', checkAdminAuth, async (req, res) => {
   try {
-    const { contentType, contentId, reportedUserId, reason } = req.body;
+    const { contentType, contentId, reportedUserId, reason, reportId } = req.body;
     if (contentType === 'listing') {
       await query(`DELETE FROM listings WHERE id = $1`, [contentId]);
     } else if (contentType === 'post' || contentType === 'event') {
       await query(`DELETE FROM posts WHERE id = $1`, [contentId]);
     }
 
-    // Create notification if user and reason are provided
-    if (reportedUserId && reason) {
-      let contentName = 'İlanınız';
-      let type = 'listing_removed';
-      if (contentType === 'post') {
-        contentName = 'Gönderiniz';
-        type = 'post_removed';
-      } else if (contentType === 'event') {
-        contentName = 'Etkinliğiniz';
-        type = 'event_removed';
-      }
+    // A) İçeriği kaldırılan kullanıcıya bildirim gönder.
+    if (reportedUserId) {
+      try {
+        const notifId = `n_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const createdAt = new Date().toISOString();
+        const title = 'İçeriğiniz Kaldırıldı';
+        const message = 'Paylaştığınız içerik, yapılan inceleme sonucunda topluluk kurallarımız ve platform politikalarımız kapsamında kaldırılmıştır. Güvenli ve saygılı bir topluluk ortamı oluşturmak amacıyla içerik paylaşırken kurallarımıza uygun hareket etmenizi rica ederiz.';
 
-      let message = `${contentName} platform politikalarımıza aykırı bulunduğu için kaldırıldı.`;
-      const lowerReason = reason.toLowerCase();
-      if (lowerReason.includes('spam')) {
-        message = `Spam olması nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
-      } else if (lowerReason.includes('rahatsız edici')) {
-        message = `Rahatsız edici içerik içermesi nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
-      } else if (lowerReason.includes('yanıltıcı')) {
-        message = `Yanıltıcı bilgi içermesi nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
-      } else if (lowerReason.includes('uygunsuz')) {
-        message = `Uygunsuz içerik içermesi nedeniyle ${contentName.toLowerCase()} kaldırıldı.`;
-      }
+        await query(`
+          INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+        `, [notifId, reportedUserId, 'moderation', title, message, contentId, contentType, createdAt]);
 
-      const notif = createNotification(db, {
-        userId: reportedUserId,
-        type: type,
-        title: `${contentName} kaldırıldı`,
-        message: message,
-        relatedId: contentId,
-        relatedType: contentType
-      });
-
-      // Send real-time notification
-      const receiverSocketId = Object.keys(userSockets).find(id => userSockets[id] === reportedUserId);
-      if (receiverSocketId && io.sockets.sockets.get(receiverSocketId)) {
-        io.to(receiverSocketId).emit('social_notification', notif);
+        // Send real-time notification via Socket.IO
+        if (typeof activeUsers !== 'undefined' && typeof io !== 'undefined') {
+          const receiverSocketId = activeUsers.get(reportedUserId);
+          if (receiverSocketId && io.sockets.sockets.get(receiverSocketId)) {
+            const liveNotif = {
+              id: notifId,
+              userId: reportedUserId,
+              type: 'moderation',
+              title,
+              message,
+              relatedId: contentId,
+              relatedType: contentType,
+              read: false,
+              createdAt
+            };
+            io.to(receiverSocketId).emit('social_notification', liveNotif);
+            console.log('[HIDE_CONTENT] Live notification emitted to owner via socket.io');
+          }
+        }
+      } catch (notifError) {
+        console.error('[HIDE_CONTENT] Owner notification failed:', notifError);
       }
     }
 
-    res.json({ success: true });
+    // B) Şikayet eden kullanıcıya da bildirim gönder.
+    let reporterUserId = null;
+    if (reportId) {
+      try {
+        const { rows } = await query(`SELECT "reporterUserId" FROM reports WHERE id = $1`, [reportId]);
+        if (rows.length > 0) {
+          reporterUserId = rows[0].reporterUserId;
+        }
+      } catch (dbErr) {
+        console.error('[HIDE_CONTENT] Failed to fetch reporter:', dbErr);
+      }
+    }
+
+    if (reporterUserId) {
+      try {
+        const notifId = `n_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const createdAt = new Date().toISOString();
+        const title = 'Şikayetiniz Sonuçlandı';
+        const message = 'Yaptığınız şikayet moderasyon ekibimiz tarafından incelenmiş ve gerekli işlemler uygulanmıştır. Topluluğumuzun güvenliğine katkınız için teşekkür ederiz.';
+
+        await query(`
+          INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+        `, [notifId, reporterUserId, 'moderation', title, message, contentId, contentType, createdAt]);
+
+        // Send real-time notification via Socket.IO
+        if (typeof activeUsers !== 'undefined' && typeof io !== 'undefined') {
+          const receiverSocketId = activeUsers.get(reporterUserId);
+          if (receiverSocketId && io.sockets.sockets.get(receiverSocketId)) {
+            const liveNotif = {
+              id: notifId,
+              userId: reporterUserId,
+              type: 'moderation',
+              title,
+              message,
+              relatedId: contentId,
+              relatedType: contentType,
+              read: false,
+              createdAt
+            };
+            io.to(receiverSocketId).emit('social_notification', liveNotif);
+            console.log('[HIDE_CONTENT] Live notification emitted to reporter via socket.io');
+          }
+        }
+      } catch (notifError) {
+        console.error('[HIDE_CONTENT] Reporter notification failed:', notifError);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'İçerik kaldırıldı.'
+    });
   } catch (error) {
     console.error('[ADMIN_MODERATE_HIDE_ERROR]', error);
-    res.status(500).json({ success: false, error: 'İçerik kaldırılamadı.' });
+    return res.status(500).json({
+      success: false,
+      error: 'İçerik kaldırılamadı.'
+    });
   }
 });
 

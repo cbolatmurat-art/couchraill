@@ -271,23 +271,26 @@ export default function AdminScreen() {
       const res = await fetch(`${API_BASE_URL}/admin/moderate/hide-content`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-        body: JSON.stringify({ contentType, contentId, reportedUserId, reason })
+        body: JSON.stringify({ contentType, contentId, reportedUserId, reason, reportId })
       });
-      const data = await res.json();
-      if (data.success) {
-        let msg = 'İçerik kaldırıldı.';
-        if (contentType === 'listing') msg = 'İlan kaldırıldı.';
-        else if (contentType === 'post') msg = 'Gönderi kaldırıldı.';
-        else if (contentType === 'event') msg = 'Etkinlik kaldırıldı.';
-        
-        AlertHelper.alert('Başarılı', msg);
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        console.error('Failed to parse response JSON:', jsonErr);
+        data = { success: false, error: 'İçerik kaldırılamadı.' };
+      }
+
+      if (data && data.success) {
+        AlertHelper.alert('Başarılı', 'İçerik kaldırıldı.');
         // Auto resolve the complaint
         await handleResolveComplaint(reportId, true);
       } else {
-        AlertHelper.alert('Hata', data.error || 'İçerik kaldırılamadı.');
+        AlertHelper.alert('Hata', (data && data.error) || 'İçerik kaldırılamadı.');
       }
     } catch (e) {
-      AlertHelper.alert('Hata', 'Sunucu hatası.');
+      AlertHelper.alert('Hata', 'İçerik kaldırılamadı.');
     } finally {
       setActionInProgress(false);
     }

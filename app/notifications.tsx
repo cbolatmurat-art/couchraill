@@ -101,6 +101,9 @@ export default function NotificationsScreen() {
           router.push(`/user/${targetUserId}`);
         }
         break;
+      case 'moderation':
+        router.push('/(tabs)/profile');
+        break;
       default:
         break;
     }
@@ -130,6 +133,7 @@ export default function NotificationsScreen() {
       case 'friend_request': return 'people-outline';
       case 'friend_request_accepted': return 'people-circle-outline';
       case 'system': return 'megaphone-outline';
+      case 'moderation': return 'shield-checkmark';
       default: return 'notifications';
     }
   };
@@ -153,6 +157,7 @@ export default function NotificationsScreen() {
       case 'friend_request': return '#2196F3';
       case 'friend_request_accepted': return '#4CAF50';
       case 'system': return '#6366F1';
+      case 'moderation': return Colors.danger;
       default: return Colors.primary;
     }
   };
