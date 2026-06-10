@@ -214,25 +214,27 @@ export default function ChatScreen() {
       const date = new Date(timestamp);
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
+      
+      if (diffMs < 0) return 'Son görülme: az önce';
+      
       const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
       
-      if (diffMins < 1) return 'Son görülme: az önce';
-      if (diffMins < 60) return `Son görülme: ${diffMins} dk önce`;
-      
-      const isToday = date.getDate() === now.getDate() &&
-                      date.getMonth() === now.getMonth() &&
-                      date.getFullYear() === now.getFullYear();
-      
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const timeStr = `${hours}:${minutes}`;
-      
-      if (isToday) {
-        return `Son görülme: bugün ${timeStr}`;
+      if (diffHours < 24) {
+        if (diffMins < 1) {
+          return 'Son görülme: az önce';
+        } else if (diffMins < 60) {
+          return `Son görülme: ${diffMins} dakika önce`;
+        } else {
+          return `Son görülme: ${diffHours} saat önce`;
+        }
       } else {
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
-        return `Son görülme: ${day}.${month} ${timeStr}`;
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `Son görülme: ${day}/${month}/${year} ${hours}:${minutes}`;
       }
     } catch (e) {
       return '';
