@@ -22,6 +22,12 @@ Notifications.setNotificationHandler({
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
 
+  const isExpoGo = Constants.executionEnvironment === 'store-client';
+  if (isExpoGo) {
+    console.warn("Expo Go ortamında push bildirimleri devre dışı.");
+    return null;
+  }
+
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -507,6 +513,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Handle notification tap / click response
   useEffect(() => {
+    const isExpoGo = Constants.executionEnvironment === 'store-client';
+    if (isExpoGo) {
+      return;
+    }
+
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
       console.log('[NOTIFICATION CLICKED] payload:', data);
