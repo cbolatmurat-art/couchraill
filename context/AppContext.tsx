@@ -9,7 +9,6 @@ import { API_BASE_URL } from '../constants/config';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import io from 'socket.io-client/dist/socket.io.js';
-import { setupPushNotifications } from '../utils/pushNotifications';
 
 const SESSION_STORAGE_KEY = 'misafirimol_session';
 const USERS_STORAGE_KEY = 'misafirimol_users';
@@ -449,10 +448,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Register push notifications when currentUser is set
   useEffect(() => {
     if (currentUser) {
-      const cleanup = setupPushNotifications(currentUser, updateProfile);
-      return () => {
-        if (cleanup) cleanup();
-      };
+      const isExpoGo = Constants.executionEnvironment === 'store-client' || Constants.executionEnvironment === 'storeClient';
+      if (isExpoGo) {
+        console.warn("Expo Go ortamında push bildirimleri devre dışı.");
+        return;
+      }
+
+      try {
+        const { setupPushNotifications } = require('../utils/pushNotifications');
+        const cleanup = setupPushNotifications(currentUser, updateProfile);
+        return () => {
+          if (cleanup) cleanup();
+        };
+      } catch (err) {
+        console.error('Failed to setup push notifications dynamically:', err);
+      }
     }
   }, [currentUser?.id]);
 
