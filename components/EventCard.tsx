@@ -28,12 +28,12 @@ export const EventCard = React.memo(({
   
   // Use backend names if available, else standard names
   const owner = item.author || item.owner || {};
-  const ownerId = item.authorId || item.ownerId || item.userId || owner.id;
+  const ownerId = item.authorId || item.ownerId || item.userId || (owner && owner.id) || item._id || item.uid;
   const ownerName = owner.fullName || owner.name || item.ownerName || 'Bilinmiyor';
   const ownerUsername = owner.username || item.ownerUsername;
   const ownerAvatar = owner.profileImage || owner.avatar || item.ownerAvatar;
 
-  const isOwner = ownerId === currentUserId;
+  const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
 
   const handleJoinPress = () => {
     if (ownerId) {
@@ -124,9 +124,11 @@ export const EventCard = React.memo(({
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm && onReportConfirm(item)}>
-            <Text style={styles.dropdownItemText}>Şikayet Et</Text>
-          </TouchableOpacity>
+          {!isOwner && onReportConfirm && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm(item)}>
+              <Text style={styles.dropdownItemText}>Şikayet Et</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>

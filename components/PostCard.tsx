@@ -65,7 +65,8 @@ export const PostCard = React.memo(({
     }
   };
 
-  const isOwner = item.userId === currentUserId || item.authorId === currentUserId || item.ownerId === currentUserId || item.createdBy === currentUserId || postOwner.id === currentUserId;
+  const ownerId = item.userId || item.authorId || item.ownerId || (item.owner && item.owner.id) || (item.author && item.author.id) || item._id || item.uid;
+  const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
 
   const tagsData = item.taggedFriends || item.taggedUsers || item.tagged_users || item.mentions || item.tags || [];
   const hasTags = Array.isArray(tagsData) && tagsData.length > 0;
@@ -168,9 +169,11 @@ export const PostCard = React.memo(({
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm && onReportConfirm(item)}>
-            <Text style={styles.dropdownItemText}>Şikayet Et</Text>
-          </TouchableOpacity>
+          {!isOwner && onReportConfirm && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm(item)}>
+              <Text style={styles.dropdownItemText}>Şikayet Et</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>

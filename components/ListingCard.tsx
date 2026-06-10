@@ -73,7 +73,8 @@ export const ListingCard = React.memo(({
 
   const isExpired = item.expiresAt ? new Date(item.expiresAt).getTime() <= Date.now() : false;
 
-  const isOwner = item.userId === currentUserId || item.authorId === currentUserId || item.ownerId === currentUserId || item.hostId === currentUserId || item.createdBy === currentUserId || owner.id === currentUserId;
+  const ownerId = item.userId || item.authorId || item.ownerId || item.hostId || (owner && owner.id) || item._id || item.uid;
+  const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
 
   console.log("LISTING_CARD_DATA", item);
 
@@ -225,7 +226,7 @@ export const ListingCard = React.memo(({
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
             </TouchableOpacity>
           )}
-          {onReportConfirm && (
+          {!isOwner && onReportConfirm && (
             <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onReportConfirm(item); }}>
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Şikayet Et</Text>
             </TouchableOpacity>
