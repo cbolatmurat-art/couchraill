@@ -1,6 +1,6 @@
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useRef, useEffect } from 'react';
-import { Platform, View, PanResponder, Dimensions, TouchableOpacity, ActivityIndicator, DeviceEventEmitter } from 'react-native';
+import { Platform, View, PanResponder, Dimensions, TouchableOpacity, ActivityIndicator, DeviceEventEmitter, Text } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../../context/AppContext';
@@ -233,9 +233,40 @@ export default function TabLayout() {
         name="messages"
         options={{
           title: 'Mesajlar',
-          tabBarIcon: ({ color }) => refreshingTab === 'messages' ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="chatbubbles" size={24} color={color} />,
-          tabBarBadge: unreadMessageCount > 0 ? unreadMessageCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: Colors.danger, color: '#FFF' },
+          tabBarIcon: ({ color }) => {
+            const displayCount = unreadMessageCount > 99 ? '99+' : unreadMessageCount;
+            return (
+              <View style={{ width: 24, height: 24, position: 'relative' }}>
+                {refreshingTab === 'messages' ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : (
+                  <Ionicons name="chatbubbles" size={24} color={color} />
+                )}
+                {unreadMessageCount > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    right: -10,
+                    top: -6,
+                    backgroundColor: Colors.danger,
+                    borderRadius: 10,
+                    minWidth: unreadMessageCount > 9 ? 20 : 16,
+                    height: 16,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingHorizontal: unreadMessageCount > 9 ? 4 : 2,
+                    zIndex: 10
+                  }}>
+                    <Text style={{
+                      color: '#FFF',
+                      fontSize: 9,
+                      fontWeight: 'bold',
+                      textAlign: 'center'
+                    }}>{displayCount}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          }
         }}
         listeners={({ navigation }) => ({
           tabPress: (e) => handleTabPress(e, navigation, 'messages')
