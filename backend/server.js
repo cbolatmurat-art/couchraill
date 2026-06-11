@@ -596,6 +596,32 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.get('/api/auth/check-username', async (req, res) => {
+  try {
+    const { username, userId } = req.query;
+    if (!username) {
+      return res.status(400).json({ success: false, error: 'Kullanıcı adı parametresi eksik.' });
+    }
+    const cleanUsername = String(username).trim().toLowerCase();
+    
+    // Check format
+    if (cleanUsername.length < 3 || !/^[a-z0-9._]+$/.test(cleanUsername)) {
+      return res.json({ success: true, available: false });
+    }
+    
+    // Query db
+    const { rows } = await query(
+      'SELECT id FROM users WHERE LOWER(username) = $1 AND id != $2 AND "isDeleted" = false',
+      [cleanUsername, userId || '']
+    );
+    
+    return res.json({ success: true, available: rows.length === 0 });
+  } catch (error) {
+    console.error('[CHECK_USERNAME_ERROR]', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/api/auth/me', async (req, res) => {
   try {
     const { userId } = req.query; 
