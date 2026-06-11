@@ -3110,52 +3110,45 @@ function normalizePhone(phone) {
   return '+' + p;
 }
 
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID;
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 
-async function sendTwilioVerification(phone) {
-  const url = `https://verify.twilio.com/v2/Services/${TWILIO_VERIFY_SERVICE_SID}/Verifications`;
-  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+async function sendFirebaseVerification(phone) {
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${FIREBASE_API_KEY}`;
   
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Content-Type': 'application/json'
     },
-    body: new URLSearchParams({
-      To: phone,
-      Channel: 'sms'
+    body: JSON.stringify({
+      phoneNumber: phone
     })
   });
   
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || 'Twilio SMS gönderimi başarısız oldu.');
+    throw new Error(data.error?.message || 'Firebase SMS gönderimi başarısız oldu.');
   }
-  return data;
+  return data.sessionInfo;
 }
 
-async function checkTwilioVerification(phone, code) {
-  const url = `https://verify.twilio.com/v2/Services/${TWILIO_VERIFY_SERVICE_SID}/VerificationCheck`;
-  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+async function checkFirebaseVerification(sessionInfo, code) {
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${FIREBASE_API_KEY}`;
   
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Content-Type': 'application/json'
     },
-    body: new URLSearchParams({
-      To: phone,
-      Code: code
+    body: JSON.stringify({
+      sessionInfo,
+      code
     })
   });
   
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || 'Twilio kod doğrulaması başarısız oldu.');
+    throw new Error(data.error?.message || 'Firebase kod doğrulaması başarısız oldu.');
   }
   return data;
 }
@@ -3165,6 +3158,10 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
 
   if (!userId) {
     return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
+  }
+
+  if (!FIREBASE_API_KEY) {
+    return res.status(500).json({ success: false, error: 'Firebase API anahtarı yapılandırılmamış.' });
   }
 
   const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -3219,13 +3216,29 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
     return res.status(429).json({ success: false, error: `Lütfen ${remainingSec} saniye bekleyin.` });
   }
 
+  if (!db.verifications) db.verifications = [];
+  db.verifications = db.verifications.filter(v => !(v.userId === userId && v.type === 'phone' && !v.used));
+
   try {
-    console.log(`[TWILIO_SEND] Attempting to send verification to: ${normalizedPhone}`);
-    await sendTwilioVerification(normalizedPhone);
+    console.log(`[FIREBASE_SEND] Attempting to send verification to: ${normalizedPhone}`);
+    const sessionInfo = await sendFirebaseVerification(normalizedPhone);
     verificationCooldowns.set(cooldownKey, now);
+
+    db.verifications.push({
+      id: `fv${now}_${Math.random().toString(36).slice(2, 6)}`,
+      userId,
+      type: 'phone',
+      target: normalizedPhone,
+      sessionInfo: sessionInfo,
+      expiresAt: now + 10 * 60 * 1000,
+      used: false,
+      createdAt: now
+    });
+    writeDB(db);
+
     return res.status(200).json({ success: true, message: 'Doğrulama kodu gönderildi.' });
   } catch (err) {
-    console.error('[TWILIO_SEND_ERROR]', err);
+    console.error('[FIREBASE_SEND_ERROR]', err);
     return res.status(400).json({ success: false, error: `SMS gönderilemedi: ${err.message}` });
   }
 });
@@ -3234,6 +3247,10 @@ app.post('/api/auth/verify-phone-code', async (req, res) => {
   const { userId, code, phone } = req.body;
   if (!userId || !code || !phone) {
     return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
+  }
+
+  if (!FIREBASE_API_KEY) {
+    return res.status(500).json({ success: false, error: 'Firebase API anahtarı yapılandırılmamış.' });
   }
 
   const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -3250,49 +3267,60 @@ app.post('/api/auth/verify-phone-code', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Geçerli bir telefon numarası bulunamadı.' });
   }
 
+  const db = readDB();
+  const vIndex = (db.verifications || []).findIndex(
+    v => v.userId === userId && v.type === 'phone' && v.target === normalizedPhone && !v.used
+  );
+  if (vIndex === -1) {
+    return res.status(400).json({ success: false, error: 'Geçerli bir kod talebi bulunamadı.' });
+  }
+
+  const v = db.verifications[vIndex];
+  if (Date.now() > v.expiresAt) {
+    return res.status(400).json({ success: false, error: 'Kod süresi dolmuş.' });
+  }
+
   try {
-    console.log(`[TWILIO_CHECK] Attempting check for ${normalizedPhone} code: ${code}`);
-    const checkResult = await checkTwilioVerification(normalizedPhone, code);
+    console.log(`[FIREBASE_CHECK] Attempting check for ${normalizedPhone} code: ${code}`);
+    await checkFirebaseVerification(v.sessionInfo, code);
     
-    if (checkResult.status === 'approved') {
-      // Update database
-      await query(
-        'UPDATE users SET phone = $1, "phoneVerified" = true WHERE id = $2',
-        [normalizedPhone, userId]
-      );
-      
-      const db = readDB();
-      const userIndex = db.users.findIndex(u => u.id === userId);
-      if (userIndex !== -1) {
-        db.users[userIndex].phone = normalizedPhone;
-        db.users[userIndex].phoneVerified = true;
-      }
-      
-      // Create notification
-      createNotification(db, {
-        userId,
-        type: 'phone_verified',
-        title: 'Telefon Doğrulandı',
-        message: 'Telefon numaranız başarıyla doğrulandı.',
-        senderId: userId,
-        senderType: 'user'
-      });
-      
-      writeDB(db);
-      
-      // Reload updated user
-      const { rows: updatedUsers } = await query('SELECT * FROM users WHERE id = $1', [userId]);
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Telefon numaranız başarıyla doğrulandı.',
-        user: updatedUsers[0]
-      });
-    } else {
-      return res.status(400).json({ success: false, error: 'Girdiğiniz kod hatalı veya süresi dolmuş.' });
+    v.used = true;
+    writeDB(db);
+
+    // Update database
+    await query(
+      'UPDATE users SET phone = $1, "phoneVerified" = true WHERE id = $2',
+      [normalizedPhone, userId]
+    );
+    
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      db.users[userIndex].phone = normalizedPhone;
+      db.users[userIndex].phoneVerified = true;
     }
+    
+    // Create notification
+    createNotification(db, {
+      userId,
+      type: 'phone_verified',
+      title: 'Telefon Doğrulandı',
+      message: 'Telefon numaranız başarıyla doğrulandı.',
+      senderId: userId,
+      senderType: 'user'
+    });
+    
+    writeDB(db);
+    
+    // Reload updated user
+    const { rows: updatedUsers } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Telefon numaranız başarıyla doğrulandı.',
+      user: updatedUsers[0]
+    });
   } catch (err) {
-    console.error('[TWILIO_CHECK_ERROR]', err);
+    console.error('[FIREBASE_CHECK_ERROR]', err);
     return res.status(400).json({ success: false, error: `Doğrulama hatası: ${err.message}` });
   }
 });
