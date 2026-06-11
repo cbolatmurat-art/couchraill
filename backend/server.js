@@ -2907,10 +2907,14 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
 
   console.log(`[EMAIL_VERIFICATION_CODE] userId: ${userId} email: ${email} code: ${code}`);
 
-  console.log("EMAIL_PROVIDER:", process.env.EMAIL_PROVIDER);
+  const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  const useBrevo = process.env.EMAIL_PROVIDER === 'brevo' || apiKey.startsWith("xkeysib-");
 
-  if (process.env.EMAIL_PROVIDER === 'brevo') {
-    const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  console.log("EMAIL_PROVIDER:", process.env.EMAIL_PROVIDER);
+  console.log("BREVO_API_KEY_EXISTS:", !!apiKey);
+  console.log("useBrevo determined:", useBrevo);
+
+  if (useBrevo) {
     if (!apiKey.startsWith("xkeysib-")) {
       console.error("BREVO_ERROR: API key xkeysib- ile başlamıyor.");
       return res.status(500).json({ success: false, message: "Kod gönderilemedi", detail: "Geçersiz Brevo API Key" });
@@ -2946,7 +2950,8 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
       const responseData = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(responseData?.message || "Brevo API Error");
+        console.error("BREVO_API_ERROR_RESPONSE:", responseData);
+        throw new Error(responseData?.message || `Brevo API Error (Status ${response.status})`);
       }
 
       console.log(`[EMAIL_VERIFICATION_SENT_BREVO] messageId: ${responseData?.messageId}`);
