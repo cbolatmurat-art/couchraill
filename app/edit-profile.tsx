@@ -1104,7 +1104,7 @@ export default function EditProfileScreen() {
                   </body>
                   </html>
                 `,
-                baseUrl: firebaseProjectId ? \`https://\${firebaseProjectId}.firebaseapp.com\` : 'https://couchraill.firebaseapp.com'
+                baseUrl: firebaseProjectId ? `https://${firebaseProjectId}.firebaseapp.com` : 'https://couchraill.firebaseapp.com'
               }}
               onMessage={(event) => {
                 try {
