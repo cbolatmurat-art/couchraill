@@ -99,16 +99,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/auth/diagnostic-users", async (req, res) => {
-  if (req.query.secret !== 'temp_diagnostic_123') return res.sendStatus(403);
-  try {
-    const { rows } = await query('SELECT id, email, "emailVerified", active, "isDeleted" FROM users');
-    return res.json({ success: true, count: rows.length, users: rows });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-});
-
 app.use(cors({
   origin: "*",
   credentials: true,
@@ -481,7 +471,7 @@ app.post('/api/auth/register', async (req, res) => {
     console.log(`[REGISTER_HIT] email: ${normalizedEmail}, dbMode: ${isPgMem ? 'pg-mem' : 'PostgreSQL'}`);
 
     const { rows: existingRows } = await query(
-      'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(email) = $1 OR phone = $2', 
+      'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(TRIM(email)) = $1 OR phone = $2', 
       [normalizedEmail, normalizedPhone]
     );
     
@@ -726,7 +716,7 @@ app.put('/api/users/profile', async (req, res) => {
         const normalizedNewEmail = trimmedEmail.toLowerCase();
 
         const { rows: verifiedCheck } = await query(
-          'SELECT id FROM users WHERE LOWER(email) = $1 AND "emailVerified" = true AND id != $2 AND active = true AND "isDeleted" = false',
+          'SELECT id FROM users WHERE LOWER(TRIM(email)) = $1 AND "emailVerified" = true AND id != $2',
           [normalizedNewEmail, userId]
         );
         if (verifiedCheck.length > 0) {
@@ -2900,7 +2890,7 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
   }
 
   const { rows: verifiedCheck } = await query(
-    'SELECT id FROM users WHERE LOWER(email) = $1 AND "emailVerified" = true AND id != $2 AND active = true AND "isDeleted" = false',
+    'SELECT id FROM users WHERE LOWER(TRIM(email)) = $1 AND "emailVerified" = true AND id != $2',
     [email, userId]
   );
   if (verifiedCheck.length > 0) {
@@ -3210,7 +3200,7 @@ app.post('/api/auth/verify-email-code', async (req, res) => {
   }
 
   const { rows: verifiedCheck } = await query(
-    'SELECT id FROM users WHERE LOWER(email) = $1 AND "emailVerified" = true AND id != $2 AND active = true AND "isDeleted" = false',
+    'SELECT id FROM users WHERE LOWER(TRIM(email)) = $1 AND "emailVerified" = true AND id != $2',
     [email, userId]
   );
   if (verifiedCheck.length > 0) {
