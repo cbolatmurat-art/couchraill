@@ -481,8 +481,8 @@ app.post('/api/auth/register', async (req, res) => {
         if (conflict.emailVerified === true) {
           return res.status(400).json({
             success: false,
-            error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
-            message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+            error: 'Bu e-posta adresi kullanılıyor.',
+            message: 'Bu e-posta adresi kullanılıyor.'
           });
         }
         return res.status(409).json({ success: false, error: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.', message: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.' });
@@ -722,8 +722,8 @@ app.put('/api/users/profile', async (req, res) => {
         if (verifiedCheck.length > 0) {
           return res.status(400).json({
             success: false,
-            error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
-            message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+            error: 'Bu e-posta adresi kullanılıyor.',
+            message: 'Bu e-posta adresi kullanılıyor.'
           });
         }
 
@@ -2896,8 +2896,8 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
   if (verifiedCheck.length > 0) {
     return res.status(400).json({
       success: false,
-      error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
-      message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+      error: 'Bu e-posta adresi kullanılıyor.',
+      message: 'Bu e-posta adresi kullanılıyor.'
     });
   }
 
@@ -3206,8 +3206,8 @@ app.post('/api/auth/verify-email-code', async (req, res) => {
   if (verifiedCheck.length > 0) {
     return res.status(400).json({
       success: false,
-      error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
-      message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+      error: 'Bu e-posta adresi kullanılıyor.',
+      message: 'Bu e-posta adresi kullanılıyor.'
     });
   }
 
