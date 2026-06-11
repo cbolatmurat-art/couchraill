@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { API_BASE_URL } from '../constants/config';
 import { CityPicker } from '../components/CityPicker';
 import { AlertHelper } from '../utils/AlertHelper';
+import { WebView } from 'react-native-webview';
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -48,6 +49,47 @@ export default function EditProfileScreen() {
   const [toastMsg, setToastMsg] = useState('');
   const [isImageModalVisible, setIsImageModalVisible] = useState(false);
 
+  // Username availability check state
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+
+  React.useEffect(() => {
+    const cleanUsername = username.trim().toLowerCase();
+    
+    if (!cleanUsername) {
+      setUsernameStatus('idle');
+      return;
+    }
+
+    if (cleanUsername === currentUser?.username?.trim().toLowerCase()) {
+      setUsernameStatus('available');
+      return;
+    }
+
+    if (cleanUsername.length < 3 || !/^[a-z0-9._]+$/.test(cleanUsername)) {
+      setUsernameStatus('taken');
+      return;
+    }
+
+    setUsernameStatus('checking');
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/check-username?username=${encodeURIComponent(cleanUsername)}&userId=${currentUser.id}`);
+        const data = await res.json().catch(() => null);
+        if (data && data.success) {
+          setUsernameStatus(data.available ? 'available' : 'taken');
+        } else {
+          setUsernameStatus('taken');
+        }
+      } catch (err) {
+        console.error('Error checking username availability:', err);
+        setUsernameStatus('taken');
+      }
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [username, currentUser?.username, currentUser?.id]);
+
   // Email Verification State
   const [isEmailModalVisible, setIsEmailModalVisible] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
@@ -63,6 +105,22 @@ export default function EditProfileScreen() {
   const [isPhoneVerifying, setIsPhoneVerifying] = useState(false);
   const [phoneVerifyError, setPhoneVerifyError] = useState('');
   const [phoneDevCode, setPhoneDevCode] = useState('');
+
+  // reCAPTCHA State
+  const [isRecaptchaVisible, setIsRecaptchaVisible] = useState(false);
+  const [firebaseProjectId, setFirebaseProjectId] = useState('');
+
+  // Fetch firebase project ID on load to configure the reCAPTCHA domain
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/auth/firebase-config`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.projectId) {
+          setFirebaseProjectId(data.projectId);
+        }
+      })
+      .catch(err => console.error('Error fetching firebase config:', err));
+  }, []);
 
   // Reset verification state if the user changes (safety: different account)
   React.useEffect(() => {
@@ -270,10 +328,10 @@ export default function EditProfileScreen() {
       setPhoneVerifyError('');
       return;
     }
-    await handleSendPhoneVerificationCode();
+    setIsRecaptchaVisible(true);
   };
 
-  const handleSendPhoneVerificationCode = async () => {
+  const handleSendPhoneVerificationCode = async (recaptchaToken?: string) => {
     if (!phone.trim()) {
       setErrorMsg('Geçerli bir telefon numarası girin.');
       return;
@@ -287,7 +345,11 @@ export default function EditProfileScreen() {
       const res = await fetch(`${API_BASE_URL}/auth/send-phone-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, phone: `+90${phone.trim()}` })
+        body: JSON.stringify({ 
+          userId: currentUser.id, 
+          phone: `+90${phone.trim()}`,
+          recaptchaToken: recaptchaToken
+        })
       });
       const data = await res.json().catch(() => null);
 
@@ -431,6 +493,10 @@ export default function EditProfileScreen() {
       }
     }
 
+    if (usernameStatus === 'taken') {
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -469,6 +535,10 @@ export default function EditProfileScreen() {
         ) {
           AlertHelper.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
           router.replace('/(auth)/login');
+          return;
+        }
+        if (errMsg.includes('Bu kullanıcı adı kullanılmaktadır')) {
+          // Suppress text warning
           return;
         }
         setErrorMsg(errMsg);
@@ -626,6 +696,13 @@ export default function EditProfileScreen() {
               onChangeText={handleUsernameChange}
               autoCapitalize="none"
               autoCorrect={false}
+              rightElement={
+                usernameStatus === 'available' ? (
+                  <Ionicons name="checkmark" size={20} color={Colors.success} />
+                ) : usernameStatus === 'taken' ? (
+                  <Ionicons name="close" size={20} color={Colors.danger} />
+                ) : null
+              }
             />
 
             <View style={styles.cityPickerGroup}>
@@ -747,9 +824,9 @@ export default function EditProfileScreen() {
             
             <View style={styles.buttonWrapper}>
               <Pressable 
-                style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+                style={[styles.submitBtn, (isSubmitting || usernameStatus === 'taken') && styles.submitBtnDisabled]}
                 onPress={handleUpdate} 
-                disabled={isSubmitting}
+                disabled={isSubmitting || usernameStatus === 'taken'}
               >
                 <Text style={styles.submitBtnText}>
                   {isSubmitting ? "Güncelleniyor..." : "Güncelle"}
@@ -950,7 +1027,10 @@ export default function EditProfileScreen() {
 
                 <Pressable 
                   style={[styles.modalCancelOption, { marginTop: 12 }]} 
-                  onPress={handleSendPhoneVerificationCode}
+                  onPress={() => {
+                    setIsPhoneModalVisible(false);
+                    setIsRecaptchaVisible(true);
+                  }}
                   disabled={phoneVerificationCooldown > 0 || isPhoneVerifying}
                 >
                   <Text style={[styles.modalCancelText, phoneVerificationCooldown > 0 && { color: Colors.textLight }]}>
@@ -968,6 +1048,82 @@ export default function EditProfileScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* reCAPTCHA Modal */}
+      <Modal
+        visible={isRecaptchaVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsRecaptchaVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { height: '80%', padding: 0, overflow: 'hidden' }]}>
+            <View style={[styles.modalHeader, { padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border || '#e2e8f0' }]}>
+              <Text style={styles.modalTitle}>Güvenlik Doğrulaması</Text>
+              <Pressable onPress={() => setIsRecaptchaVisible(false)}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </Pressable>
+            </View>
+            <WebView
+              source={{
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+                    <style>
+                      body {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 90vh;
+                        margin: 0;
+                        background-color: #ffffff;
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    <div id="recaptcha-container" class="g-recaptcha" 
+                         data-sitekey="6LeaeToUAAAAAF3t89g0ezuZhjx_c5g7Uaobw5P1" 
+                         data-callback="onRecaptchaSuccess"
+                         data-expired-callback="onRecaptchaExpired"
+                         data-error-callback="onRecaptchaError"></div>
+                    <script>
+                      function onRecaptchaSuccess(token) {
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'success', token: token }));
+                      }
+                      function onRecaptchaExpired() {
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'expired' }));
+                      }
+                      function onRecaptchaError() {
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'error' }));
+                      }
+                    </script>
+                  </body>
+                  </html>
+                `,
+                baseUrl: firebaseProjectId ? \`https://\${firebaseProjectId}.firebaseapp.com\` : 'https://couchraill.firebaseapp.com'
+              }}
+              onMessage={(event) => {
+                try {
+                  const data = JSON.parse(event.nativeEvent.data);
+                  if (data.event === 'success' && data.token) {
+                    setIsRecaptchaVisible(false);
+                    handleSendPhoneVerificationCode(data.token);
+                  } else if (data.event === 'expired' || data.event === 'error') {
+                    setIsRecaptchaVisible(false);
+                    setErrorMsg('Doğrulama başarısız oldu veya süresi doldu.');
+                  }
+                } catch (e) {
+                  console.error('Error parsing WebView message:', e);
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
