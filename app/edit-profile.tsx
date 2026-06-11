@@ -15,7 +15,7 @@ import { AlertHelper } from '../utils/AlertHelper';
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { currentUser, updateProfile, authLoading } = useAppContext();
+  const { currentUser, updateProfile, authLoading, logout } = useAppContext();
 
   if (authLoading) {
     return (
@@ -165,6 +165,13 @@ export default function EditProfileScreen() {
       });
       const data = await res.json().catch(() => null);
 
+      if (res.status === 401) {
+        AlertHelper.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
+        await logout();
+        router.replace('/(auth)/login');
+        return;
+      }
+
       if (res.status === 429) {
         const remaining = data?.remainingSeconds || 60;
         setVerificationCooldown(remaining);
@@ -212,6 +219,13 @@ export default function EditProfileScreen() {
         body: JSON.stringify({ userId: currentUser.id, code: verificationCode })
       });
       const data = await res.json().catch(() => null);
+
+      if (res.status === 401) {
+        AlertHelper.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
+        await logout();
+        router.replace('/(auth)/login');
+        return;
+      }
 
       if (res.ok && data?.success) {
         await updateProfile({ email: email.trim().toLowerCase(), emailVerified: true });

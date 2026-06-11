@@ -2844,11 +2844,16 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
   }
 
-  const db = readDB();
-  const user = db.users.find(u => u.id === userId && u.active !== false && u.isDeleted !== true);
-  if (!user) {
+  const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = users[0];
+  const { rows: deletedRows } = await query('SELECT * FROM deleted_users WHERE "userId" = $1', [userId]);
+  const isDeleted = deletedRows.length > 0 || !user || user.isDeleted === true || user.active === false;
+
+  if (isDeleted) {
     return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı veya hesap silinmiş.' });
   }
+
+  const db = readDB();
 
   const email = reqEmail?.trim().toLowerCase() || user.email?.trim().toLowerCase();
   if (!email) {
@@ -3068,17 +3073,17 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
   });
 });
 
-app.post('/api/auth/verify-email-code', (req, res) => {
+app.post('/api/auth/verify-email-code', async (req, res) => {
   const { userId, code } = req.body;
   if (!userId || !code) return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
 
-  const db = readDB();
-  const userIndex = db.users.findIndex(u => u.id === userId);
-  if (userIndex === -1) return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+  const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = users[0];
+  if (!user) return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı.' });
   
-  const user = db.users[userIndex];
   const email = user.email?.trim().toLowerCase();
   
+  const db = readDB();
   const vIndex = (db.verifications || []).findIndex(v => v.userId === userId && v.type === 'email' && v.target === email && !v.used);
   if (vIndex === -1) return res.status(400).json({ success: false, error: 'Geçerli bir kod bulunamadı. Lütfen yeni kod isteyin.' });
   
@@ -3091,7 +3096,11 @@ app.post('/api/auth/verify-email-code', (req, res) => {
   }
 
   v.used = true;
-  db.users[userIndex].emailVerified = true;
+  await query('UPDATE users SET "emailVerified" = true WHERE id = $1', [userId]);
+  const userIndex = db.users.findIndex(u => u.id === userId);
+  if (userIndex !== -1) {
+    db.users[userIndex].emailVerified = true;
+  }
 
   createNotification(db, {
     userId,
