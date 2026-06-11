@@ -17,41 +17,30 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { currentUser, updateProfile, authLoading, logout } = useAppContext();
 
-  if (authLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: Colors.textLight, fontSize: 16 }}>Profil yükleniyor...</Text>
-      </View>
-    );
-  }
-
-  if (!currentUser) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  const [name, setName] = useState(currentUser.name);
-  const [username, setUsername] = useState(currentUser.username || '');
-  const [phone, setPhone] = useState(currentUser.phone?.replace(/^\+90/, '') || '');
-  const [email, setEmail] = useState(currentUser.email);
+  const [name, setName] = useState(currentUser?.name || '');
+  const [username, setUsername] = useState(currentUser?.username || '');
+  const [phone, setPhone] = useState(currentUser?.phone?.replace(/^\+90/, '') || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
   
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   
-  const [profileImage, setProfileImage] = useState(currentUser.profileImage || null);
+  const [profileImage, setProfileImage] = useState(currentUser?.profileImage || null);
   
-  const [city, setCity] = useState(currentUser.city || '');
+  const [city, setCity] = useState(currentUser?.city || '');
 
-  const handleUsernameChange = (text: string) => {
-    const trMap: { [key: string]: string } = {
-      'ç': 'c', 'ğ': 'g', 'ı': 'i', 'i': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
-      'Ç': 'c', 'Ğ': 'g', 'I': 'i', 'İ': 'i', 'Ö': 'o', 'Ş': 's', 'Ü': 'u'
-    };
-    let val = text.replace(/@/g, ''); // Remove @
-    val = val.replace(/[çğiıöşüÇĞIİÖŞÜ]/g, match => trMap[match] || match);
-    val = val.toLowerCase().replace(/ /g, '_').replace(/[^a-z0-9_.]/g, '');
-    setUsername(val);
-  };
+  // Keep state in sync with currentUser if it loads asynchronously
+  React.useEffect(() => {
+    if (currentUser) {
+      setName(currentUser.name || '');
+      setUsername(currentUser.username || '');
+      setPhone(currentUser.phone?.replace(/^\+90/, '') || '');
+      setEmail(currentUser.email || '');
+      setProfileImage(currentUser.profileImage || null);
+      setCity(currentUser.city || '');
+    }
+  }, [currentUser]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -75,11 +64,6 @@ export default function EditProfileScreen() {
   const [phoneVerifyError, setPhoneVerifyError] = useState('');
   const [phoneDevCode, setPhoneDevCode] = useState('');
 
-  // Ignore formatting differences for verified check
-  const normalizeForComparison = (p: string) => p.replace(/\D/g, '').slice(-10);
-  const isEmailVerified = currentUser.emailVerified && currentUser.email?.toLowerCase() === email?.toLowerCase();
-  const isPhoneVerified = currentUser.phoneVerified && normalizeForComparison(currentUser.phone || '') === normalizeForComparison(phone);
-
   // Reset verification state if the user changes (safety: different account)
   React.useEffect(() => {
     setVerificationCooldown(0);
@@ -91,7 +75,7 @@ export default function EditProfileScreen() {
     setPhoneVerificationCode('');
     setPhoneVerifyError('');
     setIsPhoneModalVisible(false);
-  }, [currentUser.id]);
+  }, [currentUser?.id]);
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -120,6 +104,34 @@ export default function EditProfileScreen() {
     }
     return () => clearTimeout(timeout);
   }, [toastMsg]);
+
+  if (authLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: Colors.textLight, fontSize: 16 }}>Profil yükleniyor...</Text>
+      </View>
+    );
+  }
+
+  if (!currentUser) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  // Ignore formatting differences for verified check
+  const normalizeForComparison = (p: string) => p.replace(/\D/g, '').slice(-10);
+  const isEmailVerified = currentUser?.emailVerified && currentUser?.email?.toLowerCase() === email?.toLowerCase();
+  const isPhoneVerified = currentUser?.phoneVerified && normalizeForComparison(currentUser?.phone || '') === normalizeForComparison(phone);
+
+  const handleUsernameChange = (text: string) => {
+    const trMap: { [key: string]: string } = {
+      'ç': 'c', 'ğ': 'g', 'ı': 'i', 'i': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
+      'Ç': 'c', 'Ğ': 'g', 'I': 'i', 'İ': 'i', 'Ö': 'o', 'Ş': 's', 'Ü': 'u'
+    };
+    let val = text.replace(/@/g, ''); // Remove @
+    val = val.replace(/[çğiıöşüÇĞIİÖŞÜ]/g, match => trMap[match] || match);
+    val = val.toLowerCase().replace(/ /g, '_').replace(/[^a-z0-9_.]/g, '');
+    setUsername(val);
+  };
 
   const handleCancelEmailVerification = () => {
     setIsEmailModalVisible(false);
