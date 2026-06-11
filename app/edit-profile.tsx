@@ -197,8 +197,7 @@ export default function EditProfileScreen() {
         setIsEmailModalVisible(true);
         setVerificationCode('');
         setEmailVerifyError('');
-        if (data.devCode) setEmailDevCode(data.devCode);
-        else setEmailDevCode('');
+        setToastMsg('Doğrulama kodu e-posta adresinize gönderildi.');
       } else {
         const errMsg = data?.detail || data?.message || data?.error || 'Kod gönderilemedi.';
         setEmailVerifyError(errMsg);
@@ -842,9 +841,7 @@ export default function EditProfileScreen() {
               {email} adresinize gönderilen 6 haneli kodu girin.
             </Text>
 
-            {emailDevCode ? (
-              <Text style={{ textAlign: 'center', color: Colors.textLight, marginBottom: 10, fontSize: 12 }}>Test kodu: {emailDevCode}</Text>
-            ) : null}
+
 
             {emailVerifyError ? (
               <Text style={styles.emailModalError}>{emailVerifyError}</Text>

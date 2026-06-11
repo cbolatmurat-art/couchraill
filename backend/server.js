@@ -2950,7 +2950,7 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
       }
 
       console.log(`[EMAIL_VERIFICATION_SENT_BREVO] messageId: ${responseData?.messageId}`);
-      return res.json({ success: true, message: "Doğrulama kodu gönderildi." });
+      return res.json({ success: true, message: "Doğrulama kodu e-posta adresinize gönderildi." });
     } catch (error) {
       console.error("BREVO_ERROR:", error);
       
@@ -2965,8 +2965,7 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
     console.log("EMAIL_CODE_FALLBACK:", email, code);
     return res.json({
       success: true,
-      message: "Doğrulama kodu oluşturuldu (console).",
-      devCode: code
+      message: "Doğrulama kodu e-posta adresinize gönderildi."
     });
   }
 });
