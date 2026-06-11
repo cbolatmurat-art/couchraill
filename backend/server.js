@@ -4740,6 +4740,16 @@ app.get('/api/admin/reports', checkAdminAuth, async (req, res) => {
     res.status(500).json({ success: false, error: 'Şikayetler alınamadı.' });
   }
 });
+// DELETE All Reports
+app.delete('/api/admin/reports', checkAdminAuth, async (req, res) => {
+  try {
+    await query(`DELETE FROM reports`);
+    res.json({ success: true, message: 'Tüm şikayet talepleri başarıyla silindi.' });
+  } catch (error) {
+    console.error('[ADMIN_REPORTS_DELETE_ALL_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Şikayetler silinemedi.' });
+  }
+});
 // GET Admin Report Details
 app.get('/api/admin/reports/:id/details', checkAdminAuth, async (req, res) => {
   try {

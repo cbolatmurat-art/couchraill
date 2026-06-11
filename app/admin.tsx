@@ -96,6 +96,10 @@ export default function AdminScreen() {
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastLoading, setBroadcastLoading] = useState(false);
 
+  // Delete all reports modal state
+  const [isDeleteAllModalVisible, setIsDeleteAllModalVisible] = useState(false);
+  const [deleteAllError, setDeleteAllError] = useState<string | null>(null);
+
   const clearAdminSession = async () => {
     localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt');
     try {
@@ -387,6 +391,30 @@ export default function AdminScreen() {
     }
   };
 
+  const handleDeleteAllComplaints = async () => {
+    if (!adminToken) return;
+
+    setActionInProgress(true);
+    setDeleteAllError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/reports`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReports([]);
+        setIsDeleteAllModalVisible(false);
+      } else {
+        setDeleteAllError(data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      setDeleteAllError('Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthorized && (activeTab === 'moderation' || activeTab === 'overview')) {
       fetchReports(undefined, reportTypeFilter);
@@ -587,9 +615,14 @@ export default function AdminScreen() {
         <View style={styles.pageHeaderSticky}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={styles.pageTitle}>Şikayet Talepleri / Moderasyon Merkezi</Text>
-            <Pressable onPress={() => fetchReports()} style={styles.refreshIconBtn} disabled={reportsLoading}>
-              <Ionicons name="refresh" size={20} color="#4F46E5" />
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <Pressable onPress={() => fetchReports()} style={styles.refreshIconBtn} disabled={reportsLoading}>
+                <Ionicons name="refresh" size={20} color="#4F46E5" />
+              </Pressable>
+              <Pressable onPress={() => { setDeleteAllError(null); setIsDeleteAllModalVisible(true); }} style={[styles.refreshIconBtn, { backgroundColor: '#FEE2E2' }]} disabled={reportsLoading}>
+                <Ionicons name="trash-outline" size={20} color="#EF4444" />
+              </Pressable>
+            </View>
           </View>
           <View style={styles.modTabsRow}>
             {statusTabs.map(t => (
@@ -1207,6 +1240,44 @@ export default function AdminScreen() {
                 ) : (
                   <Text style={styles.solidBtnText}>Gönder</Text>
                 )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete All Complaints Confirmation Modal */}
+      <Modal visible={isDeleteAllModalVisible} transparent={true} animationType="fade" onRequestClose={() => setIsDeleteAllModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.detailedModal, { maxWidth: 420, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 }]}>
+            <View style={styles.detailedModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="trash-outline" size={22} color="#EF4444" style={{ marginRight: 10 }} />
+                <Text style={styles.detailedModalTitle}>Şikayet Taleplerini Temizle</Text>
+              </View>
+              <Pressable onPress={() => setIsDeleteAllModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </Pressable>
+            </View>
+            <View style={[styles.detailedModalBody, { paddingVertical: 24 }]}>
+              <Text style={{ fontSize: 15, color: '#475569', lineHeight: 22 }}>
+                Tüm şikayet taleplerini kalıcı olarak silmek istediğinize emin misiniz?
+              </Text>
+              {deleteAllError && (
+                <View style={{ marginTop: 12, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FCA5A5' }}>
+                  <Text style={{ fontSize: 13, color: '#EF4444' }}>{deleteAllError}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.detailedModalFooter}>
+              <Pressable style={styles.outlineBtn} onPress={() => setIsDeleteAllModalVisible(false)}>
+                <Text style={styles.outlineBtnText}>İptal</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.solidBtn, { backgroundColor: '#EF4444' }]}
+                onPress={handleDeleteAllComplaints}
+              >
+                <Text style={styles.solidBtnText}>Tümünü Sil</Text>
               </Pressable>
             </View>
           </View>
