@@ -471,13 +471,20 @@ app.post('/api/auth/register', async (req, res) => {
     console.log(`[REGISTER_HIT] email: ${normalizedEmail}, dbMode: ${isPgMem ? 'pg-mem' : 'PostgreSQL'}`);
 
     const { rows: existingRows } = await query(
-      'SELECT id, email, phone FROM users WHERE LOWER(email) = $1 OR phone = $2', 
+      'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(email) = $1 OR phone = $2', 
       [normalizedEmail, normalizedPhone]
     );
     
     if (existingRows.length > 0) {
       const conflict = existingRows[0];
       if (conflict.email && conflict.email.toLowerCase() === normalizedEmail) {
+        if (conflict.emailVerified === true) {
+          return res.status(400).json({
+            success: false,
+            error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
+            message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+          });
+        }
         return res.status(409).json({ success: false, error: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.', message: 'Bu e-posta adresi ile kayıtlı bir hesap bulunmaktadır.\nGiriş yapabilir veya şifrenizi sıfırlayabilirsiniz.' });
       }
       return res.status(409).json({ success: false, error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.', message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.' });
@@ -707,6 +714,18 @@ app.put('/api/users/profile', async (req, res) => {
       
       if (trimmedEmail.toLowerCase() !== user.email?.trim().toLowerCase()) {
         const normalizedNewEmail = trimmedEmail.toLowerCase();
+
+        const { rows: verifiedCheck } = await query(
+          'SELECT id FROM users WHERE LOWER(email) = $1 AND "emailVerified" = true AND id != $2 AND active = true AND "isDeleted" = false',
+          [normalizedNewEmail, userId]
+        );
+        if (verifiedCheck.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
+            message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+          });
+        }
 
         const { rows: activeConflicts } = await query(`
         SELECT * FROM users 
@@ -2862,8 +2881,24 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
 
   console.log(`[EMAIL_VERIFICATION_REQUEST] userId: ${userId} email: ${email}`);
 
-  if (user.emailVerified) {
-    return res.status(400).json({ success: false, error: 'E-posta zaten doğrulanmış.' });
+  if (user.emailVerified && user.email?.trim().toLowerCase() === email) {
+    return res.status(400).json({
+      success: false,
+      error: 'Bu e-posta adresi zaten doğrulanmış.',
+      message: 'Bu e-posta adresi zaten doğrulanmış.'
+    });
+  }
+
+  const { rows: verifiedCheck } = await query(
+    'SELECT id FROM users WHERE LOWER(email) = $1 AND "emailVerified" = true AND id != $2 AND active = true AND "isDeleted" = false',
+    [email, userId]
+  );
+  if (verifiedCheck.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
+      message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+    });
   }
 
   const cooldownKey = `${userId}:email:${email}`;
@@ -2908,69 +2943,134 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
   console.log(`[EMAIL_VERIFICATION_CODE] userId: ${userId} email: ${email} code: ${code}`);
 
   const apiKey = (process.env.BREVO_API_KEY || "").trim();
-  const useBrevo = process.env.EMAIL_PROVIDER === 'brevo' || apiKey.startsWith("xkeysib-");
 
   console.log("EMAIL_PROVIDER:", process.env.EMAIL_PROVIDER);
   console.log("BREVO_API_KEY_EXISTS:", !!apiKey);
-  console.log("useBrevo determined:", useBrevo);
 
-  if (useBrevo) {
-    if (!apiKey.startsWith("xkeysib-")) {
-      console.error("BREVO_ERROR: API key xkeysib- ile başlamıyor.");
-      return res.status(500).json({ success: false, message: "Kod gönderilemedi", detail: "Geçersiz Brevo API Key" });
-    }
+  if (!apiKey) {
+    console.error("BREVO_ERROR: BREVO_API_KEY bulunamadı veya boş.");
+    return res.status(500).json({
+      success: false,
+      message: "Kod gönderilemedi",
+      detail: "E-posta servis sağlayıcısı API anahtarı (BREVO_API_KEY) tanımlı değil."
+    });
+  }
 
-    try {
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json',
-          'api-key': apiKey,
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          sender: {
-            name: process.env.BREVO_FROM_NAME || "Misafirim Ol",
-            email: process.env.BREVO_FROM_EMAIL || "onay@senindomainin.com"
-          },
-          to: [
-            {
-              email: email
-            }
-          ],
-          subject: "E-posta Doğrulama Kodu",
-          htmlContent: `
-            <h2>E-posta Doğrulama</h2>
-            <p>Doğrulama kodunuz:</p>
-            <h1>${code}</h1>
-          `
-        })
-      });
+  if (!apiKey.startsWith("xkeysib-")) {
+    console.error("BREVO_ERROR: API key xkeysib- ile başlamıyor.");
+    return res.status(500).json({
+      success: false,
+      message: "Kod gönderilemedi",
+      detail: "Geçersiz Brevo API Key (xkeysib- ile başlamalıdır)."
+    });
+  }
 
-      const responseData = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        console.error("BREVO_API_ERROR_RESPONSE:", responseData);
-        throw new Error(responseData?.message || `Brevo API Error (Status ${response.status})`);
+  // 1. Sender (Gönderici) doğrulama kontrolü
+  const fromEmail = (process.env.BREVO_FROM_EMAIL || "onay@senindomainin.com").trim().toLowerCase();
+  let senders = [];
+  try {
+    console.log("[BREVO_CHECK] Fetching senders from Brevo...");
+    const sendersRes = await fetch('https://api.brevo.com/v3/senders', {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey
       }
+    });
 
-      console.log(`[EMAIL_VERIFICATION_SENT_BREVO] messageId: ${responseData?.messageId}`);
-      return res.json({ success: true, message: "Doğrulama kodu e-posta adresinize gönderildi." });
-    } catch (error) {
-      console.error("BREVO_ERROR:", error);
-      
+    console.log("BREVO_SENDERS_RESPONSE_STATUS:", sendersRes.status);
+    const sendersData = await sendersRes.json().catch(() => null);
+    console.log("BREVO_SENDERS_RESPONSE_BODY:", JSON.stringify(sendersData));
+
+    if (sendersRes.status === 401 || sendersRes.status === 403 || (sendersData && sendersData.code === "unauthorized")) {
+      const errDetail = "Brevo API Yetkilendirme Hatası: API anahtarı veya IP adresi yetkilendirilmemiş. Lütfen Brevo panelinden IP adresinizi yetkilendirdiğinizden emin olun.";
+      console.error("BREVO_ERROR:", errDetail);
       return res.status(500).json({
         success: false,
         message: "Kod gönderilemedi",
-        detail: error.message
+        detail: errDetail
       });
     }
-  } else {
-    // Sadece logla (Brevo ayarlı değilse veya local debug ise)
-    console.log("EMAIL_CODE_FALLBACK:", email, code);
-    return res.json({
-      success: true,
-      message: "Doğrulama kodu e-posta adresinize gönderildi."
+
+    if (sendersRes.ok && sendersData && Array.isArray(sendersData.senders)) {
+      senders = sendersData.senders;
+    } else {
+      console.warn("Could not retrieve senders list from Brevo status:", sendersRes.status);
+    }
+  } catch (err) {
+    console.error("Error fetching Brevo senders list:", err.message);
+  }
+
+  const senderObj = senders.find(s => s.email && s.email.trim().toLowerCase() === fromEmail);
+  if (!senderObj) {
+    const errDetail = `Gönderici e-posta adresi (${fromEmail}) Brevo hesabınızda bir Senders (Gönderici) olarak tanımlı değil. Lütfen Brevo panelinden bu adresi ekleyin.`;
+    console.error("BREVO_ERROR:", errDetail);
+    return res.status(500).json({
+      success: false,
+      message: "Kod gönderilemedi",
+      detail: errDetail
+    });
+  } else if (senderObj.active !== true) {
+    const errDetail = `Gönderici e-posta adresi (${fromEmail}) Brevo hesabınızda tanımlı ancak doğrulanmamış (aktif değil). Lütfen e-postanıza gelen doğrulama linkine tıklayarak veya Brevo panelinden bu adresi doğrulayın.`;
+    console.error("BREVO_ERROR:", errDetail);
+    return res.status(500).json({
+      success: false,
+      message: "Kod gönderilemedi",
+      detail: errDetail
+    });
+  }
+
+  // 2. E-posta Gönderimi
+  try {
+    console.log("[BREVO_SEND] Sending verification email to:", email);
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: {
+          name: process.env.BREVO_FROM_NAME || "Misafirim Ol",
+          email: fromEmail
+        },
+        to: [
+          {
+            email: email
+          }
+        ],
+        subject: "E-posta Doğrulama Kodu",
+        htmlContent: `
+          <h2>E-posta Doğrulama</h2>
+          <p>Doğrulama kodunuz:</p>
+          <h1>${code}</h1>
+        `
+      })
+    });
+
+    const responseData = await response.json().catch(() => null);
+
+    console.log("BREVO_API_RESPONSE_STATUS:", response.status);
+    console.log("BREVO_API_RESPONSE_BODY:", JSON.stringify(responseData));
+
+    if (!response.ok) {
+      console.error("BREVO_API_ERROR_RESPONSE:", responseData);
+      throw new Error(responseData?.message || `Brevo API Hatası (Durum: ${response.status})`);
+    }
+
+    console.log(`[EMAIL_VERIFICATION_SENT_BREVO] messageId: ${responseData?.messageId}`);
+    return res.json({ 
+      success: true, 
+      message: "Doğrulama kodu e-posta adresinize gönderildi. (Spam/Junk/Gereksiz e-posta klasörlerini kontrol etmeyi unutmayın!)" 
+    });
+  } catch (error) {
+    console.error("BREVO_ERROR:", error);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Kod gönderilemedi",
+      detail: error.message
     });
   }
 });
@@ -3097,6 +3197,18 @@ app.post('/api/auth/verify-email-code', async (req, res) => {
     v.attempts = (v.attempts || 0) + 1;
     writeDB(db);
     return res.status(400).json({ success: false, error: 'Kod hatalı.' });
+  }
+
+  const { rows: verifiedCheck } = await query(
+    'SELECT id FROM users WHERE LOWER(email) = $1 AND "emailVerified" = true AND id != $2 AND active = true AND "isDeleted" = false',
+    [email, userId]
+  );
+  if (verifiedCheck.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.',
+      message: 'Bu e-posta adresi başka bir hesap tarafından doğrulanmış. Lütfen farklı bir e-posta adresi kullanın.'
+    });
   }
 
   v.used = true;
