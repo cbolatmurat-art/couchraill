@@ -3112,17 +3112,22 @@ function normalizePhone(phone) {
 
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 
-async function sendFirebaseVerification(phone) {
+async function sendFirebaseVerification(phone, recaptchaToken) {
   const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${FIREBASE_API_KEY}`;
+  
+  const body = {
+    phoneNumber: phone
+  };
+  if (recaptchaToken) {
+    body.recaptchaToken = recaptchaToken;
+  }
   
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      phoneNumber: phone
-    })
+    body: JSON.stringify(body)
   });
   
   const data = await response.json();
@@ -3153,8 +3158,14 @@ async function checkFirebaseVerification(sessionInfo, code) {
   return data;
 }
 
+app.get('/api/auth/firebase-config', (req, res) => {
+  res.json({
+    projectId: process.env.FIREBASE_PROJECT_ID || ''
+  });
+});
+
 app.post('/api/auth/send-phone-verification', async (req, res) => {
-  const { userId, phone: reqPhone } = req.body;
+  const { userId, phone: reqPhone, recaptchaToken } = req.body;
 
   if (!userId) {
     return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
@@ -3220,8 +3231,8 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
   db.verifications = db.verifications.filter(v => !(v.userId === userId && v.type === 'phone' && !v.used));
 
   try {
-    console.log(`[FIREBASE_SEND] Attempting to send verification to: ${normalizedPhone}`);
-    const sessionInfo = await sendFirebaseVerification(normalizedPhone);
+    console.log(`[FIREBASE_SEND] Attempting to send verification to: ${normalizedPhone} (recaptcha: ${recaptchaToken ? 'yes' : 'no'})`);
+    const sessionInfo = await sendFirebaseVerification(normalizedPhone, recaptchaToken);
     verificationCooldowns.set(cooldownKey, now);
 
     db.verifications.push({
