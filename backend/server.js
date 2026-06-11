@@ -3110,6 +3110,56 @@ function normalizePhone(phone) {
   return '+' + p;
 }
 
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID;
+
+async function sendTwilioVerification(phone) {
+  const url = `https://verify.twilio.com/v2/Services/${TWILIO_VERIFY_SERVICE_SID}/Verifications`;
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      To: phone,
+      Channel: 'sms'
+    })
+  });
+  
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Twilio SMS gönderimi başarısız oldu.');
+  }
+  return data;
+}
+
+async function checkTwilioVerification(phone, code) {
+  const url = `https://verify.twilio.com/v2/Services/${TWILIO_VERIFY_SERVICE_SID}/VerificationCheck`;
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      To: phone,
+      Code: code
+    })
+  });
+  
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Twilio kod doğrulaması başarısız oldu.');
+  }
+  return data;
+}
+
 app.post('/api/auth/send-phone-verification', async (req, res) => {
   const { userId, phone: reqPhone } = req.body;
 
@@ -3117,10 +3167,13 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
   }
 
-  const db = readDB();
-  const user = db.users.find(u => u.id === userId && u.active !== false && u.isDeleted !== true);
-  if (!user) {
-    return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+  const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = users[0];
+  const { rows: deletedRows } = await query('SELECT * FROM deleted_users WHERE "userId" = $1', [userId]);
+  const isDeleted = deletedRows.length > 0 || !user || user.isDeleted === true || user.active === false;
+
+  if (isDeleted) {
+    return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı veya hesap silinmiş.' });
   }
 
   const rawPhone = reqPhone || user.phone;
@@ -3130,20 +3183,31 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
 
   const normalizedPhone = normalizePhone(rawPhone);
 
-  const conflictUser = db.users.find(u => 
-    u.phone === normalizedPhone && 
-    u.id !== userId && 
-    u.isDeleted !== true && 
-    u.active !== false
+  const { rows: phoneConflict } = await query(
+    'SELECT id FROM users WHERE phone = $1 AND id != $2 AND active = true AND "isDeleted" = false',
+    [normalizedPhone, userId]
   );
-
-  if (conflictUser) {
-    return res.status(409).json({ success: false, message: 'Bu telefon numarası kullanılıyor.', error: 'Bu telefon numarası kullanılıyor.' });
+  if (phoneConflict.length > 0) {
+    return res.status(409).json({
+      success: false,
+      error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.',
+      message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.'
+    });
   }
 
-  // Update user.phone so it matches
-  user.phone = normalizedPhone;
-  user.phoneVerified = false;
+  // Update user.phone in PostgreSQL
+  await query(
+    'UPDATE users SET phone = $1, "phoneVerified" = false WHERE id = $2',
+    [normalizedPhone, userId]
+  );
+
+  // Sync to db.json
+  const db = readDB();
+  const userIndex = db.users.findIndex(u => u.id === userId);
+  if (userIndex !== -1) {
+    db.users[userIndex].phone = normalizedPhone;
+    db.users[userIndex].phoneVerified = false;
+  }
   writeDB(db);
 
   const cooldownKey = `${userId}:phone:${normalizedPhone}`;
@@ -3155,52 +3219,82 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
     return res.status(429).json({ success: false, error: `Lütfen ${remainingSec} saniye bekleyin.` });
   }
 
-  if (!db.verifications) db.verifications = [];
-
-  // Remove old unused phone codes for this user
-  db.verifications.forEach(v => {
-    if (v.userId === userId && v.type === 'phone' && !v.used) {
-      v.used = true;
-    }
-  });
-
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = now + 10 * 60 * 1000;
-  
-  const verificationId = `pv${now}_${Math.random().toString(36).slice(2, 6)}`;
-
-  db.verifications.push({
-    id: verificationId,
-    userId,
-    type: 'phone',
-    target: normalizedPhone,
-    code: String(code).trim(),
-    expiresAt,
-    used: false,
-    attempts: 0,
-    createdAt: now
-  });
-  
-  writeDB(db);
-  verificationCooldowns.set(cooldownKey, now);
-
-  console.log("PHONE_SEND", {
-    userId,
-    rawPhone,
-    normalizedPhone,
-    code,
-    savedVerificationId: verificationId
-  });
-
-  console.log("PHONE_CODE:", normalizedPhone, code);
-  if (process.env.NODE_ENV === 'production') {
+  try {
+    console.log(`[TWILIO_SEND] Attempting to send verification to: ${normalizedPhone}`);
+    await sendTwilioVerification(normalizedPhone);
+    verificationCooldowns.set(cooldownKey, now);
     return res.status(200).json({ success: true, message: 'Doğrulama kodu gönderildi.' });
+  } catch (err) {
+    console.error('[TWILIO_SEND_ERROR]', err);
+    return res.status(400).json({ success: false, error: `SMS gönderilemedi: ${err.message}` });
   }
-  return res.status(200).json({ 
-    success: true, 
-    message: 'Test modu: kod konsola yazdırıldı.', 
-    devCode: code 
-  });
+});
+
+app.post('/api/auth/verify-phone-code', async (req, res) => {
+  const { userId, code, phone } = req.body;
+  if (!userId || !code || !phone) {
+    return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
+  }
+
+  const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = users[0];
+  const { rows: deletedRows } = await query('SELECT * FROM deleted_users WHERE "userId" = $1', [userId]);
+  const isDeleted = deletedRows.length > 0 || !user || user.isDeleted === true || user.active === false;
+
+  if (isDeleted) {
+    return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı veya hesap silinmiş.' });
+  }
+
+  const normalizedPhone = normalizePhone(phone || user.phone);
+  if (!normalizedPhone) {
+    return res.status(400).json({ success: false, error: 'Geçerli bir telefon numarası bulunamadı.' });
+  }
+
+  try {
+    console.log(`[TWILIO_CHECK] Attempting check for ${normalizedPhone} code: ${code}`);
+    const checkResult = await checkTwilioVerification(normalizedPhone, code);
+    
+    if (checkResult.status === 'approved') {
+      // Update database
+      await query(
+        'UPDATE users SET phone = $1, "phoneVerified" = true WHERE id = $2',
+        [normalizedPhone, userId]
+      );
+      
+      const db = readDB();
+      const userIndex = db.users.findIndex(u => u.id === userId);
+      if (userIndex !== -1) {
+        db.users[userIndex].phone = normalizedPhone;
+        db.users[userIndex].phoneVerified = true;
+      }
+      
+      // Create notification
+      createNotification(db, {
+        userId,
+        type: 'phone_verified',
+        title: 'Telefon Doğrulandı',
+        message: 'Telefon numaranız başarıyla doğrulandı.',
+        senderId: userId,
+        senderType: 'user'
+      });
+      
+      writeDB(db);
+      
+      // Reload updated user
+      const { rows: updatedUsers } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Telefon numaranız başarıyla doğrulandı.',
+        user: updatedUsers[0]
+      });
+    } else {
+      return res.status(400).json({ success: false, error: 'Girdiğiniz kod hatalı veya süresi dolmuş.' });
+    }
+  } catch (err) {
+    console.error('[TWILIO_CHECK_ERROR]', err);
+    return res.status(400).json({ success: false, error: `Doğrulama hatası: ${err.message}` });
+  }
 });
 
 app.post('/api/auth/verify-email-code', async (req, res) => {
