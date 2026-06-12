@@ -137,8 +137,7 @@ export default function SecurityScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: type === 'selfie' ? [1, 1] : [4, 3],
-      quality: 0.5,
-      base64: true,
+      quality: 0.8,
     };
 
     let result;
@@ -149,10 +148,14 @@ export default function SecurityScreen() {
     }
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      if (type === 'front') setIdFrontImage(base64Image);
-      else if (type === 'back') setIdBackImage(base64Image);
-      else if (type === 'selfie') setSelfieImage(base64Image);
+      const asset = result.assets[0];
+      console.log(`[ImagePicker] Selected ${type}: uri=${asset.uri}, type=${asset.type}, fileName=${asset.fileName}, fileSize=${asset.fileSize}`);
+      const imageUri = asset.uri;
+      if (type === 'front') setIdFrontImage(imageUri);
+      else if (type === 'back') setIdBackImage(imageUri);
+      else if (type === 'selfie') setSelfieImage(imageUri);
+    } else {
+      console.log(`[ImagePicker] Cancelled or no assets for ${type}`);
     }
   };
 
@@ -178,7 +181,9 @@ export default function SecurityScreen() {
 
     setIsSubmittingVerification(true);
     try {
+      console.log(`[Submit] Starting submitVerificationRequest...`);
       const result = await submitVerificationRequest(idFrontImage, idBackImage, selfieImage);
+      console.log(`[Submit] Result:`, result);
       if (result.success) {
         setVerificationSuccess('Kimlik doğrulama başvurunuz alındı. İnceleme sonrası bilgilendirileceksiniz.');
         
@@ -197,6 +202,7 @@ export default function SecurityScreen() {
         setVerificationError(result.error || 'Başvuru gönderilirken hata oluştu.');
       }
     } catch (e: any) {
+      console.error(`[Submit] Catch Error:`, e.message, e);
       setVerificationError(e?.message || 'Sistemsel bir hata oluştu.');
     } finally {
       setIsSubmittingVerification(false);

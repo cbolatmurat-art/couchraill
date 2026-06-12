@@ -1601,6 +1601,18 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+const multer = require('multer');
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, crypto.randomUUID() + ext);
+  }
+});
+const upload = multer({ storage: storage });
+
 const activeAdminTokens = new Map();
 
 const checkAdminAuth = (req, res, next) => {
@@ -1793,19 +1805,7 @@ const cleanupInconsistentEmails = () => {
 cleanupExpiredVerifications();
 cleanupInconsistentEmails();
 
-// Helper to save base64 to file and return filename/id
-const saveVerificationFile = (base64String) => {
-  if (!base64String) return null;
-  const match = base64String.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!match) return null;
-  
-  const base64Data = match[2];
-  const fileId = crypto.randomUUID();
-  const filePath = path.join(UPLOADS_DIR, `${fileId}.jpg`);
-  
-  fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
-  return fileId;
-};
+
 
 // Delete all verification request files of a user
 const deleteUserVerificationFiles = (userId, db, logDeletion) => {
@@ -1839,110 +1839,159 @@ const deleteUserVerificationFiles = (userId, db, logDeletion) => {
 };
 
 // ---- IDENTITY VERIFICATION ENDPOINTS ----
-app.post('/api/verification/request', (req, res) => {
-  const { userId, idFrontImage, idBackImage, selfieImage, kvkkAccepted, consentAccepted } = req.body;
+app.post('/api/verification/request', upload.fields([
+  { name: 'idFrontImage', maxCount: 1 },
+  { name: 'idBackImage', maxCount: 1 },
+  { name: 'selfieImage', maxCount: 1 }
+]), async (req, res) => {
+  console.log(`[POST /api/verification/request] req.body:`, req.body);
+  console.log(`[POST /api/verification/request] req.files keys:`, req.files ? Object.keys(req.files) : 'null');
   
-  if (!kvkkAccepted || !consentAccepted) {
+  const { userId, kvkkAccepted, consentAccepted } = req.body;
+  
+  if (!kvkkAccepted || !consentAccepted || kvkkAccepted === 'false' || consentAccepted === 'false') {
     return res.status(400).json({ error: 'KVKK ve Açık Rıza onayları zorunludur.' });
   }
 
+  const idFrontFile = req.files?.idFrontImage?.[0];
+  const idBackFile = req.files?.idBackImage?.[0];
+  const selfieFile = req.files?.selfieImage?.[0];
+
+  if (!idFrontFile || !idBackFile || !selfieFile) {
+    return res.status(400).json({ error: 'Görseller eksik. Lütfen tüm belgeleri yüklediğinizden emin olun.' });
+  }
+
+  const idFrontImageId = path.parse(idFrontFile.filename).name;
+  const idBackImageId = path.parse(idBackFile.filename).name;
+  const selfieImageId = path.parse(selfieFile.filename).name;
+
+  const requestId = `vr${Date.now()}`;
+  const createdAt = new Date().toISOString();
+
+  let user = null;
   const db = readDB();
   const userIndex = db.users.findIndex(u => u.id === userId);
-  if (userIndex === -1) {
-    return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+  
+  if (userIndex !== -1) {
+    user = db.users[userIndex];
+    if (!db.verificationRequests) db.verificationRequests = [];
+    db.verificationRequests.push({
+      id: requestId,
+      userId,
+      status: 'pending',
+      createdAt,
+      idFrontImageId,
+      idBackImageId,
+      selfieImageId,
+      rejectionReason: null
+    });
+    db.users[userIndex].identityVerificationStatus = 'pending';
+    db.users[userIndex].verified = false;
+    writeDB(db);
   }
 
-  // Save files to private disk storage
-  const idFrontImageId = saveVerificationFile(idFrontImage);
-  const idBackImageId = saveVerificationFile(idBackImage);
-  const selfieImageId = saveVerificationFile(selfieImage);
+  try {
+    const userRes = await pool.query('SELECT name, email, phone FROM users WHERE id = $1', [userId]);
+    const uName = userRes.rows[0]?.name || '';
+    const uEmail = userRes.rows[0]?.email || '';
+    const uPhone = userRes.rows[0]?.phone || '';
 
-  if (!idFrontImageId || !idBackImageId || !selfieImageId) {
-    return res.status(400).json({ error: 'Dosyalar kaydedilemedi.' });
+    await pool.query(`
+      INSERT INTO verification_requests 
+        (id, "userId", status, "documentUrl", "selfieUrl", "submittedAt", "idFrontImageUrl", "idBackImageUrl", "selfieImageUrl", "userName", "userEmail", "userPhone")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `, [requestId, userId, 'pending', '/uploads/private-verifications/' + idFrontFile.filename, '/uploads/private-verifications/' + selfieFile.filename, new Date(), '/uploads/private-verifications/' + idFrontFile.filename, '/uploads/private-verifications/' + idBackFile.filename, '/uploads/private-verifications/' + selfieFile.filename, uName, uEmail, uPhone]);
+
+    await pool.query(`
+      UPDATE users SET "identityVerificationStatus" = 'pending', verified = false WHERE id = $1
+    `, [userId]);
+  } catch (err) {
+    console.error('Postgres VR insert error:', err);
   }
 
-  if (!db.verificationRequests) {
-    db.verificationRequests = [];
+  if (!user) {
+    try {
+      const uRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+      user = uRes.rows[0];
+    } catch(e) {}
   }
 
-  // Create verification request record without base64 images
-  const newRequest = {
-    id: `vr${Date.now()}`,
-    userId,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    idFrontImageId,
-    idBackImageId,
-    selfieImageId,
-    rejectionReason: null
-  };
-
-  db.verificationRequests.push(newRequest);
-  db.users[userIndex].identityVerificationStatus = 'pending';
-  db.users[userIndex].verified = false;
-
-  writeDB(db);
-  res.json({ success: true, user: db.users[userIndex] });
+  res.json({ success: true, user: user || { id: userId, identityVerificationStatus: 'pending' } });
 });
 
-// GET user own profile (already returns status only, no images)
 // GET admin verification requests
-app.get('/api/admin/verification-requests', checkAdminAuth, (req, res) => {
-  // Trigger retention cleanup
+app.get('/api/admin/verification-requests', checkAdminAuth, async (req, res) => {
   cleanupExpiredVerifications();
-
-  const db = readDB();
-  // Filter for pending verification requests
-  const pendingRequests = (db.verificationRequests || []).filter(r => r.status === 'pending');
-
+  
   let token = '';
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const parts = authHeader.split(' ');
-    if (parts.length === 2 && parts[0] === 'Bearer') {
-      token = parts[1];
-    }
+    if (parts.length === 2 && parts[0] === 'Bearer') token = parts[1];
   }
 
+  const host = req.headers.host || '192.168.1.102:3000';
+  const baseUrl = req.protocol + '://' + host + '/api';
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT v.*, u."userType", u.username 
+      FROM verification_requests v 
+      LEFT JOIN users u ON v."userId" = u.id 
+      ORDER BY v."submittedAt" DESC
+    `);
+    if (rows && rows.length > 0) {
+      const formatted = rows.map(r => {
+        let frontUri = r.idFrontImageUrl || r.documentUrl;
+        let backUri = r.idBackImageUrl || r.documentUrl;
+        let selfieUri = r.selfieImageUrl || r.selfieUrl;
+
+        if (frontUri && frontUri.startsWith('/uploads')) frontUri = `${baseUrl}/admin/verification-file/${path.basename(frontUri)}?token=${token}`;
+        if (backUri && backUri.startsWith('/uploads')) backUri = `${baseUrl}/admin/verification-file/${path.basename(backUri)}?token=${token}`;
+        if (selfieUri && selfieUri.startsWith('/uploads')) selfieUri = `${baseUrl}/admin/verification-file/${path.basename(selfieUri)}?token=${token}`;
+
+        return {
+          id: r.id,
+          userId: r.userId,
+          status: r.status,
+          createdAt: r.submittedAt || r.createdAt,
+          idFrontImageUrl: frontUri,
+          idBackImageUrl: backUri,
+          selfieImageUrl: selfieUri,
+          userName: r.userName || 'Bilinmiyor',
+          userUsername: r.username || '',
+          userEmail: r.userEmail || '',
+          userPhone: r.userPhone || '',
+          userType: r.userType || 'Bilinmiyor'
+        };
+      });
+      return res.json(formatted);
+    }
+  } catch (err) {
+    console.error('PG fetch VR error:', err);
+  }
+
+  const db = readDB();
+  const pendingRequests = (db.verificationRequests || []);
   const requests = pendingRequests.map(r => {
     const user = db.users.find(u => u.id === r.userId) || {};
-    
     const frontId = r.idFrontImageId || r.idFrontFileId;
     const backId = r.idBackImageId || r.idBackFileId;
     const selfieId = r.selfieImageId || r.selfieFileId;
     
-    const host = req.headers.host || '192.168.1.102:3000';
-    const baseUrl = `http://${host}/api`;
-
     return {
       id: r.id,
       userId: r.userId,
       status: r.status,
       createdAt: r.createdAt,
-      
-      // Original IDs
-      idFrontImageId: r.idFrontImageId,
-      idBackImageId: r.idBackImageId,
-      selfieImageId: r.selfieImageId,
-      
-      // File IDs
-      idFrontFileId: r.idFrontFileId || r.idFrontImageId,
-      idBackFileId: r.idBackFileId || r.idBackImageId,
-      selfieFileId: r.selfieFileId || r.selfieImageId,
-      
-      // Image URLs
-      idFrontImageUrl: frontId ? `${baseUrl}/admin/verification-file/${frontId}?token=${token}` : null,
-      idBackImageUrl: backId ? `${baseUrl}/admin/verification-file/${backId}?token=${token}` : null,
-      selfieImageUrl: selfieId ? `${baseUrl}/admin/verification-file/${selfieId}?token=${token}` : null,
-      
-      // Base64 fallbacks if they exist
-      idFrontImage: r.idFrontImage || null,
-      idBackImage: r.idBackImage || null,
-      selfieImage: r.selfieImage || null,
-
+      idFrontImageUrl: frontId ? `${baseUrl}/admin/verification-file/${frontId}.jpg?token=${token}` : null,
+      idBackImageUrl: backId ? `${baseUrl}/admin/verification-file/${backId}.jpg?token=${token}` : null,
+      selfieImageUrl: selfieId ? `${baseUrl}/admin/verification-file/${selfieId}.jpg?token=${token}` : null,
       userName: user.name || 'Bilinmiyor',
+      userUsername: user.username || '',
       userEmail: user.email || '',
-      userPhone: user.phone || ''
+      userPhone: user.phone || '',
+      userType: user.userType || 'Bilinmiyor'
     };
   });
   res.json(requests);
@@ -1950,10 +1999,11 @@ app.get('/api/admin/verification-requests', checkAdminAuth, (req, res) => {
 
 // GET private verification file contents (authorized only)
 app.get('/api/admin/verification-file/:fileId', checkAdminAuth, (req, res) => {
-  // Şimdilik development için admin token kontrolü olmadan erişime izin veriliyor.
-  // Production’da admin auth zorunlu olacak.
-  const { fileId } = req.params;
-  const filePath = path.join(UPLOADS_DIR, `${fileId}.jpg`);
+  let { fileId } = req.params;
+  if (!path.extname(fileId)) {
+    fileId += '.jpg';
+  }
+  const filePath = path.join(UPLOADS_DIR, fileId);
   
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
@@ -1965,34 +2015,23 @@ app.get('/api/admin/verification-file/:fileId', checkAdminAuth, (req, res) => {
 // POST Admin Login
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body;
-  
-  console.log("ADMIN_LOGIN_ATTEMPT", email);
-  
   const db = readDB();
-  
-  console.log("ADMIN_USERS", db.adminUsers);
-
   const emailTrimmed = email ? String(email).trim().toLowerCase() : '';
   const passwordStr = password ? String(password) : '';
-
   const admin = (db.adminUsers || []).find(a => 
     a.email && a.email.trim().toLowerCase() === emailTrimmed && String(a.password) === passwordStr
   );
 
   if (admin) {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+    const expiresAt = Date.now() + 60 * 60 * 1000;
     activeAdminTokens.set(token, { adminId: admin.id, expiresAt });
 
     res.json({
       success: true,
       token,
       expiresAt,
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        role: admin.role
-      }
+      admin: { id: admin.id, email: admin.email, role: admin.role }
     });
   } else {
     res.status(401).json({ success: false, message: 'Admin email veya şifre hatalı.' });
@@ -2000,23 +2039,37 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 // POST Admin Verification Approve
-app.post('/api/admin/verification-requests/:id/approve', checkAdminAuth, (req, res) => {
+app.post('/api/admin/verification-requests/:id/approve', checkAdminAuth, async (req, res) => {
   const { id } = req.params;
   const { adminId } = req.body;
   const db = readDB();
   
+  let userId = null;
+  
+  try {
+    const vrRes = await pool.query('UPDATE verification_requests SET status = $1, "reviewedAt" = $2 WHERE id = $3 RETURNING "userId"', ['approved', new Date(), id]);
+    if (vrRes.rows.length > 0) {
+      userId = vrRes.rows[0].userId;
+      await pool.query('UPDATE users SET "identityVerificationStatus" = $1, verified = true WHERE id = $2', ['verified', userId]);
+    }
+  } catch (err) {
+    console.error('PG approve VR err:', err);
+  }
+
   if (!db.verificationRequests) db.verificationRequests = [];
   const reqIndex = db.verificationRequests.findIndex(r => r.id === id);
-  if (reqIndex === -1) return res.status(404).json({ error: 'Başvuru bulunamadı.' });
-  
-  db.verificationRequests[reqIndex].status = 'approved';
-  
-  const userId = db.verificationRequests[reqIndex].userId;
-  const userIndex = db.users.findIndex(u => u.id === userId);
-  if (userIndex > -1) {
-    db.users[userIndex].identityVerificationStatus = 'verified';
-    db.users[userIndex].verified = true;
+  if (reqIndex !== -1) {
+    db.verificationRequests[reqIndex].status = 'approved';
+    userId = db.verificationRequests[reqIndex].userId;
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    if (userIndex > -1) {
+      db.users[userIndex].identityVerificationStatus = 'verified';
+      db.users[userIndex].verified = true;
+    }
+    writeDB(db);
   }
+  
+  if (!userId) return res.status(404).json({ error: 'Başvuru bulunamadı.' });
   
   logAdminAction(adminId || 'unknown_admin', 'approve', userId, req.ip);
 
@@ -2025,16 +2078,15 @@ app.post('/api/admin/verification-requests/:id/approve', checkAdminAuth, (req, r
     type: 'identity_approved',
     title: 'Kimlik Onaylandı',
     message: 'Kimlik doğrulama başvurunuz onaylandı.',
-    relatedId: db.verificationRequests[reqIndex].id,
+    relatedId: id,
     relatedType: 'identity_verification'
   });
 
-  writeDB(db);
-  res.json({ success: true, request: db.verificationRequests[reqIndex] });
+  res.json({ success: true });
 });
 
 // POST Admin Verification Reject
-app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, (req, res) => {
+app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, async (req, res) => {
   const { id } = req.params;
   const { adminId, rejectionReason } = req.body;
   
@@ -2043,33 +2095,47 @@ app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, (req, re
   }
 
   const db = readDB();
+  let userId = null;
+
+  try {
+    const vrRes = await pool.query('UPDATE verification_requests SET status = $1, "reviewedAt" = $2, "reviewerNotes" = $3 WHERE id = $4 RETURNING "userId"', ['rejected', new Date(), rejectionReason, id]);
+    if (vrRes.rows.length > 0) {
+      userId = vrRes.rows[0].userId;
+      await pool.query('UPDATE users SET "identityVerificationStatus" = $1, verified = false WHERE id = $2', ['rejected', userId]);
+    }
+  } catch (err) {
+    console.error('PG reject VR err:', err);
+  }
+
   if (!db.verificationRequests) db.verificationRequests = [];
   const reqIndex = db.verificationRequests.findIndex(r => r.id === id);
-  if (reqIndex === -1) return res.status(404).json({ error: 'Başvuru bulunamadı.' });
-  
-  db.verificationRequests[reqIndex].status = 'rejected';
-  db.verificationRequests[reqIndex].rejectionReason = rejectionReason;
-  
-  const userId = db.verificationRequests[reqIndex].userId;
-  const userIndex = db.users.findIndex(u => u.id === userId);
-  if (userIndex > -1) {
-    db.users[userIndex].identityVerificationStatus = 'rejected';
-    db.users[userIndex].verified = false;
+  if (reqIndex !== -1) {
+    db.verificationRequests[reqIndex].status = 'rejected';
+    db.verificationRequests[reqIndex].rejectionReason = rejectionReason;
+    userId = db.verificationRequests[reqIndex].userId;
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    if (userIndex > -1) {
+      db.users[userIndex].identityVerificationStatus = 'rejected';
+      db.users[userIndex].verified = false;
+    }
+    writeDB(db);
   }
   
+  if (!userId) return res.status(404).json({ error: 'Başvuru bulunamadı.' });
+
   logAdminAction(adminId || 'unknown_admin', 'reject', userId, req.ip);
 
   createNotification(db, {
     userId,
     type: 'identity_rejected',
-    title: 'Kimlik Reddedildi',
-    message: `Kimlik başvurunuz reddedildi. Neden: ${rejectionReason}`,
-    relatedId: db.verificationRequests[reqIndex].id,
+    title: 'Kimlik Doğrulama Reddedildi',
+    message: `Başvurunuz reddedildi. Sebep: ${rejectionReason}`,
+    relatedId: id,
     relatedType: 'identity_verification'
   });
 
   writeDB(db);
-  res.json({ success: true, request: db.verificationRequests[reqIndex] });
+  res.json({ success: true });
 });
 
 // DELETE User Account (Purges files & data, logs retention)

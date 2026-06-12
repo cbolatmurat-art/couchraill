@@ -162,10 +162,13 @@ async function safeFetch(url: string, options: RequestInit = {}, retries = 1): P
        try {
          const cloned = res.clone();
          responseBody = await cloned.text();
+         console.log(`[safeFetch] Error Response from ${url}:`, responseBody);
          const data = JSON.parse(responseBody);
          if (data?.message) errorMsg = data.message;
          else if (data?.error) errorMsg = data.error;
-       } catch(e) {}
+       } catch(e) {
+         console.log(`[safeFetch] Could not parse error response:`, e);
+       }
        
        if ([502, 503, 504].includes(res.status)) {
          console.warn(`[API ERROR ${res.status}] URL: ${url} | METHOD: ${options.method || 'GET'} | BODY: ${responseBody}`);
@@ -927,11 +930,49 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const submitVerificationRequest = async (idFrontImage: string, idBackImage: string, selfieImage: string) => {
     if (!currentUser) return { success: false, error: 'Oturum açık değil.' };
 
-    const apiResult = await safeFetch(`${API_BASE_URL}/verification/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentUser.id, idFrontImage, idBackImage, selfieImage, kvkkAccepted: true, consentAccepted: true })
-    });
+    const formData = new FormData();
+    formData.append('userId', currentUser.id);
+    formData.append('kvkkAccepted', 'true');
+    formData.append('consentAccepted', 'true');
+
+    if (idFrontImage) {
+      formData.append('idFrontImage', {
+        uri: idFrontImage,
+        name: 'idFront.jpg',
+        type: 'image/jpeg',
+      } as any);
+    }
+
+    if (idBackImage) {
+      formData.append('idBackImage', {
+        uri: idBackImage,
+        name: 'idBack.jpg',
+        type: 'image/jpeg',
+      } as any);
+    }
+
+    if (selfieImage) {
+      formData.append('selfieImage', {
+        uri: selfieImage,
+        name: 'selfie.jpg',
+        type: 'image/jpeg',
+      } as any);
+    }
+
+    console.log(`[AppContext] submitVerificationRequest called with URIs: front=${!!idFrontImage}, back=${!!idBackImage}, selfie=${!!selfieImage}`);
+    
+    let apiResult: any;
+    try {
+      console.log(`[AppContext] Sending POST request to ${API_BASE_URL}/verification/request`);
+      apiResult = await safeFetch(`${API_BASE_URL}/verification/request`, {
+        method: 'POST',
+        body: formData
+      });
+      console.log(`[AppContext] safeFetch success:`, apiResult);
+    } catch (fetchError: any) {
+      console.error(`[AppContext] safeFetch error:`, fetchError.message);
+      return { success: false, error: fetchError.message || 'Sunucu ile iletişim kurulamadı.' };
+    }
 
     if (apiResult && apiResult.success) {
       const updatedUser = apiResult.user;

@@ -43,9 +43,11 @@ interface VerificationRequest {
   idFrontImage?: string;
   idBackImage?: string;
   selfieImage?: string;
-  userName: string;
-  userEmail: string;
-  userPhone: string;
+  userName?: string;
+  userUsername?: string;
+  userEmail?: string;
+  userPhone?: string;
+  userType?: string;
 }
 
 // Empty Data for Dashboard
@@ -744,8 +746,12 @@ export default function AdminScreen() {
               <View key={req.id} style={styles.verificationCard}>
                 <View style={styles.verificationHeader}>
                   <View>
-                    <Text style={styles.verificationName}>{req.userName}</Text>
-                    <Text style={styles.verificationEmail}>{req.userEmail} {req.userPhone ? `• ${req.userPhone}` : ''}</Text>
+                    <Text style={styles.verificationName}>
+                      {req.userName} {req.userUsername ? `(@${req.userUsername})` : ''}
+                    </Text>
+                    <Text style={styles.verificationEmail}>
+                      {req.userEmail} {req.userPhone ? `• ${req.userPhone}` : ''} • {req.userType === 'host' ? 'Ev Sahibi' : req.userType === 'seeker' ? 'Misafir' : req.userType}
+                    </Text>
                   </View>
                   <View style={[styles.badge, req.status === 'approved' ? styles.badgeSuccess : req.status === 'rejected' ? styles.badgeDanger : styles.badgeWarning]}>
                     <Text style={[styles.badgeText, req.status === 'rejected' && { color: '#FFF' }]}>

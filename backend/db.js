@@ -439,7 +439,13 @@ const initDB = async () => {
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
       `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAccepted" BOOLEAN DEFAULT false`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP`
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP`,
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "idFrontImageUrl" TEXT`,
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "idBackImageUrl" TEXT`,
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "selfieImageUrl" TEXT`,
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userEmail" VARCHAR(255)`,
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userPhone" VARCHAR(255)`
     ];
     for (const alt of alters) {
       try {
