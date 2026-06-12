@@ -74,7 +74,7 @@ export default function EditProfileScreen() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/auth/check-username?username=${encodeURIComponent(cleanUsername)}&userId=${currentUser.id}`);
+        const res = await fetch(`${API_BASE_URL}/auth/check-username?username=${encodeURIComponent(cleanUsername)}&userId=${currentUser?.id}`);
         const data = await res.json().catch(() => null);
         if (data && data.success) {
           setUsernameStatus(data.available ? 'available' : 'taken');
