@@ -109,15 +109,21 @@ export default function EditProfileScreen() {
   // reCAPTCHA State
   const [isRecaptchaVisible, setIsRecaptchaVisible] = useState(false);
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
+  const [recaptchaSiteKey, setRecaptchaSiteKey] = useState('');
   const hasRecaptchaTokenReceived = React.useRef(false);
 
-  // Fetch firebase project ID on load to configure the reCAPTCHA domain
+  // Fetch firebase config on load to configure the reCAPTCHA domain and sitekey
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/auth/firebase-config`)
       .then(res => res.json())
       .then(data => {
-        if (data && data.projectId) {
-          setFirebaseProjectId(data.projectId);
+        if (data) {
+          if (data.projectId) {
+            setFirebaseProjectId(data.projectId);
+          }
+          if (data.recaptchaSiteKey) {
+            setRecaptchaSiteKey(data.recaptchaSiteKey);
+          }
         }
       })
       .catch(err => console.error('Error fetching firebase config:', err));
@@ -329,6 +335,22 @@ export default function EditProfileScreen() {
       setPhoneVerifyError('');
       return;
     }
+
+    // Check if reCAPTCHA Site Key is configured and valid
+    if (!recaptchaSiteKey) {
+      const errMsg = 'Google reCAPTCHA Site Anahtarı (Site Key) tanımlanmamış. Telefon doğrulama başlatılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden v2 site anahtarı alıp sunucu çevre değişkenlerine (RECAPTCHA_SITE_KEY) ekleyin.';
+      setErrorMsg(errMsg);
+      Alert.alert('Sistem Yapılandırma Hatası', errMsg);
+      return;
+    }
+
+    if (recaptchaSiteKey.startsWith('AIzaSy')) {
+      const errMsg = 'Hatalı Yapılandırma: Firebase API anahtarı, Google reCAPTCHA site anahtarı (Site Key) olarak kullanılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden doğru reCAPTCHA v2 site anahtarını alıp RECAPTCHA_SITE_KEY olarak tanımlayın.';
+      setErrorMsg(errMsg);
+      Alert.alert('Hatalı Yapılandırma', errMsg);
+      return;
+    }
+
     hasRecaptchaTokenReceived.current = false;
     setIsRecaptchaVisible(true);
   };
@@ -1088,7 +1110,6 @@ export default function EditProfileScreen() {
                   <html>
                   <head>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                     <style>
                       body {
                         display: flex;
@@ -1101,11 +1122,7 @@ export default function EditProfileScreen() {
                     </style>
                   </head>
                   <body>
-                    <div id="recaptcha-container" class="g-recaptcha" 
-                         data-sitekey="6LeaeToUAAAAAF3t89g0ezuZhjx_c5g7Uaobw5P1" 
-                         data-callback="onRecaptchaSuccess"
-                         data-expired-callback="onRecaptchaExpired"
-                         data-error-callback="onRecaptchaError"></div>
+                    <div id="recaptcha-container"></div>
                     <script>
                       function safePostMessage(message) {
                         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -1129,7 +1146,22 @@ export default function EditProfileScreen() {
                       function onRecaptchaError() {
                         safePostMessage(JSON.stringify({ event: 'error' }));
                       }
+                      
+                      var onloadCallback = function() {
+                        try {
+                          grecaptcha.render('recaptcha-container', {
+                            'sitekey' : '${recaptchaSiteKey}',
+                            'callback' : onRecaptchaSuccess,
+                            'expired-callback': onRecaptchaExpired,
+                            'error-callback': onRecaptchaError
+                          });
+                        } catch (e) {
+                          console.error("reCAPTCHA render error: ", e);
+                          safePostMessage(JSON.stringify({ event: 'error' }));
+                        }
+                      };
                     </script>
+                    <script src="https://www.google.com/recaptcha/api.js?onload=onloadCallback&render=explicit" async defer></script>
                   </body>
                   </html>
                 `,

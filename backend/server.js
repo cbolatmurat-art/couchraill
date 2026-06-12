@@ -3160,7 +3160,8 @@ async function checkFirebaseVerification(sessionInfo, code) {
 
 app.get('/api/auth/firebase-config', (req, res) => {
   res.json({
-    projectId: process.env.FIREBASE_PROJECT_ID || 'smsproject-10ae9'
+    projectId: process.env.FIREBASE_PROJECT_ID || 'smsproject-10ae9',
+    recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY || ''
   });
 });
 
@@ -3169,6 +3170,21 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
 
   if (!userId) {
     return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
+  }
+
+  const siteKey = process.env.RECAPTCHA_SITE_KEY;
+  if (!siteKey) {
+    return res.status(500).json({
+      success: false,
+      error: 'Google reCAPTCHA site anahtarı (Site Key) sunucuda tanımlanmamış. Lütfen Google reCAPTCHA Admin Console üzerinden v2 site anahtarı alıp sunucu çevre değişkenlerine (RECAPTCHA_SITE_KEY) ekleyin.'
+    });
+  }
+
+  if (siteKey.startsWith('AIzaSy')) {
+    return res.status(500).json({
+      success: false,
+      error: 'Hatalı Yapılandırma: Firebase API anahtarı, Google reCAPTCHA site anahtarı (Site Key) olarak kullanılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden doğru reCAPTCHA v2 site anahtarını alıp sunucu çevre değişkenlerinde RECAPTCHA_SITE_KEY olarak tanımlayın.'
+    });
   }
 
   if (!FIREBASE_API_KEY) {
