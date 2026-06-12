@@ -3171,32 +3171,43 @@ app.get('/api/auth/firebase-config', (req, res) => {
 });
 
 app.post('/api/auth/send-phone-verification', async (req, res) => {
-  return res.status(400).json({
-    success: false,
-    error: 'Bu yöntem artık kullanılmıyor. Lütfen istemci tarafı resmi Firebase SDK doğrulama akışını kullanın.'
-  });
-});
+  const { userId, phone: reqPhone } = req.body;
+  if (!userId || !reqPhone) {
+    return res.status(400).json({ success: false, error: 'Kullanıcı ID ve telefon numarası gereklidir.' });
+  }
 
-app.post('/api/auth/verify-phone-code', async (req, res) => {
-  return res.status(400).json({
-    success: false,
-    error: 'Bu yöntem artık kullanılmıyor. Lütfen istemci tarafı resmi Firebase SDK doğrulama akışını kullanın.'
-  });
+  try {
+    let formattedPhone = reqPhone.trim();
+    if (formattedPhone.startsWith('5') && formattedPhone.length === 10) {
+      formattedPhone = '+90' + formattedPhone;
+    } else if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+
+    if (!accountSid || !authToken || !verifyServiceSid) {
+      return res.status(500).json({ success: false, error: 'Twilio yapılandırması eksik.' });
+    }
+
+    const twilio = require('twilio')(accountSid, authToken);
+    const verification = await twilio.verify.v2.services(verifyServiceSid)
+      .verifications.create({ to: formattedPhone, channel: 'sms' });
+
+    return res.status(200).json({ success: true, message: 'Doğrulama kodu gönderildi.', status: verification.status });
+  } catch (error) {
+    console.error('Twilio send error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Kod gönderilemedi.' });
+  }
 });
 
 app.post('/api/auth/confirm-phone-verification', async (req, res) => {
-  const { userId, phone: reqPhone, idToken } = req.body;
+  const { userId, phone: reqPhone, code } = req.body;
 
-  if (!userId) {
-    return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
-  }
-
-  if (!idToken) {
-    return res.status(400).json({ success: false, error: 'Doğrulama tokeni eksik.' });
-  }
-
-  if (!FIREBASE_API_KEY) {
-    return res.status(500).json({ success: false, error: 'Firebase API anahtarı yapılandırılmamış.' });
+  if (!userId || !code || !reqPhone) {
+    return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
   }
 
   const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -3209,33 +3220,30 @@ app.post('/api/auth/confirm-phone-verification', async (req, res) => {
   }
 
   try {
-    // 1. Verify the ID Token with Firebase Auth REST API (accounts:lookup)
-    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`;
-    const lookupRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken })
-    });
-    const lookupData = await lookupRes.json();
-
-    if (!lookupRes.ok) {
-      throw new Error(lookupData.error?.message || 'Token doğrulaması başarısız oldu.');
+    let formattedPhone = reqPhone.trim();
+    if (formattedPhone.startsWith('5') && formattedPhone.length === 10) {
+      formattedPhone = '+90' + formattedPhone;
+    } else if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
     }
 
-    const firebaseUser = lookupData.users?.[0];
-    if (!firebaseUser || !firebaseUser.phoneNumber) {
-      throw new Error('Doğrulanmış telefon numarası bulunamadı.');
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+
+    if (!accountSid || !authToken || !verifyServiceSid) {
+      return res.status(500).json({ success: false, error: 'Twilio yapılandırması eksik.' });
     }
 
-    const normalizedPhone = normalizePhone(reqPhone || firebaseUser.phoneNumber);
-    const firebasePhone = normalizePhone(firebaseUser.phoneNumber);
+    const twilio = require('twilio')(accountSid, authToken);
+    const verificationCheck = await twilio.verify.v2.services(verifyServiceSid)
+      .verificationChecks.create({ to: formattedPhone, code });
 
-    if (normalizedPhone !== firebasePhone) {
-      return res.status(400).json({
-        success: false,
-        error: 'Doğrulanan telefon numarası girilen numara ile eşleşmiyor.'
-      });
+    if (verificationCheck.status !== 'approved') {
+      return res.status(400).json({ success: false, error: 'Hatalı veya süresi dolmuş kod.' });
     }
+
+    const normalizedPhone = formattedPhone;
 
     // Check for phone number conflicts
     const { rows: phoneConflict } = await query(
@@ -3285,8 +3293,8 @@ app.post('/api/auth/confirm-phone-verification', async (req, res) => {
       user: updatedUsers[0]
     });
   } catch (error) {
-    console.error('Error verifying phone token:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Error verifying phone code with Twilio:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Doğrulama işlemi başarısız oldu.' });
   }
 });
 

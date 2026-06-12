@@ -106,33 +106,7 @@ export default function EditProfileScreen() {
   const [phoneVerifyError, setPhoneVerifyError] = useState('');
   const [phoneDevCode, setPhoneDevCode] = useState('');
 
-  // reCAPTCHA State
-  const [isRecaptchaVisible, setIsRecaptchaVisible] = useState(false);
-  const [firebaseProjectId, setFirebaseProjectId] = useState('');
-  const [recaptchaSiteKey, setRecaptchaSiteKey] = useState('');
-  const hasRecaptchaTokenReceived = React.useRef(false);
-  const [isFirebaseConfigLoaded, setIsFirebaseConfigLoaded] = useState(false);
-  const [firebaseConfig, setFirebaseConfig] = useState<any>(null);
-  const recaptchaWebViewRef = React.useRef<WebView>(null);
 
-  // Fetch firebase config on load to configure the reCAPTCHA domain and sitekey
-  React.useEffect(() => {
-    fetch(`${API_BASE_URL}/auth/firebase-config`)
-      .then(res => res.json())
-      .then(data => {
-        if (data) {
-          setFirebaseConfig(data);
-          if (data.projectId) {
-            setFirebaseProjectId(data.projectId);
-          }
-          if (data.recaptchaSiteKey) {
-            setRecaptchaSiteKey(data.recaptchaSiteKey);
-          }
-          setIsFirebaseConfigLoaded(true);
-        }
-      })
-      .catch(err => console.error('Error fetching firebase config:', err));
-  }, []);
 
   // Reset verification state if the user changes (safety: different account)
   React.useEffect(() => {
@@ -325,11 +299,6 @@ export default function EditProfileScreen() {
   };
 
   const handleOpenPhoneVerification = async () => {
-    console.log("VERIFY_PHONE_CLICK", {
-      inputPhone: `+90${phone}`,
-      userPhone: currentUser?.phone
-    });
-    
     if (!phone.trim()) {
       setErrorMsg('Geçerli bir telefon numarası girin.');
       return;
@@ -341,31 +310,40 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // Check if Firebase Config is loaded
-    if (!isFirebaseConfigLoaded || !firebaseConfig) {
-      const errMsg = 'Firebase yapılandırması yüklenemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.';
-      setErrorMsg(errMsg);
-      Alert.alert('Hata', errMsg);
-      return;
-    }
+    try {
+      setIsPhoneVerifying(true);
+      setPhoneVerifyError('');
+      
+      const res = await fetch(`${API_BASE_URL}/auth/send-phone-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, phone: phone.trim() })
+      });
+      const data = await res.json().catch(() => null);
 
-    // Check if reCAPTCHA Site Key is configured and valid
-    if (!recaptchaSiteKey) {
-      const errMsg = 'Google reCAPTCHA Site Anahtarı (Site Key) tanımlanmamış. Telefon doğrulama başlatılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden v2 site anahtarı alıp sunucu çevre değişkenlerine (RECAPTCHA_SITE_KEY) ekleyin.';
-      setErrorMsg(errMsg);
-      Alert.alert('Sistem Yapılandırma Hatası', errMsg);
-      return;
-    }
+      if (res.status === 401) {
+        AlertHelper.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
+        await logout();
+        router.replace('/(auth)/login');
+        return;
+      }
 
-    if (recaptchaSiteKey.startsWith('AIzaSy')) {
-      const errMsg = 'Hatalı Yapılandırma: Firebase API anahtarı, Google reCAPTCHA site anahtarı (Site Key) olarak kullanılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden doğru reCAPTCHA v2 site anahtarını alıp RECAPTCHA_SITE_KEY olarak tanımlayın.';
-      setErrorMsg(errMsg);
-      Alert.alert('Hatalı Yapılandırma', errMsg);
-      return;
+      if (res.ok && data?.success) {
+        setPhoneVerificationCooldown(60);
+        setIsPhoneModalVisible(true);
+        setPhoneVerificationCode('');
+        setPhoneVerifyError('');
+        setToastMsg('Doğrulama kodu telefonunuza gönderildi.');
+      } else {
+        const errMsg = data?.error || data?.message || 'Kod gönderilemedi.';
+        setPhoneVerifyError(errMsg);
+        if (!isPhoneModalVisible) setErrorMsg(errMsg);
+      }
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Sunucuya ulaşılamıyor.');
+    } finally {
+      setIsPhoneVerifying(false);
     }
-
-    hasRecaptchaTokenReceived.current = false;
-    setIsRecaptchaVisible(true);
   };
 
   const handleVerifyPhone = async () => {
@@ -378,28 +356,13 @@ export default function EditProfileScreen() {
       setIsPhoneVerifying(true);
       setPhoneVerifyError('');
 
-      // Inject confirmCode into WebView
-      recaptchaWebViewRef.current?.injectJavaScript(
-        "if (window.confirmCode) { window.confirmCode('" + phoneVerificationCode + "'); } true;"
-      );
-    } catch (e: any) {
-      setPhoneVerifyError(e?.message || 'Kod doğrulanamadı.');
-      setIsPhoneVerifying(false);
-    }
-  };
-
-  const handleCompletePhoneVerification = async (idToken: string) => {
-    try {
-      setIsPhoneVerifying(true);
-      setPhoneVerifyError('');
-
       const res = await fetch(`${API_BASE_URL}/auth/confirm-phone-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser?.id,
-          phone: `+90${phone.trim()}`,
-          idToken: idToken
+          phone: phone.trim(),
+          code: phoneVerificationCode
         })
       });
       const data = await res.json().catch(() => null);
@@ -1023,7 +986,7 @@ export default function EditProfileScreen() {
                   style={[styles.modalCancelOption, { marginTop: 12 }]} 
                   onPress={() => {
                     setIsPhoneModalVisible(false);
-                    setIsRecaptchaVisible(true);
+                    handleOpenPhoneVerification();
                   }}
                   disabled={phoneVerificationCooldown > 0 || isPhoneVerifying}
                 >
@@ -1044,180 +1007,7 @@ export default function EditProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Persistent reCAPTCHA WebView for Firebase Auth */}
-      {isFirebaseConfigLoaded && firebaseConfig && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 9999,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: isRecaptchaVisible ? 'flex' : 'none',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 20
-        }}>
-          <View style={{
-            backgroundColor: '#fff',
-            borderRadius: 12,
-            width: '100%',
-            height: '80%',
-            overflow: 'hidden'
-          }}>
-            <View style={[styles.modalHeader, { padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border || '#e2e8f0' }]}>
-              <Text style={styles.modalTitle}>Güvenlik Doğrulaması</Text>
-              <Pressable onPress={() => {
-                setIsRecaptchaVisible(false);
-                if (!hasRecaptchaTokenReceived.current) {
-                  setErrorMsg('Doğrulama tamamlanamadı, tekrar deneyin.');
-                }
-              }}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </Pressable>
-            </View>
-            <WebView
-              ref={recaptchaWebViewRef}
-              source={{
-                html: `
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                      body {
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 90vh;
-                        margin: 0;
-                        background-color: #ffffff;
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <div id="recaptcha-container"></div>
-                    
-                    <script type="module">
-                      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-                      import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
-                      const firebaseConfig = {
-                        apiKey: "${firebaseConfig.apiKey}",
-                        authDomain: "${firebaseConfig.authDomain}",
-                        projectId: "${firebaseConfig.projectId}",
-                        storageBucket: "${firebaseConfig.storageBucket}",
-                        messagingSenderId: "${firebaseConfig.messagingSenderId}",
-                        appId: "${firebaseConfig.appId}"
-                      };
-
-                      const app = initializeApp(firebaseConfig);
-                      const auth = getAuth(app);
-                      let confirmationResult = null;
-
-                      function safePostMessage(message) {
-                        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                          window.ReactNativeWebView.postMessage(message);
-                        }
-                      }
-
-                      window.onload = function() {
-                        try {
-                          window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
-                            'size': 'normal',
-                            'callback': (response) => {
-                              safePostMessage(JSON.stringify({ event: 'recaptcha_solved' }));
-                            },
-                            'expired-callback': () => {
-                              safePostMessage(JSON.stringify({ event: 'expired' }));
-                            },
-                            'error-callback': () => {
-                              safePostMessage(JSON.stringify({ event: 'error' }));
-                            }
-                          }, auth);
-
-                          window.recaptchaVerifier.render().then((widgetId) => {
-                            window.recaptchaWidgetId = widgetId;
-                          });
-                        } catch (e) {
-                          safePostMessage(JSON.stringify({ event: 'error', message: e.message }));
-                        }
-                      };
-
-                      window.startVerification = function(phoneNumber) {
-                        signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier)
-                          .then((result) => {
-                            confirmationResult = result;
-                            safePostMessage(JSON.stringify({ event: 'sms_sent' }));
-                          })
-                          .catch((error) => {
-                            safePostMessage(JSON.stringify({ event: 'sms_failed', message: error.message }));
-                          });
-                      };
-
-                      window.confirmCode = function(code) {
-                        if (!confirmationResult) {
-                          safePostMessage(JSON.stringify({ event: 'confirm_failed', message: 'No confirmation result active.' }));
-                          return;
-                        }
-                        confirmationResult.confirm(code)
-                          .then((result) => {
-                            result.user.getIdToken().then((idToken) => {
-                              safePostMessage(JSON.stringify({ event: 'verified', idToken: idToken }));
-                            });
-                          })
-                          .catch((error) => {
-                            safePostMessage(JSON.stringify({ event: 'confirm_failed', message: error.message }));
-                          });
-                      };
-                    </script>
-                  </body>
-                  </html>
-                `,
-                baseUrl: firebaseProjectId ? `https://${firebaseProjectId}.firebaseapp.com/` : 'https://smsproject-10ae9.firebaseapp.com/'
-              }}
-              onMessage={(event) => {
-                try {
-                  const data = JSON.parse(event.nativeEvent.data);
-                  if (data && typeof data === 'object' && data.event) {
-                    if (data.event === 'recaptcha_solved') {
-                      const formattedPhone = "+90" + phone.trim();
-                      recaptchaWebViewRef.current?.injectJavaScript(
-                        "if (window.startVerification) { window.startVerification('" + formattedPhone + "'); } true;"
-                      );
-                    } else if (data.event === 'sms_sent') {
-                      hasRecaptchaTokenReceived.current = true;
-                      setIsRecaptchaVisible(false);
-                      setIsPhoneModalVisible(true);
-                      setPhoneVerificationCode('');
-                      setPhoneVerifyError('');
-                      setPhoneVerificationCooldown(60);
-                      setToastMsg('ℹ️ Kod telefonunuza gönderildi.');
-                    } else if (data.event === 'sms_failed') {
-                      setIsRecaptchaVisible(false);
-                      setErrorMsg(data.message || 'SMS gönderilemedi.');
-                      Alert.alert('Hata', data.message || 'SMS gönderilemedi.');
-                    } else if (data.event === 'verified' && data.idToken) {
-                      handleCompletePhoneVerification(data.idToken);
-                    } else if (data.event === 'confirm_failed') {
-                      setPhoneVerifyError(data.message || 'Kod doğrulanamadı.');
-                      setIsPhoneVerifying(false);
-                    } else if (data.event === 'expired') {
-                      setErrorMsg('Doğrulama süresi doldu, lütfen tekrar deneyin.');
-                    } else if (data.event === 'error') {
-                      setErrorMsg('Güvenlik doğrulaması yüklenemedi veya bir hata oluştu.');
-                    }
-                  }
-                } catch (e) {
-                  // Ignore non-JSON messages
-                }
-              }}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
