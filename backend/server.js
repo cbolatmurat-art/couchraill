@@ -3160,7 +3160,7 @@ async function checkFirebaseVerification(sessionInfo, code) {
 
 app.get('/api/auth/firebase-config', (req, res) => {
   res.json({
-    projectId: process.env.FIREBASE_PROJECT_ID || ''
+    projectId: process.env.FIREBASE_PROJECT_ID || 'smsproject-10ae9'
   });
 });
 

@@ -109,6 +109,7 @@ export default function EditProfileScreen() {
   // reCAPTCHA State
   const [isRecaptchaVisible, setIsRecaptchaVisible] = useState(false);
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
+  const hasRecaptchaTokenReceived = React.useRef(false);
 
   // Fetch firebase project ID on load to configure the reCAPTCHA domain
   React.useEffect(() => {
@@ -328,10 +329,15 @@ export default function EditProfileScreen() {
       setPhoneVerifyError('');
       return;
     }
+    hasRecaptchaTokenReceived.current = false;
     setIsRecaptchaVisible(true);
   };
 
   const handleSendPhoneVerificationCode = async (recaptchaToken?: string) => {
+    if (!recaptchaToken) {
+      setErrorMsg('Doğrulama tamamlanamadı, tekrar deneyin.');
+      return;
+    }
     if (!phone.trim()) {
       setErrorMsg('Geçerli bir telefon numarası girin.');
       return;
@@ -1055,13 +1061,23 @@ export default function EditProfileScreen() {
         visible={isRecaptchaVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setIsRecaptchaVisible(false)}
+        onRequestClose={() => {
+          setIsRecaptchaVisible(false);
+          if (!hasRecaptchaTokenReceived.current) {
+            setErrorMsg('Doğrulama tamamlanamadı, tekrar deneyin.');
+          }
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { height: '80%', padding: 0, overflow: 'hidden' }]}>
             <View style={[styles.modalHeader, { padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border || '#e2e8f0' }]}>
               <Text style={styles.modalTitle}>Güvenlik Doğrulaması</Text>
-              <Pressable onPress={() => setIsRecaptchaVisible(false)}>
+              <Pressable onPress={() => {
+                setIsRecaptchaVisible(false);
+                if (!hasRecaptchaTokenReceived.current) {
+                  setErrorMsg('Doğrulama tamamlanamadı, tekrar deneyin.');
+                }
+              }}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </Pressable>
             </View>
@@ -1091,33 +1107,50 @@ export default function EditProfileScreen() {
                          data-expired-callback="onRecaptchaExpired"
                          data-error-callback="onRecaptchaError"></div>
                     <script>
+                      function safePostMessage(message) {
+                        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                          window.ReactNativeWebView.postMessage(message);
+                        } else {
+                          setTimeout(function() {
+                            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                              window.ReactNativeWebView.postMessage(message);
+                            } else {
+                              console.error("ReactNativeWebView.postMessage is not available");
+                            }
+                          }, 250);
+                        }
+                      }
                       function onRecaptchaSuccess(token) {
-                        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'success', token: token }));
+                        safePostMessage(JSON.stringify({ event: 'success', token: token }));
                       }
                       function onRecaptchaExpired() {
-                        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'expired' }));
+                        safePostMessage(JSON.stringify({ event: 'expired' }));
                       }
                       function onRecaptchaError() {
-                        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'error' }));
+                        safePostMessage(JSON.stringify({ event: 'error' }));
                       }
                     </script>
                   </body>
                   </html>
                 `,
-                baseUrl: firebaseProjectId ? `https://${firebaseProjectId}.firebaseapp.com` : 'https://couchraill.firebaseapp.com'
+                baseUrl: firebaseProjectId ? `https://${firebaseProjectId}.firebaseapp.com/` : 'https://smsproject-10ae9.firebaseapp.com/'
               }}
               onMessage={(event) => {
                 try {
                   const data = JSON.parse(event.nativeEvent.data);
-                  if (data.event === 'success' && data.token) {
-                    setIsRecaptchaVisible(false);
-                    handleSendPhoneVerificationCode(data.token);
-                  } else if (data.event === 'expired' || data.event === 'error') {
-                    setIsRecaptchaVisible(false);
-                    setErrorMsg('Doğrulama başarısız oldu veya süresi doldu.');
+                  if (data && typeof data === 'object' && data.event) {
+                    if (data.event === 'success' && data.token) {
+                      hasRecaptchaTokenReceived.current = true;
+                      setIsRecaptchaVisible(false);
+                      handleSendPhoneVerificationCode(data.token);
+                    } else if (data.event === 'expired') {
+                      setErrorMsg('Doğrulama süresi doldu, lütfen tekrar deneyin.');
+                    } else if (data.event === 'error') {
+                      setErrorMsg('Güvenlik doğrulaması yüklenemedi veya bir hata oluştu.');
+                    }
                   }
                 } catch (e) {
-                  console.error('Error parsing WebView message:', e);
+                  // Not our JSON message, ignore it safely
                 }
               }}
               style={{ flex: 1 }}
