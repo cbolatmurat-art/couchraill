@@ -111,6 +111,9 @@ export default function EditProfileScreen() {
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
   const [recaptchaSiteKey, setRecaptchaSiteKey] = useState('');
   const hasRecaptchaTokenReceived = React.useRef(false);
+  const [isFirebaseConfigLoaded, setIsFirebaseConfigLoaded] = useState(false);
+  const [firebaseConfig, setFirebaseConfig] = useState<any>(null);
+  const recaptchaWebViewRef = React.useRef<WebView>(null);
 
   // Fetch firebase config on load to configure the reCAPTCHA domain and sitekey
   React.useEffect(() => {
@@ -118,12 +121,14 @@ export default function EditProfileScreen() {
       .then(res => res.json())
       .then(data => {
         if (data) {
+          setFirebaseConfig(data);
           if (data.projectId) {
             setFirebaseProjectId(data.projectId);
           }
           if (data.recaptchaSiteKey) {
             setRecaptchaSiteKey(data.recaptchaSiteKey);
           }
+          setIsFirebaseConfigLoaded(true);
         }
       })
       .catch(err => console.error('Error fetching firebase config:', err));
@@ -336,6 +341,14 @@ export default function EditProfileScreen() {
       return;
     }
 
+    // Check if Firebase Config is loaded
+    if (!isFirebaseConfigLoaded || !firebaseConfig) {
+      const errMsg = 'Firebase yapılandırması yüklenemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.';
+      setErrorMsg(errMsg);
+      Alert.alert('Hata', errMsg);
+      return;
+    }
+
     // Check if reCAPTCHA Site Key is configured and valid
     if (!recaptchaSiteKey) {
       const errMsg = 'Google reCAPTCHA Site Anahtarı (Site Key) tanımlanmamış. Telefon doğrulama başlatılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden v2 site anahtarı alıp sunucu çevre değişkenlerine (RECAPTCHA_SITE_KEY) ekleyin.';
@@ -355,67 +368,6 @@ export default function EditProfileScreen() {
     setIsRecaptchaVisible(true);
   };
 
-  const handleSendPhoneVerificationCode = async (recaptchaToken?: string) => {
-    if (!recaptchaToken) {
-      setErrorMsg('Doğrulama tamamlanamadı, tekrar deneyin.');
-      return;
-    }
-    if (!phone.trim()) {
-      setErrorMsg('Geçerli bir telefon numarası girin.');
-      return;
-    }
-    if (phoneVerificationCooldown > 0) return;
-
-    try {
-      setIsPhoneVerifying(true);
-      setPhoneVerifyError('');
-      
-      const res = await fetch(`${API_BASE_URL}/auth/send-phone-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: currentUser.id, 
-          phone: `+90${phone.trim()}`,
-          recaptchaToken: recaptchaToken
-        })
-      });
-      const data = await res.json().catch(() => null);
-
-      if (res.status === 429) {
-        const remaining = data?.remainingSeconds || 60;
-        setPhoneVerificationCooldown(remaining);
-        setIsPhoneModalVisible(true);
-        setPhoneVerifyError(data?.error || `Lütfen ${remaining} saniye bekleyin.`);
-        return;
-      }
-
-      if (res.ok && data?.success) {
-        setPhoneVerificationCooldown(60);
-        setIsPhoneModalVisible(true);
-        setPhoneVerificationCode('');
-        setPhoneVerifyError('');
-        if (data.devCode) {
-          setPhoneDevCode(data.devCode);
-        } else {
-          setPhoneDevCode('');
-          setToastMsg('ℹ️ Kod telefonunuza gönderildi.');
-        }
-      } else {
-        const errMsg = data?.detail || data?.message || data?.error || 'Kod gönderilemedi.';
-        setPhoneVerifyError(errMsg);
-        if (!isPhoneModalVisible) setErrorMsg(errMsg);
-      }
-    } catch (e: any) {
-      if (e?.name === 'AbortError' || e?.message?.includes("Network") || e?.message?.includes("fetch") || e?.message?.includes("connect")) {
-        setErrorMsg('Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.');
-      } else {
-        setErrorMsg(e?.message || 'Kod gönderilemedi.');
-      }
-    } finally {
-      setIsPhoneVerifying(false);
-    }
-  };
-
   const handleVerifyPhone = async () => {
     if (phoneVerificationCode.length !== 6) {
       setPhoneVerifyError('Lütfen 6 haneli kodu girin.');
@@ -426,20 +378,34 @@ export default function EditProfileScreen() {
       setIsPhoneVerifying(true);
       setPhoneVerifyError('');
 
-      const res = await fetch(`${API_BASE_URL}/auth/verify-phone-code`, {
+      // Inject confirmCode into WebView
+      recaptchaWebViewRef.current?.injectJavaScript(
+        "if (window.confirmCode) { window.confirmCode('" + phoneVerificationCode + "'); } true;"
+      );
+    } catch (e: any) {
+      setPhoneVerifyError(e?.message || 'Kod doğrulanamadı.');
+      setIsPhoneVerifying(false);
+    }
+  };
+
+  const handleCompletePhoneVerification = async (idToken: string) => {
+    try {
+      setIsPhoneVerifying(true);
+      setPhoneVerifyError('');
+
+      const res = await fetch(`${API_BASE_URL}/auth/confirm-phone-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, code: phoneVerificationCode, phone: `+90${phone.trim()}` })
+        body: JSON.stringify({
+          userId: currentUser?.id,
+          phone: `+90${phone.trim()}`,
+          idToken: idToken
+        })
       });
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.success) {
-        if (data.user) {
-          setPhone(data.user.phone);
-          await updateProfile({ phone: data.user.phone, phoneVerified: true });
-        } else {
-          await updateProfile({ phone: `+90${phone.trim()}`, phoneVerified: true });
-        }
+        await updateProfile({ phone: `+90${phone.trim()}`, phoneVerified: true });
         setIsPhoneModalVisible(false);
         setPhoneVerificationCode('');
         setPhoneVerificationCooldown(0);
@@ -448,7 +414,7 @@ export default function EditProfileScreen() {
         setPhoneVerifyError(data?.error || data?.message || 'Doğrulama başarısız.');
       }
     } catch (e: any) {
-      setPhoneVerifyError(e?.message || 'Sunucu bağlantı hatası.');
+      setPhoneVerifyError(e?.message || 'Doğrulama tamamlanamadı.');
     } finally {
       setIsPhoneVerifying(false);
     }
@@ -1078,20 +1044,28 @@ export default function EditProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* reCAPTCHA Modal */}
-      <Modal
-        visible={isRecaptchaVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setIsRecaptchaVisible(false);
-          if (!hasRecaptchaTokenReceived.current) {
-            setErrorMsg('Doğrulama tamamlanamadı, tekrar deneyin.');
-          }
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { height: '80%', padding: 0, overflow: 'hidden' }]}>
+      {/* Persistent reCAPTCHA WebView for Firebase Auth */}
+      {isFirebaseConfigLoaded && firebaseConfig && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: isRecaptchaVisible ? 'flex' : 'none',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            width: '100%',
+            height: '80%',
+            overflow: 'hidden'
+          }}>
             <View style={[styles.modalHeader, { padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border || '#e2e8f0' }]}>
               <Text style={styles.modalTitle}>Güvenlik Doğrulaması</Text>
               <Pressable onPress={() => {
@@ -1104,6 +1078,7 @@ export default function EditProfileScreen() {
               </Pressable>
             </View>
             <WebView
+              ref={recaptchaWebViewRef}
               source={{
                 html: `
                   <!DOCTYPE html>
@@ -1123,45 +1098,80 @@ export default function EditProfileScreen() {
                   </head>
                   <body>
                     <div id="recaptcha-container"></div>
-                    <script>
+                    
+                    <script type="module">
+                      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+                      import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+
+                      const firebaseConfig = {
+                        apiKey: "${firebaseConfig.apiKey}",
+                        authDomain: "${firebaseConfig.authDomain}",
+                        projectId: "${firebaseConfig.projectId}",
+                        storageBucket: "${firebaseConfig.storageBucket}",
+                        messagingSenderId: "${firebaseConfig.messagingSenderId}",
+                        appId: "${firebaseConfig.appId}"
+                      };
+
+                      const app = initializeApp(firebaseConfig);
+                      const auth = getAuth(app);
+                      let confirmationResult = null;
+
                       function safePostMessage(message) {
                         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
                           window.ReactNativeWebView.postMessage(message);
-                        } else {
-                          setTimeout(function() {
-                            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                              window.ReactNativeWebView.postMessage(message);
-                            } else {
-                              console.error("ReactNativeWebView.postMessage is not available");
-                            }
-                          }, 250);
                         }
                       }
-                      function onRecaptchaSuccess(token) {
-                        safePostMessage(JSON.stringify({ event: 'success', token: token }));
-                      }
-                      function onRecaptchaExpired() {
-                        safePostMessage(JSON.stringify({ event: 'expired' }));
-                      }
-                      function onRecaptchaError() {
-                        safePostMessage(JSON.stringify({ event: 'error' }));
-                      }
-                      
-                      var onloadCallback = function() {
+
+                      window.onload = function() {
                         try {
-                          grecaptcha.render('recaptcha-container', {
-                            'sitekey' : '${recaptchaSiteKey}',
-                            'callback' : onRecaptchaSuccess,
-                            'expired-callback': onRecaptchaExpired,
-                            'error-callback': onRecaptchaError
+                          window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
+                            'size': 'normal',
+                            'callback': (response) => {
+                              safePostMessage(JSON.stringify({ event: 'recaptcha_solved' }));
+                            },
+                            'expired-callback': () => {
+                              safePostMessage(JSON.stringify({ event: 'expired' }));
+                            },
+                            'error-callback': () => {
+                              safePostMessage(JSON.stringify({ event: 'error' }));
+                            }
+                          }, auth);
+
+                          window.recaptchaVerifier.render().then((widgetId) => {
+                            window.recaptchaWidgetId = widgetId;
                           });
                         } catch (e) {
-                          console.error("reCAPTCHA render error: ", e);
-                          safePostMessage(JSON.stringify({ event: 'error' }));
+                          safePostMessage(JSON.stringify({ event: 'error', message: e.message }));
                         }
                       };
+
+                      window.startVerification = function(phoneNumber) {
+                        signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier)
+                          .then((result) => {
+                            confirmationResult = result;
+                            safePostMessage(JSON.stringify({ event: 'sms_sent' }));
+                          })
+                          .catch((error) => {
+                            safePostMessage(JSON.stringify({ event: 'sms_failed', message: error.message }));
+                          });
+                      };
+
+                      window.confirmCode = function(code) {
+                        if (!confirmationResult) {
+                          safePostMessage(JSON.stringify({ event: 'confirm_failed', message: 'No confirmation result active.' }));
+                          return;
+                        }
+                        confirmationResult.confirm(code)
+                          .then((result) => {
+                            result.user.getIdToken().then((idToken) => {
+                              safePostMessage(JSON.stringify({ event: 'verified', idToken: idToken }));
+                            });
+                          })
+                          .catch((error) => {
+                            safePostMessage(JSON.stringify({ event: 'confirm_failed', message: error.message }));
+                          });
+                      };
                     </script>
-                    <script src="https://www.google.com/recaptcha/api.js?onload=onloadCallback&render=explicit" async defer></script>
                   </body>
                   </html>
                 `,
@@ -1171,10 +1181,28 @@ export default function EditProfileScreen() {
                 try {
                   const data = JSON.parse(event.nativeEvent.data);
                   if (data && typeof data === 'object' && data.event) {
-                    if (data.event === 'success' && data.token) {
+                    if (data.event === 'recaptcha_solved') {
+                      const formattedPhone = "+90" + phone.trim();
+                      recaptchaWebViewRef.current?.injectJavaScript(
+                        "if (window.startVerification) { window.startVerification('" + formattedPhone + "'); } true;"
+                      );
+                    } else if (data.event === 'sms_sent') {
                       hasRecaptchaTokenReceived.current = true;
                       setIsRecaptchaVisible(false);
-                      handleSendPhoneVerificationCode(data.token);
+                      setIsPhoneModalVisible(true);
+                      setPhoneVerificationCode('');
+                      setPhoneVerifyError('');
+                      setPhoneVerificationCooldown(60);
+                      setToastMsg('ℹ️ Kod telefonunuza gönderildi.');
+                    } else if (data.event === 'sms_failed') {
+                      setIsRecaptchaVisible(false);
+                      setErrorMsg(data.message || 'SMS gönderilemedi.');
+                      Alert.alert('Hata', data.message || 'SMS gönderilemedi.');
+                    } else if (data.event === 'verified' && data.idToken) {
+                      handleCompletePhoneVerification(data.idToken);
+                    } else if (data.event === 'confirm_failed') {
+                      setPhoneVerifyError(data.message || 'Kod doğrulanamadı.');
+                      setIsPhoneVerifying(false);
                     } else if (data.event === 'expired') {
                       setErrorMsg('Doğrulama süresi doldu, lütfen tekrar deneyin.');
                     } else if (data.event === 'error') {
@@ -1182,14 +1210,14 @@ export default function EditProfileScreen() {
                     }
                   }
                 } catch (e) {
-                  // Not our JSON message, ignore it safely
+                  // Ignore non-JSON messages
                 }
               }}
               style={{ flex: 1 }}
             />
           </View>
         </View>
-      </Modal>
+      )}
     </SafeAreaView>
   );
 }

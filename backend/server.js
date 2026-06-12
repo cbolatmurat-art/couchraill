@@ -3161,30 +3161,38 @@ async function checkFirebaseVerification(sessionInfo, code) {
 app.get('/api/auth/firebase-config', (req, res) => {
   res.json({
     projectId: process.env.FIREBASE_PROJECT_ID || 'smsproject-10ae9',
-    recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY || ''
+    recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY || '',
+    apiKey: process.env.FIREBASE_API_KEY || '',
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+    appId: process.env.FIREBASE_APP_ID || ''
   });
 });
 
 app.post('/api/auth/send-phone-verification', async (req, res) => {
-  const { userId, phone: reqPhone, recaptchaToken } = req.body;
+  return res.status(400).json({
+    success: false,
+    error: 'Bu yöntem artık kullanılmıyor. Lütfen istemci tarafı resmi Firebase SDK doğrulama akışını kullanın.'
+  });
+});
+
+app.post('/api/auth/verify-phone-code', async (req, res) => {
+  return res.status(400).json({
+    success: false,
+    error: 'Bu yöntem artık kullanılmıyor. Lütfen istemci tarafı resmi Firebase SDK doğrulama akışını kullanın.'
+  });
+});
+
+app.post('/api/auth/confirm-phone-verification', async (req, res) => {
+  const { userId, phone: reqPhone, idToken } = req.body;
 
   if (!userId) {
     return res.status(401).json({ success: false, error: 'Oturum geçersiz.' });
   }
 
-  const siteKey = process.env.RECAPTCHA_SITE_KEY;
-  if (!siteKey) {
-    return res.status(500).json({
-      success: false,
-      error: 'Google reCAPTCHA site anahtarı (Site Key) sunucuda tanımlanmamış. Lütfen Google reCAPTCHA Admin Console üzerinden v2 site anahtarı alıp sunucu çevre değişkenlerine (RECAPTCHA_SITE_KEY) ekleyin.'
-    });
-  }
-
-  if (siteKey.startsWith('AIzaSy')) {
-    return res.status(500).json({
-      success: false,
-      error: 'Hatalı Yapılandırma: Firebase API anahtarı, Google reCAPTCHA site anahtarı (Site Key) olarak kullanılamaz. Lütfen Google reCAPTCHA Admin Console üzerinden doğru reCAPTCHA v2 site anahtarını alıp sunucu çevre değişkenlerinde RECAPTCHA_SITE_KEY olarak tanımlayın.'
-    });
+  if (!idToken) {
+    return res.status(400).json({ success: false, error: 'Doğrulama tokeni eksik.' });
   }
 
   if (!FIREBASE_API_KEY) {
@@ -3200,132 +3208,62 @@ app.post('/api/auth/send-phone-verification', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı veya hesap silinmiş.' });
   }
 
-  const rawPhone = reqPhone || user.phone;
-  if (!rawPhone) {
-    return res.status(400).json({ success: false, error: 'Telefon numarası ekleyin.' });
-  }
-
-  const normalizedPhone = normalizePhone(rawPhone);
-
-  const { rows: phoneConflict } = await query(
-    'SELECT id FROM users WHERE phone = $1 AND id != $2 AND active = true AND "isDeleted" = false',
-    [normalizedPhone, userId]
-  );
-  if (phoneConflict.length > 0) {
-    return res.status(409).json({
-      success: false,
-      error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.',
-      message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.'
-    });
-  }
-
-  // Update user.phone in PostgreSQL
-  await query(
-    'UPDATE users SET phone = $1, "phoneVerified" = false WHERE id = $2',
-    [normalizedPhone, userId]
-  );
-
-  // Sync to db.json
-  const db = readDB();
-  const userIndex = db.users.findIndex(u => u.id === userId);
-  if (userIndex !== -1) {
-    db.users[userIndex].phone = normalizedPhone;
-    db.users[userIndex].phoneVerified = false;
-  }
-  writeDB(db);
-
-  const cooldownKey = `${userId}:phone:${normalizedPhone}`;
-  const lastSent = verificationCooldowns.get(cooldownKey);
-  const now = Date.now();
-
-  if (lastSent && (now - lastSent) < VERIFICATION_COOLDOWN_MS) {
-    const remainingSec = Math.ceil((VERIFICATION_COOLDOWN_MS - (now - lastSent)) / 1000);
-    return res.status(429).json({ success: false, error: `Lütfen ${remainingSec} saniye bekleyin.` });
-  }
-
-  if (!db.verifications) db.verifications = [];
-  db.verifications = db.verifications.filter(v => !(v.userId === userId && v.type === 'phone' && !v.used));
-
   try {
-    console.log(`[FIREBASE_SEND] Attempting to send verification to: ${normalizedPhone} (recaptcha: ${recaptchaToken ? 'yes' : 'no'})`);
-    const sessionInfo = await sendFirebaseVerification(normalizedPhone, recaptchaToken);
-    verificationCooldowns.set(cooldownKey, now);
-
-    db.verifications.push({
-      id: `fv${now}_${Math.random().toString(36).slice(2, 6)}`,
-      userId,
-      type: 'phone',
-      target: normalizedPhone,
-      sessionInfo: sessionInfo,
-      expiresAt: now + 10 * 60 * 1000,
-      used: false,
-      createdAt: now
+    // 1. Verify the ID Token with Firebase Auth REST API (accounts:lookup)
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`;
+    const lookupRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
     });
-    writeDB(db);
+    const lookupData = await lookupRes.json();
 
-    return res.status(200).json({ success: true, message: 'Doğrulama kodu gönderildi.' });
-  } catch (err) {
-    console.error('[FIREBASE_SEND_ERROR]', err);
-    return res.status(400).json({ success: false, error: `SMS gönderilemedi: ${err.message}` });
-  }
-});
+    if (!lookupRes.ok) {
+      throw new Error(lookupData.error?.message || 'Token doğrulaması başarısız oldu.');
+    }
 
-app.post('/api/auth/verify-phone-code', async (req, res) => {
-  const { userId, code, phone } = req.body;
-  if (!userId || !code || !phone) {
-    return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
-  }
+    const firebaseUser = lookupData.users?.[0];
+    if (!firebaseUser || !firebaseUser.phoneNumber) {
+      throw new Error('Doğrulanmış telefon numarası bulunamadı.');
+    }
 
-  if (!FIREBASE_API_KEY) {
-    return res.status(500).json({ success: false, error: 'Firebase API anahtarı yapılandırılmamış.' });
-  }
+    const normalizedPhone = normalizePhone(reqPhone || firebaseUser.phoneNumber);
+    const firebasePhone = normalizePhone(firebaseUser.phoneNumber);
 
-  const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
-  const user = users[0];
-  const { rows: deletedRows } = await query('SELECT * FROM deleted_users WHERE "userId" = $1', [userId]);
-  const isDeleted = deletedRows.length > 0 || !user || user.isDeleted === true || user.active === false;
+    if (normalizedPhone !== firebasePhone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Doğrulanan telefon numarası girilen numara ile eşleşmiyor.'
+      });
+    }
 
-  if (isDeleted) {
-    return res.status(401).json({ success: false, error: 'Kullanıcı bulunamadı veya hesap silinmiş.' });
-  }
+    // Check for phone number conflicts
+    const { rows: phoneConflict } = await query(
+      'SELECT id FROM users WHERE phone = $1 AND id != $2 AND active = true AND "isDeleted" = false',
+      [normalizedPhone, userId]
+    );
+    if (phoneConflict.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.',
+        message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.'
+      });
+    }
 
-  const normalizedPhone = normalizePhone(phone || user.phone);
-  if (!normalizedPhone) {
-    return res.status(400).json({ success: false, error: 'Geçerli bir telefon numarası bulunamadı.' });
-  }
-
-  const db = readDB();
-  const vIndex = (db.verifications || []).findIndex(
-    v => v.userId === userId && v.type === 'phone' && v.target === normalizedPhone && !v.used
-  );
-  if (vIndex === -1) {
-    return res.status(400).json({ success: false, error: 'Geçerli bir kod talebi bulunamadı.' });
-  }
-
-  const v = db.verifications[vIndex];
-  if (Date.now() > v.expiresAt) {
-    return res.status(400).json({ success: false, error: 'Kod süresi dolmuş.' });
-  }
-
-  try {
-    console.log(`[FIREBASE_CHECK] Attempting check for ${normalizedPhone} code: ${code}`);
-    await checkFirebaseVerification(v.sessionInfo, code);
-    
-    v.used = true;
-    writeDB(db);
-
-    // Update database
+    // Update user.phone in PostgreSQL
     await query(
       'UPDATE users SET phone = $1, "phoneVerified" = true WHERE id = $2',
       [normalizedPhone, userId]
     );
-    
+
+    // Sync to db.json
+    const db = readDB();
     const userIndex = db.users.findIndex(u => u.id === userId);
     if (userIndex !== -1) {
       db.users[userIndex].phone = normalizedPhone;
       db.users[userIndex].phoneVerified = true;
     }
-    
+
     // Create notification
     createNotification(db, {
       userId,
@@ -3335,20 +3273,20 @@ app.post('/api/auth/verify-phone-code', async (req, res) => {
       senderId: userId,
       senderType: 'user'
     });
-    
+
     writeDB(db);
-    
+
     // Reload updated user
     const { rows: updatedUsers } = await query('SELECT * FROM users WHERE id = $1', [userId]);
-    
+
     return res.status(200).json({
       success: true,
       message: 'Telefon numaranız başarıyla doğrulandı.',
       user: updatedUsers[0]
     });
-  } catch (err) {
-    console.error('[FIREBASE_CHECK_ERROR]', err);
-    return res.status(400).json({ success: false, error: `Doğrulama hatası: ${err.message}` });
+  } catch (error) {
+    console.error('Error verifying phone token:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
