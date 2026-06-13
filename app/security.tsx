@@ -499,9 +499,20 @@ export default function SecurityScreen() {
                       </View>
                     )}
 
-                    {!idFrontImage && !isAnalyzing && (
-                      <Pressable style={styles.captureButton} onPress={takePhoto}>
-                        <View style={styles.captureButtonInner} />
+                    {!idFrontImage && (
+                      <Pressable 
+                        style={[styles.captureButton, isAnalyzing && { borderColor: 'rgba(230, 81, 0, 0.2)' }]} 
+                        onPress={isAnalyzing ? undefined : takePhoto}
+                        disabled={isAnalyzing}
+                      >
+                        <View style={[styles.captureButtonInner, isAnalyzing && { opacity: 0.5 }]} />
+                        {isAnalyzing && (
+                          <ActivityIndicator 
+                            size="large" 
+                            color={Colors.primary} 
+                            style={{ position: 'absolute', transform: [{ scale: 1.35 }] }} 
+                          />
+                        )}
                       </Pressable>
                     )}
                   </View>
@@ -549,9 +560,20 @@ export default function SecurityScreen() {
                       </View>
                     )}
 
-                    {!idBackImage && !isAnalyzing && (
-                      <Pressable style={styles.captureButton} onPress={takePhoto}>
-                        <View style={styles.captureButtonInner} />
+                    {!idBackImage && (
+                      <Pressable 
+                        style={[styles.captureButton, isAnalyzing && { borderColor: 'rgba(230, 81, 0, 0.2)' }]} 
+                        onPress={isAnalyzing ? undefined : takePhoto}
+                        disabled={isAnalyzing}
+                      >
+                        <View style={[styles.captureButtonInner, isAnalyzing && { opacity: 0.5 }]} />
+                        {isAnalyzing && (
+                          <ActivityIndicator 
+                            size="large" 
+                            color={Colors.primary} 
+                            style={{ position: 'absolute', transform: [{ scale: 1.35 }] }} 
+                          />
+                        )}
                       </Pressable>
                     )}
                   </View>
@@ -588,9 +610,20 @@ export default function SecurityScreen() {
                       </View>
                     )}
 
-                    {!selfieImage && !isAnalyzing && (
-                      <Pressable style={styles.captureButton} onPress={takePhoto}>
-                        <View style={styles.captureButtonInner} />
+                    {!selfieImage && (
+                      <Pressable 
+                        style={[styles.captureButton, isAnalyzing && { borderColor: 'rgba(230, 81, 0, 0.2)' }]} 
+                        onPress={isAnalyzing ? undefined : takePhoto}
+                        disabled={isAnalyzing}
+                      >
+                        <View style={[styles.captureButtonInner, isAnalyzing && { opacity: 0.5 }]} />
+                        {isAnalyzing && (
+                          <ActivityIndicator 
+                            size="large" 
+                            color={Colors.primary} 
+                            style={{ position: 'absolute', transform: [{ scale: 1.35 }] }} 
+                          />
+                        )}
                       </Pressable>
                     )}
                   </View>
