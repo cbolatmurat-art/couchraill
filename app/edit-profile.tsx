@@ -298,52 +298,8 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleOpenPhoneVerification = async () => {
-    if (!phone.trim()) {
-      setErrorMsg('Geçerli bir telefon numarası girin.');
-      return;
-    }
-    if (phoneVerificationCooldown > 0) {
-      setIsPhoneModalVisible(true);
-      setPhoneVerificationCode('');
-      setPhoneVerifyError('');
-      return;
-    }
-
-    try {
-      setIsPhoneVerifying(true);
-      setPhoneVerifyError('');
-      
-      const res = await fetch(`${API_BASE_URL}/auth/send-phone-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, phone: phone.trim() })
-      });
-      const data = await res.json().catch(() => null);
-
-      if (res.status === 401) {
-        AlertHelper.alert('Hesap Silinmiş', 'Bu hesap artık geçerli değil. Lütfen tekrar giriş yapın.');
-        await logout();
-        router.replace('/(auth)/login');
-        return;
-      }
-
-      if (res.ok && data?.success) {
-        setPhoneVerificationCooldown(60);
-        setIsPhoneModalVisible(true);
-        setPhoneVerificationCode('');
-        setPhoneVerifyError('');
-        setToastMsg('Doğrulama kodu telefonunuza gönderildi.');
-      } else {
-        const errMsg = data?.error || data?.message || 'Kod gönderilemedi.';
-        setPhoneVerifyError(errMsg);
-        if (!isPhoneModalVisible) setErrorMsg(errMsg);
-      }
-    } catch (e: any) {
-      setErrorMsg(e?.message || 'Sunucuya ulaşılamıyor.');
-    } finally {
-      setIsPhoneVerifying(false);
-    }
+  const handleOpenPhoneVerification = () => {
+    router.push('/security');
   };
 
   const handleVerifyPhone = async () => {
@@ -735,9 +691,8 @@ export default function EditProfileScreen() {
                   <View style={{ alignItems: 'center' }}>
                     <Text style={{ fontSize: 10, color: Colors.danger, marginBottom: 4 }}>Telefon doğrulanmadı</Text>
                     <Pressable 
-                      style={[styles.emailBadgeUnverified, isPhoneVerifying && { opacity: 0.7 }]}
+                      style={styles.emailBadgeUnverified}
                       onPress={handleOpenPhoneVerification}
-                      disabled={isPhoneVerifying}
                     >
                       <Text style={styles.emailBadgeTextUnverified}>Doğrula</Text>
                     </Pressable>
