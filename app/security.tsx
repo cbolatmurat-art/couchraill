@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Modal, Pressable, Image, ActivityIndicator, Platform, LayoutAnimation, UIManager } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, Modal, Pressable, Image, ActivityIndicator, Platform, LayoutAnimation, UIManager, KeyboardAvoidingView, Animated } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -19,6 +19,92 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 export default function SecurityScreen() {
   const { currentUser, updateProfile, submitVerificationRequest } = useAppContext();
   const router = useRouter();
+
+  // Change password state
+  const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
+
+  const passwordSlideAnim = useRef(new Animated.Value(600)).current;
+
+  const handleOpenPasswordModal = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setNewPasswordConfirm('');
+    setPasswordError('');
+    setPasswordSuccess('');
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowNewPasswordConfirm(false);
+    setIsPasswordModalVisible(true);
+    Animated.timing(passwordSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleClosePasswordModal = () => {
+    Animated.timing(passwordSlideAnim, {
+      toValue: 600,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsPasswordModalVisible(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setPasswordError('');
+      setPasswordSuccess('');
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowNewPasswordConfirm(false);
+    });
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword) {
+      setPasswordError('Mevcut şifrenizi girmelisiniz.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('Yeni şifreniz en az 6 karakter olmalıdır.');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError('Yeni şifreler birbiriyle eşleşmiyor.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const result = await updateProfile({ password: newPassword }, currentPassword);
+      if (result.success) {
+        setPasswordSuccess('Şifreniz başarıyla güncellendi.');
+        setTimeout(() => {
+          handleClosePasswordModal();
+          AlertHelper.alert('Başarılı', 'Şifreniz başarıyla değiştirildi.');
+        }, 1200);
+      } else {
+        setPasswordError(result.error || 'Şifre değiştirilemedi.');
+      }
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Sistem hatası oluştu.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   // Phone state
   const [phoneNumber, setPhoneNumber] = useState(currentUser?.phone || '');
@@ -389,17 +475,134 @@ export default function SecurityScreen() {
         )}
       </Card>
 
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="ban" size={24} color={Colors.danger} style={styles.icon} />
-          <Text style={styles.cardTitle}>Şikayet ve Engelleme</Text>
+      {/* Şifreyi Değiştir Card */}
+      <Pressable onPress={handleOpenPasswordModal} style={({ pressed }) => [styles.passwordRow, pressed && { opacity: 0.7 }]}>
+        <View style={styles.passwordRowLeft}>
+          <View style={styles.passwordIconBox}>
+            <Ionicons name="lock-closed" size={20} color={Colors.primary} />
+          </View>
+          <Text style={styles.passwordRowText}>Şifreyi Değiştir</Text>
         </View>
-        <Text style={styles.cardText}>
-          Sizi rahatsız eden kullanıcıları sohbet ekranından engelleyebilir veya şikayet edebilirsiniz. Engellediğiniz kullanıcılar size bir daha ulaşamaz.
-        </Text>
-      </Card>
+        <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+      </Pressable>
 
       <View style={{ height: 260, backgroundColor: 'transparent' }} />
+
+      {/* Change Password Bottom Sheet Modal */}
+      <Modal
+        visible={isPasswordModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleClosePasswordModal}
+      >
+        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={handleClosePasswordModal} />
+          <KeyboardAvoidingView
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            pointerEvents="box-none"
+          >
+            <Animated.View style={[
+              styles.bottomSheetContent, 
+              { 
+                transform: [{ translateY: passwordSlideAnim }],
+                paddingBottom: 0,
+                flexShrink: 1,
+                backgroundColor: '#F0F2F5',
+                borderTopWidth: 1,
+                borderTopColor: '#E9ECEF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 12,
+                elevation: 10,
+              }
+            ]}>
+              <View style={styles.bottomSheetHandle} />
+
+              <View style={styles.pwModalHeader}>
+                <View style={{ width: 32 }} />
+                <Text style={styles.pwModalTitle}>Şifreyi Değiştir</Text>
+                <Pressable onPress={handleClosePasswordModal} style={styles.modalCloseBtn}>
+                  <Ionicons name="close" size={24} color={Colors.text} />
+                </Pressable>
+              </View>
+
+              <ScrollView 
+                style={{ flexShrink: 1, width: '100%' }} 
+                contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 40 : 30 }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
+                {passwordError ? (
+                  <View style={styles.pwErrorBox}>
+                    <Ionicons name="alert-circle" size={18} color={Colors.danger} style={{ marginRight: 6 }} />
+                    <Text style={styles.pwErrorText}>{passwordError}</Text>
+                  </View>
+                ) : null}
+
+                {passwordSuccess ? (
+                  <View style={styles.pwSuccessBox}>
+                    <Ionicons name="checkmark-circle" size={18} color={Colors.success} style={{ marginRight: 6 }} />
+                    <Text style={styles.pwSuccessText}>{passwordSuccess}</Text>
+                  </View>
+                ) : null}
+
+                <Input
+                  label="Mevcut Şifre"
+                  placeholder="••••••••"
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry={!showCurrentPassword}
+                  autoCapitalize="none"
+                  rightElement={
+                    <Pressable onPress={() => setShowCurrentPassword(!showCurrentPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name={showCurrentPassword ? "eye-off" : "eye"} size={20} color={Colors.textLight} />
+                    </Pressable>
+                  }
+                />
+
+                <Input
+                  label="Yeni Şifre"
+                  placeholder="En az 6 karakter"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry={!showNewPassword}
+                  autoCapitalize="none"
+                  rightElement={
+                    <Pressable onPress={() => setShowNewPassword(!showNewPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name={showNewPassword ? "eye-off" : "eye"} size={20} color={Colors.textLight} />
+                    </Pressable>
+                  }
+                />
+
+                <Input
+                  label="Yeni Şifre (Tekrar)"
+                  placeholder="Yeni şifrenizi doğrulayın"
+                  value={newPasswordConfirm}
+                  onChangeText={setNewPasswordConfirm}
+                  secureTextEntry={!showNewPasswordConfirm}
+                  autoCapitalize="none"
+                  rightElement={
+                    <Pressable onPress={() => setShowNewPasswordConfirm(!showNewPasswordConfirm)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name={showNewPasswordConfirm ? "eye-off" : "eye"} size={20} color={Colors.textLight} />
+                    </Pressable>
+                  }
+                />
+
+                <View style={{ marginTop: 16, marginBottom: 8 }}>
+                  <Button
+                    title={isChangingPassword ? 'Değiştiriliyor...' : 'Şifreyi Değiştir'}
+                    onPress={handleChangePassword}
+                    disabled={isChangingPassword}
+                    loading={isChangingPassword}
+                  />
+                </View>
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* Identity Verification Modal (Bottom Sheet) */}
       <Modal
@@ -409,7 +612,7 @@ export default function SecurityScreen() {
         onRequestClose={handleCloseModal}
       >
         <View style={styles.bottomSheetOverlay}>
-          <Pressable style={styles.bottomSheetBackground} onPress={handleCloseModal} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCloseModal} />
           
           <View style={styles.bottomSheetContent}>
             <View style={styles.bottomSheetHandle} />
@@ -663,6 +866,85 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: Colors.textLight,
   },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  passwordRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  passwordRowText: {
+    ...Typography.body,
+    fontWeight: '600',
+    fontSize: 16,
+    color: Colors.text,
+  },
+  pwModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pwModalTitle: {
+    ...Typography.title,
+    fontWeight: 'bold',
+    color: Colors.text,
+    textAlign: 'center',
+    flex: 1,
+  },
+  pwErrorBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFEBEE',
+    borderColor: '#FFCDD2',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  pwErrorText: {
+    color: Colors.danger,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  pwSuccessBox: {
+    flexDirection: 'row',
+    backgroundColor: '#E8F5E9',
+    borderColor: '#C8E6C9',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  pwSuccessText: {
+    color: Colors.success,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
   card: {
     marginBottom: 16,
   },
@@ -773,9 +1055,9 @@ const styles = StyleSheet.create({
   },
   // Bottom Sheet Modal Styles
   bottomSheetOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
   },
   bottomSheetBackground: {
     ...StyleSheet.absoluteFillObject,

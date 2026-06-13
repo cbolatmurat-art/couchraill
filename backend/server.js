@@ -708,8 +708,20 @@ app.put('/api/users/profile', async (req, res) => {
     
     if (!user) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.', message: 'Kullanıcı bulunamadı.' });
     
-    if (updates.password && user.password !== currentPassword) {
-      return res.status(400).json({ success: false, error: 'Mevcut şifreniz yanlış.', message: 'Mevcut şifreniz yanlış.' });
+    if (updates.password) {
+      let isMatch = false;
+      if (user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'))) {
+        isMatch = await bcrypt.compare(currentPassword, user.password);
+      } else {
+        isMatch = String(user.password) === String(currentPassword);
+      }
+      
+      if (!isMatch) {
+        return res.status(400).json({ success: false, error: 'Mevcut şifreniz yanlış.', message: 'Mevcut şifreniz yanlış.' });
+      }
+      
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(updates.password, salt);
     }
 
     if (updates.username !== undefined) {
