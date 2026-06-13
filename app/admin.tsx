@@ -107,9 +107,14 @@ export default function AdminScreen() {
   const [deleteVerificationsError, setDeleteVerificationsError] = useState<string | null>(null);
 
   const clearAdminSession = async () => {
-    localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt');
+    localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt', 'misafirimol_adminRememberMe');
     try {
-      await AsyncStorage.multiRemove(['misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt']);
+      await AsyncStorage.multiRemove([
+        'misafirimol_adminUser',
+        'misafirimol_adminToken',
+        'misafirimol_adminExpiresAt',
+        'misafirimol_adminRememberMe'
+      ]);
     } catch (e) {}
     setIsAuthorized(false);
     setAdminToken(null);

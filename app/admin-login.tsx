@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
@@ -13,6 +13,7 @@ export default function AdminLoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successText, setSuccessText] = useState('');
@@ -31,7 +32,7 @@ export default function AdminLoginScreen() {
       const res = await fetch(`${API_BASE_URL}/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
       const data = await res.json().catch(() => null);
 
@@ -42,6 +43,27 @@ export default function AdminLoginScreen() {
         
         const expiresAt = data.expiresAt ? String(data.expiresAt) : String(Date.now() + 60 * 60 * 1000);
         await AsyncStorage.setItem('misafirimol_adminExpiresAt', expiresAt);
+
+        if (rememberMe) {
+          await AsyncStorage.setItem('misafirimol_adminRememberMe', 'true');
+        } else {
+          await AsyncStorage.removeItem('misafirimol_adminRememberMe');
+        }
+
+        if (Platform.OS === 'web') {
+          try {
+            localStorage.setItem('misafirimol_adminUser', JSON.stringify(data.admin));
+            localStorage.setItem('misafirimol_adminToken', data.token);
+            localStorage.setItem('misafirimol_adminExpiresAt', expiresAt);
+            if (rememberMe) {
+              localStorage.setItem('misafirimol_adminRememberMe', 'true');
+            } else {
+              localStorage.removeItem('misafirimol_adminRememberMe');
+            }
+          } catch (e) {
+            console.error('Local storage error:', e);
+          }
+        }
 
         setSuccessText('Giriş başarılı, yönetici paneline yönlendiriliyorsunuz...');
         setTimeout(() => {
@@ -104,6 +126,17 @@ export default function AdminLoginScreen() {
             autoCorrect={false}
             editable={!loading}
           />
+
+          <Pressable 
+            style={styles.rememberMeContainer} 
+            onPress={() => setRememberMe(!rememberMe)}
+            disabled={loading}
+          >
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+            </View>
+            <Text style={styles.rememberMeText}>Beni Hatırla</Text>
+          </Pressable>
 
           <View style={{ height: 10 }} />
 
@@ -176,5 +209,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+    alignSelf: 'flex-start',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  rememberMeText: {
+    ...Typography.body,
+    fontSize: 14,
+    color: Colors.text,
   },
 });

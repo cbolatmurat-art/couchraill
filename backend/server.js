@@ -2014,7 +2014,7 @@ app.get('/api/admin/verification-file/:fileId', checkAdminAuth, (req, res) => {
 
 // POST Admin Login
 app.post('/api/admin/login', (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
   const db = readDB();
   const emailTrimmed = email ? String(email).trim().toLowerCase() : '';
   const passwordStr = password ? String(password) : '';
@@ -2024,7 +2024,7 @@ app.post('/api/admin/login', (req, res) => {
 
   if (admin) {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 60 * 60 * 1000;
+    const expiresAt = rememberMe ? Date.now() + 10 * 365 * 24 * 60 * 60 * 1000 : Date.now() + 60 * 60 * 1000;
     activeAdminTokens.set(token, { adminId: admin.id, expiresAt });
 
     res.json({
