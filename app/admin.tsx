@@ -102,6 +102,10 @@ export default function AdminScreen() {
   const [isDeleteAllModalVisible, setIsDeleteAllModalVisible] = useState(false);
   const [deleteAllError, setDeleteAllError] = useState<string | null>(null);
 
+  // Delete all verifications modal state
+  const [isDeleteVerificationsModalVisible, setIsDeleteVerificationsModalVisible] = useState(false);
+  const [deleteVerificationsError, setDeleteVerificationsError] = useState<string | null>(null);
+
   const clearAdminSession = async () => {
     localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt');
     try {
@@ -417,6 +421,30 @@ export default function AdminScreen() {
     }
   };
 
+  const handleDeleteAllVerifications = async () => {
+    if (!adminToken) return;
+
+    setActionInProgress(true);
+    setDeleteVerificationsError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/verification-requests`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRequests([]);
+        setIsDeleteVerificationsModalVisible(false);
+      } else {
+        setDeleteVerificationsError(data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      setDeleteVerificationsError('Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthorized && (activeTab === 'moderation' || activeTab === 'overview')) {
       fetchReports(undefined, reportTypeFilter);
@@ -718,9 +746,14 @@ export default function AdminScreen() {
       <View style={styles.pageHeaderSticky}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.pageTitle}>Kimlik Doğrulama Başvuruları</Text>
-          <Pressable onPress={() => fetchRequests()} style={styles.refreshIconBtn} disabled={loading}>
-            <Ionicons name="refresh" size={20} color="#4F46E5" />
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <Pressable onPress={() => fetchRequests()} style={styles.refreshIconBtn} disabled={loading}>
+              <Ionicons name="refresh" size={20} color="#4F46E5" />
+            </Pressable>
+            <Pressable onPress={() => { setDeleteVerificationsError(null); setIsDeleteVerificationsModalVisible(true); }} style={[styles.refreshIconBtn, { backgroundColor: '#FEE2E2' }]} disabled={loading}>
+              <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            </Pressable>
+          </View>
         </View>
       </View>
       <ScrollView contentContainerStyle={styles.contentScroll}>
@@ -1284,6 +1317,45 @@ export default function AdminScreen() {
                 onPress={handleDeleteAllComplaints}
               >
                 <Text style={styles.solidBtnText}>Tümünü Sil</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete All Verifications Confirmation Modal */}
+      <Modal visible={isDeleteVerificationsModalVisible} transparent={true} animationType="fade" onRequestClose={() => setIsDeleteVerificationsModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.detailedModal, { maxWidth: 420, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 }]}>
+            <View style={styles.detailedModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="trash-outline" size={22} color="#EF4444" style={{ marginRight: 10 }} />
+                <Text style={styles.detailedModalTitle}>Kimlik Doğrulama Taleplerini Temizle</Text>
+              </View>
+              <Pressable onPress={() => setIsDeleteVerificationsModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </Pressable>
+            </View>
+            <View style={[styles.detailedModalBody, { paddingVertical: 24 }]}>
+              <Text style={{ fontSize: 15, color: '#475569', lineHeight: 22 }}>
+                Tüm kimlik doğrulama taleplerini kalıcı olarak silmek istediğinize emin misiniz?
+              </Text>
+              {deleteVerificationsError && (
+                <View style={{ marginTop: 12, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FCA5A5' }}>
+                  <Text style={{ fontSize: 13, color: '#EF4444' }}>{deleteVerificationsError}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.detailedModalFooter}>
+              <Pressable style={styles.outlineBtn} onPress={() => setIsDeleteVerificationsModalVisible(false)}>
+                <Text style={styles.outlineBtnText}>İptal</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.solidBtn, { backgroundColor: '#EF4444' }]}
+                onPress={handleDeleteAllVerifications}
+                disabled={actionInProgress}
+              >
+                {actionInProgress ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.solidBtnText}>Tümünü Sil</Text>}
               </Pressable>
             </View>
           </View>

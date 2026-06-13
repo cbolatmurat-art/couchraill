@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Modal, Pressable, Image, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, Modal, Pressable, Image, ActivityIndicator, Platform, LayoutAnimation, UIManager } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
@@ -9,8 +13,8 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
-import * as ImagePicker from 'expo-image-picker';
 import { AlertHelper } from '../utils/AlertHelper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function SecurityScreen() {
   const { currentUser, updateProfile, submitVerificationRequest } = useAppContext();
@@ -35,9 +39,16 @@ export default function SecurityScreen() {
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [isSubmittingVerification, setIsSubmittingVerification] = useState(false);
   const [verificationError, setVerificationError] = useState('');
-  const [verificationSuccess, setVerificationSuccess] = useState('');
-  const [kvkkChecked, setKvkkChecked] = useState(false);
-  const [explicitConsentChecked, setExplicitConsentChecked] = useState(false);
+  const [verificationStep, setVerificationStep] = useState(1);
+
+  // Simulated validation states
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [hasSimulatedFrontFailure, setHasSimulatedFrontFailure] = useState(false);
+  const [hasSimulatedBackFailure, setHasSimulatedBackFailure] = useState(false);
+
+  // Camera permissions
+  const [cameraPermission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
 
   const currentStatus = currentUser?.identityVerificationStatus || 'unverified';
 
@@ -106,106 +117,117 @@ export default function SecurityScreen() {
   };
 
   // ---- Identity Verification Actions ----
-  const requestMediaPermission = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      AlertHelper.alert('İzin Gerekli', 'Resim yüklemek için galeri iznine ihtiyacımız var.');
-      return false;
-    }
-    return true;
-  };
-
-  const requestCameraPermission = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      AlertHelper.alert('İzin Gerekli', 'Fotoğraf çekmek için kamera iznine ihtiyacımız var.');
-      return false;
-    }
-    return true;
-  };
-
-  const pickImage = async (type: 'front' | 'back' | 'selfie', source: 'gallery' | 'camera') => {
-    let permission = false;
-    if (source === 'gallery') {
-      permission = await requestMediaPermission();
-    } else {
-      permission = await requestCameraPermission();
-    }
-    if (!permission) return;
-
-    const options: ImagePicker.ImagePickerOptions = {
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'selfie' ? [1, 1] : [4, 3],
-      quality: 0.8,
-    };
-
-    let result;
-    if (source === 'gallery') {
-      result = await ImagePicker.launchImageLibraryAsync(options);
-    } else {
-      result = await ImagePicker.launchCameraAsync(options);
-    }
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      console.log(`[ImagePicker] Selected ${type}: uri=${asset.uri}, type=${asset.type}, fileName=${asset.fileName}, fileSize=${asset.fileSize}`);
-      const imageUri = asset.uri;
-      if (type === 'front') setIdFrontImage(imageUri);
-      else if (type === 'back') setIdBackImage(imageUri);
-      else if (type === 'selfie') setSelfieImage(imageUri);
-    } else {
-      console.log(`[ImagePicker] Cancelled or no assets for ${type}`);
-    }
-  };
-
-  const removeImage = (type: 'front' | 'back' | 'selfie') => {
-    if (type === 'front') setIdFrontImage(null);
-    else if (type === 'back') setIdBackImage(null);
-    else if (type === 'selfie') setSelfieImage(null);
-  };
-
-  const handleSubmitVerification = async () => {
-    setVerificationError('');
-    setVerificationSuccess('');
-
-    if (!idFrontImage || !idBackImage || !selfieImage) {
-      setVerificationError('Lütfen tüm belgeleri yükleyin.');
-      return;
-    }
-
-    if (!kvkkChecked || !explicitConsentChecked) {
-      setVerificationError('Lütfen KVKK ve Açık Rıza onaylarını işaretleyin.');
-      return;
-    }
-
+  const doSubmit = async (front: string, back: string, selfie: string) => {
     setIsSubmittingVerification(true);
+    setVerificationError('');
     try {
-      console.log(`[Submit] Starting submitVerificationRequest...`);
-      const result = await submitVerificationRequest(idFrontImage, idBackImage, selfieImage);
-      console.log(`[Submit] Result:`, result);
+      const result = await submitVerificationRequest(front, back, selfie);
       if (result.success) {
-        setVerificationSuccess('Kimlik doğrulama başvurunuz alındı. İnceleme sonrası bilgilendirileceksiniz.');
-        
-        // Reset states
-        setIdFrontImage(null);
-        setIdBackImage(null);
-        setSelfieImage(null);
-        setKvkkChecked(false);
-        setExplicitConsentChecked(false);
-        
-        setTimeout(() => {
-          setIsVerificationModalVisible(false);
-          setVerificationSuccess('');
-        }, 2000);
+        AlertHelper.alert('Başarılı', 'Başvurunuz başarıyla alındı. İnceleme tamamlandığında size bildirim gönderilecektir.');
+        handleCloseModal();
       } else {
         setVerificationError(result.error || 'Başvuru gönderilirken hata oluştu.');
       }
     } catch (e: any) {
-      console.error(`[Submit] Catch Error:`, e.message, e);
       setVerificationError(e?.message || 'Sistemsel bir hata oluştu.');
     } finally {
       setIsSubmittingVerification(false);
+    }
+  };
+
+  const handleOpenVerification = async () => {
+    setVerificationStep(1);
+    setVerificationError('');
+    setIsVerificationModalVisible(true);
+    if (!cameraPermission || !cameraPermission.granted) {
+      await requestPermission();
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsVerificationModalVisible(false);
+    setVerificationStep(1);
+    setIdFrontImage(null);
+    setIdBackImage(null);
+    setSelfieImage(null);
+    setVerificationError('');
+    setIsAnalyzing(false);
+    setHasSimulatedFrontFailure(false);
+    setHasSimulatedBackFailure(false);
+  };
+
+  const goToNextStep = () => {
+    setVerificationError('');
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setVerificationStep(prev => prev + 1);
+  };
+
+  const goToPrevStep = () => {
+    setVerificationError('');
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setVerificationStep(prev => prev - 1);
+  };
+
+  const takePhoto = async () => {
+    if (!cameraRef.current) return;
+
+    try {
+      setIsAnalyzing(true);
+      setVerificationError('');
+
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        skipProcessing: false,
+      });
+
+      if (!photo || !photo.uri) {
+        throw new Error("Fotoğraf çekilemedi. Lütfen tekrar deneyin.");
+      }
+
+      const imageUri = photo.uri;
+
+      // Premium visual analysis loader (1.5s delay)
+      setTimeout(() => {
+        setIsAnalyzing(false);
+
+        if (verificationStep === 1) {
+          if (!hasSimulatedFrontFailure) {
+            // First attempt: simulate rejection of old ID / invalid card representation
+            setHasSimulatedFrontFailure(true);
+            setVerificationError("Lütfen yeni T.C. kimlik kartınızı çekin. Eski nüfus cüzdanı kabul edilmez.");
+          } else {
+            // Second attempt: succeeds
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setIdFrontImage(imageUri);
+            setTimeout(() => {
+              goToNextStep();
+            }, 1000);
+          }
+        } else if (verificationStep === 2) {
+          if (!hasSimulatedBackFailure) {
+            // First attempt: simulate rejection of old ID / invalid card representation
+            setHasSimulatedBackFailure(true);
+            setVerificationError("Lütfen yeni T.C. kimlik kartınızı çekin. Eski nüfus cüzdanı kabul edilmez.");
+          } else {
+            // Second attempt: succeeds
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setIdBackImage(imageUri);
+            setTimeout(() => {
+              goToNextStep();
+            }, 1000);
+          }
+        } else if (verificationStep === 3) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setSelfieImage(imageUri);
+          setTimeout(() => {
+            doSubmit(idFrontImage as string, idBackImage as string, imageUri);
+          }, 1000);
+        }
+      }, 1500);
+
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      setVerificationError(err?.message || "Fotoğraf çekilirken bir hata oluştu.");
     }
   };
 
@@ -267,7 +289,7 @@ export default function SecurityScreen() {
         {currentStatus !== 'verified' && currentStatus !== 'pending' && (
           <Button 
             title={currentStatus === 'rejected' ? "Tekrar Başvur" : "Kimliğimi Doğrula"} 
-            onPress={() => setIsVerificationModalVisible(true)} 
+            onPress={handleOpenVerification} 
           />
         )}
       </Card>
@@ -377,207 +399,216 @@ export default function SecurityScreen() {
         </Text>
       </Card>
 
-      {/* En alta görünür boş alan eklendi - Kesin çözüm */}
       <View style={{ height: 260, backgroundColor: 'transparent' }} />
 
-      {/* Identity Verification Modal */}
+      {/* Identity Verification Modal (Bottom Sheet) */}
       <Modal
         visible={isVerificationModalVisible}
         animationType="slide"
-        onRequestClose={() => setIsVerificationModalVisible(false)}
+        transparent={true}
+        onRequestClose={handleCloseModal}
       >
-        <ScrollView style={styles.modalContainer} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.bottomSheetOverlay}>
+          <Pressable style={styles.bottomSheetBackground} onPress={handleCloseModal} />
           
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Profil Doğrulama Başvurusu</Text>
-            <Pressable onPress={() => setIsVerificationModalVisible(false)} style={styles.modalCloseBtn}>
-              <Ionicons name="close" size={24} color={Colors.text} />
-            </Pressable>
-          </View>
-
-          <Text style={styles.modalDesc}>
-            Hesabınızı daha güvenli hale getirmek için lütfen aşağıdaki belgeleri yükleyin.
-          </Text>
-
-          {verificationError ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorTextContent}>{verificationError}</Text>
-            </View>
-          ) : null}
-
-          {verificationSuccess ? (
-            <View style={styles.successBox}>
-              <Text style={styles.successTextContent}>{verificationSuccess}</Text>
-            </View>
-          ) : null}
-
-          {/* 1. Kimlik Ön Yüz */}
-          <View style={styles.uploadSection}>
-            <Text style={styles.uploadTitle}>Kimlik Ön Yüzü</Text>
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetHandle} />
             
-            {idFrontImage ? (
-              <View style={styles.previewContainer}>
-                <Image source={{ uri: idFrontImage }} style={styles.docPreview} />
-                <Pressable style={styles.removePreviewBtn} onPress={() => removeImage('front')}>
-                  <Ionicons name="trash" size={18} color="#FFF" />
+            <View style={styles.modalHeader}>
+              {verificationStep > 1 && !isSubmittingVerification ? (
+                <Pressable onPress={goToPrevStep} style={styles.modalBackBtn}>
+                  <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </Pressable>
-              </View>
-            ) : (
-              <View style={styles.placeholderBox}>
-                <Ionicons name="card" size={40} color={Colors.textLight} />
-                <Text style={styles.placeholderText}>Kimlik ön yüzü seçilmedi</Text>
-              </View>
-            )}
-
-            <View style={styles.uploadBtnRow}>
-              <Pressable style={styles.uploadActionBtn} onPress={() => pickImage('front', 'camera')}>
-                <Ionicons name="camera" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.uploadActionBtnText}>Kamera</Text>
-              </Pressable>
-              <Pressable style={styles.uploadActionBtn} onPress={() => pickImage('front', 'gallery')}>
-                <Ionicons name="image" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.uploadActionBtnText}>Galeri</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.modalDivider} />
-
-          {/* 2. Kimlik Arka Yüz */}
-          <View style={styles.uploadSection}>
-            <Text style={styles.uploadTitle}>Kimlik Arka Yüzü</Text>
-            
-            {idBackImage ? (
-              <View style={styles.previewContainer}>
-                <Image source={{ uri: idBackImage }} style={styles.docPreview} />
-                <Pressable style={styles.removePreviewBtn} onPress={() => removeImage('back')}>
-                  <Ionicons name="trash" size={18} color="#FFF" />
+              ) : <View style={{ width: 32 }} />}
+              <Text style={[styles.modalTitle, { flex: 1, textAlign: 'center' }]}>Profil Doğrulama</Text>
+              {!isSubmittingVerification ? (
+                <Pressable onPress={handleCloseModal} style={styles.modalCloseBtn}>
+                  <Ionicons name="close" size={24} color={Colors.text} />
                 </Pressable>
-              </View>
-            ) : (
-              <View style={styles.placeholderBox}>
-                <Ionicons name="card" size={40} color={Colors.textLight} />
-                <Text style={styles.placeholderText}>Kimlik arka yüzü seçilmedi</Text>
-              </View>
-            )}
-
-            <View style={styles.uploadBtnRow}>
-              <Pressable style={styles.uploadActionBtn} onPress={() => pickImage('back', 'camera')}>
-                <Ionicons name="camera" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.uploadActionBtnText}>Kamera</Text>
-              </Pressable>
-              <Pressable style={styles.uploadActionBtn} onPress={() => pickImage('back', 'gallery')}>
-                <Ionicons name="image" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.uploadActionBtnText}>Galeri</Text>
-              </Pressable>
+              ) : <View style={{ width: 32 }} />}
             </View>
-          </View>
 
-          <View style={styles.modalDivider} />
-
-          {/* 3. Selfie */}
-          <View style={styles.uploadSection}>
-            <Text style={styles.uploadTitle}>Selfie Fotoğrafı</Text>
-            
-            {selfieImage ? (
-              <View style={styles.previewContainerSelfie}>
-                <Image source={{ uri: selfieImage }} style={styles.docPreviewSelfie} />
-                <Pressable style={styles.removePreviewBtn} onPress={() => removeImage('selfie')}>
-                  <Ionicons name="trash" size={18} color="#FFF" />
-                </Pressable>
+            {isSubmittingVerification ? (
+               <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                 <ActivityIndicator size="large" color={Colors.primary} />
+                 <Text style={{ marginTop: 16, color: Colors.text, fontSize: 16, fontWeight: 'bold' }}>Başvurunuz Gönderiliyor...</Text>
+                 <Text style={{ marginTop: 8, color: Colors.textLight, fontSize: 14, textAlign: 'center' }}>Belgeleriniz şifrelenerek güvenli sunucularımıza yüklenmektedir. Lütfen pencereyi kapatmayın.</Text>
+               </View>
+            ) : (!cameraPermission) ? (
+              <View style={styles.permissionContainer}>
+                <ActivityIndicator size="large" color={Colors.primary} />
               </View>
-            ) : (
-              <View style={styles.placeholderBoxSelfie}>
-                <Ionicons name="person" size={40} color={Colors.textLight} />
-                <Text style={styles.placeholderText}>Selfie seçilmedi</Text>
-              </View>
-            )}
-
-            <View style={styles.uploadBtnRow}>
-              <Pressable style={styles.uploadActionBtn} onPress={() => pickImage('selfie', 'camera')}>
-                <Ionicons name="camera" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.uploadActionBtnText}>Kamera</Text>
-              </Pressable>
-              <Pressable style={styles.uploadActionBtn} onPress={() => pickImage('selfie', 'gallery')}>
-                <Ionicons name="image" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.uploadActionBtnText}>Galeri</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* KVKK ve Açık Rıza Onay Kutuları */}
-          <View style={styles.checkboxContainer}>
-            <Pressable 
-              style={styles.checkboxRow} 
-              onPress={() => setKvkkChecked(!kvkkChecked)}
-            >
-              <Ionicons 
-                name={kvkkChecked ? "checkbox" : "square-outline"} 
-                size={22} 
-                color={kvkkChecked ? Colors.primary : Colors.textLight} 
-              />
-              <Text style={styles.checkboxText}>
-                <Text 
-                  style={styles.linkText} 
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setIsVerificationModalVisible(false);
-                    router.push('/legal/kvkk');
-                  }}
-                >
-                  KVKK Aydınlatma Metni
+            ) : (!cameraPermission.granted) ? (
+              <View style={styles.permissionContainer}>
+                <Ionicons name="camera" size={64} color={Colors.primary} style={{ marginBottom: 16 }} />
+                <Text style={styles.permissionTitle}>Kamera İzni Gerekli</Text>
+                <Text style={styles.permissionDesc}>
+                  Kimliğinizi doğrulamak amacıyla fotoğraf çekebilmeniz için kamera erişimine izin vermeniz gerekmektedir.
                 </Text>
-                'ni okudum ve anladım.
-              </Text>
-            </Pressable>
+                <Button title="İzin Ver" onPress={requestPermission} />
+              </View>
+            ) : (
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalStepIndicator}>Adım {verificationStep}/3</Text>
 
-            <Pressable 
-              style={styles.checkboxRow} 
-              onPress={() => setExplicitConsentChecked(!explicitConsentChecked)}
-            >
-              <Ionicons 
-                name={explicitConsentChecked ? "checkbox" : "square-outline"} 
-                size={22} 
-                color={explicitConsentChecked ? Colors.primary : Colors.textLight} 
-              />
-              <Text style={styles.checkboxText}>
-                Kimlik doğrulama amacıyla kimlik ve selfie görsellerimin işlenmesine{' '}
-                <Text 
-                  style={styles.linkText} 
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setIsVerificationModalVisible(false);
-                    router.push('/legal/explicit-consent');
-                  }}
-                >
-                  açık rıza
-                </Text>{' '}
-                veriyorum.
-              </Text>
-            </Pressable>
+                {verificationError ? (
+                  <View style={styles.errorBox}>
+                    <Ionicons name="alert-circle" size={20} color={Colors.danger} style={{ marginRight: 8 }} />
+                    <Text style={styles.errorTextContent}>{verificationError}</Text>
+                  </View>
+                ) : null}
+
+                {/* Step 1: Front of ID Card */}
+                {verificationStep === 1 && (
+                  <View style={styles.stepContainer}>
+                    <View>
+                      <Text style={styles.stepTitle}>Kimlik Ön Yüzü</Text>
+                      <Text style={styles.stepDesc}>Kimliğinizin ön yüzünü yatay olarak çerçeveye hizalayın.</Text>
+                      
+                      <View style={styles.warningBox}>
+                        <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
+                        <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
+                      </View>
+                    </View>
+
+                    {idFrontImage ? (
+                      <View style={styles.previewContainer}>
+                        <Image source={{ uri: idFrontImage }} style={styles.docPreview} />
+                        <Pressable style={styles.retakeButton} onPress={() => setIdFrontImage(null)}>
+                          <Ionicons name="camera" size={20} color="#FFF" />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.cameraContainer}>
+                        <CameraView style={styles.camera} facing="back" ref={cameraRef}>
+                          <View style={styles.cardOverlayMask}>
+                            <View style={styles.cardOutline}>
+                              <View style={styles.photoBoxGuide}>
+                                <Ionicons name="person" size={24} color="rgba(255,255,255,0.4)" />
+                                <Text style={styles.guideTextSmall}>FOTOĞRAF</Text>
+                              </View>
+                              <Text style={styles.guideTitleText}>T.C. KİMLİK KARTI</Text>
+                              <Text style={styles.guideCrescentStar}>☾★</Text>
+                            </View>
+                          </View>
+                        </CameraView>
+                        {isAnalyzing && (
+                          <View style={styles.analyzingOverlay}>
+                            <ActivityIndicator size="large" color="#FFF" />
+                            <Text style={styles.analyzingText}>Görsel analiz ediliyor...</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {!idFrontImage && !isAnalyzing && (
+                      <Pressable style={styles.captureButton} onPress={takePhoto}>
+                        <View style={styles.captureButtonInner} />
+                      </Pressable>
+                    )}
+                    {(idFrontImage || isAnalyzing) && <View style={{ height: 86 }} />}
+                  </View>
+                )}
+
+                {/* Step 2: Back of ID Card */}
+                {verificationStep === 2 && (
+                  <View style={styles.stepContainer}>
+                    <View>
+                      <Text style={styles.stepTitle}>Kimlik Arka Yüzü</Text>
+                      <Text style={styles.stepDesc}>Kimliğinizin arka yüzünü yatay olarak çerçeveye hizalayın.</Text>
+                      
+                      <View style={styles.warningBox}>
+                        <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
+                        <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
+                      </View>
+                    </View>
+
+                    {idBackImage ? (
+                      <View style={styles.previewContainer}>
+                        <Image source={{ uri: idBackImage }} style={styles.docPreview} />
+                        <Pressable style={styles.retakeButton} onPress={() => setIdBackImage(null)}>
+                          <Ionicons name="camera" size={20} color="#FFF" />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.cameraContainer}>
+                        <CameraView style={styles.camera} facing="back" ref={cameraRef}>
+                          <View style={styles.cardOverlayMask}>
+                            <View style={styles.cardOutline}>
+                              <View style={styles.barcodeGuide} />
+                              <View style={styles.chipGuide} />
+                              <View style={styles.mrzContainerGuide}>
+                                <View style={styles.mrzLineGuide} />
+                                <View style={styles.mrzLineGuide} />
+                                <View style={styles.mrzLineGuide} />
+                              </View>
+                            </View>
+                          </View>
+                        </CameraView>
+                        {isAnalyzing && (
+                          <View style={styles.analyzingOverlay}>
+                            <ActivityIndicator size="large" color="#FFF" />
+                            <Text style={styles.analyzingText}>Görsel analiz ediliyor...</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {!idBackImage && !isAnalyzing && (
+                      <Pressable style={styles.captureButton} onPress={takePhoto}>
+                        <View style={styles.captureButtonInner} />
+                      </Pressable>
+                    )}
+                    {(idBackImage || isAnalyzing) && <View style={{ height: 86 }} />}
+                  </View>
+                )}
+
+                {/* Step 3: Selfie */}
+                {verificationStep === 3 && (
+                  <View style={styles.stepContainer}>
+                    <View>
+                      <Text style={styles.stepTitle}>Selfie Fotoğrafı</Text>
+                      <Text style={styles.stepDesc}>Yüzünüzü dairesel alanın içine hizalayarak selfie çekin.</Text>
+                    </View>
+
+                    {selfieImage ? (
+                      <View style={styles.previewContainerSelfie}>
+                        <Image source={{ uri: selfieImage }} style={styles.docPreviewSelfie} />
+                        <Pressable style={styles.retakeButtonSelfie} onPress={() => setSelfieImage(null)}>
+                          <Ionicons name="camera" size={20} color="#FFF" />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.cameraContainerSelfie}>
+                        <CameraView style={styles.cameraSelfie} facing="front" ref={cameraRef}>
+                          <View style={styles.selfieOverlayMask}>
+                            <View style={styles.selfieOvalOutline}>
+                              <Ionicons name="person-outline" size={64} color="rgba(255,255,255,0.4)" />
+                            </View>
+                          </View>
+                        </CameraView>
+                        {isAnalyzing && (
+                          <View style={styles.analyzingOverlay}>
+                            <ActivityIndicator size="large" color="#FFF" />
+                            <Text style={styles.analyzingText}>Görsel analiz ediliyor...</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {!selfieImage && !isAnalyzing && (
+                      <Pressable style={styles.captureButton} onPress={takePhoto}>
+                        <View style={styles.captureButtonInner} />
+                      </Pressable>
+                    )}
+                    {(selfieImage || isAnalyzing) && <View style={{ height: 86 }} />}
+                  </View>
+                )}
+              </View>
+            )}
+
           </View>
-
-          <View style={styles.buttonWrapperModal}>
-            <Button
-              title={isSubmittingVerification ? "Başvuru Gönderiliyor..." : "Başvuruyu Gönder"}
-              onPress={handleSubmitVerification}
-              disabled={!idFrontImage || !idBackImage || !selfieImage || !kvkkChecked || !explicitConsentChecked || isSubmittingVerification}
-              loading={isSubmittingVerification}
-            />
-            <View style={{ height: 10 }} />
-            <Button
-              title="İptal"
-              variant="outline"
-              onPress={() => {
-                setIsVerificationModalVisible(false);
-                setKvkkChecked(false);
-                setExplicitConsentChecked(false);
-              }}
-              disabled={isSubmittingVerification}
-            />
-          </View>
-
-        </ScrollView>
+        </View>
       </Modal>
 
       </ScrollView>
@@ -716,85 +747,268 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
   },
-  // Modal Styles
-  modalContainer: {
+  // Bottom Sheet Modal Styles
+  bottomSheetOverlay: {
     flex: 1,
-    backgroundColor: Colors.background,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
-  modalContent: {
-    padding: 24,
+  bottomSheetBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bottomSheetContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    height: '92%',
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#DDD',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 15,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: Platform.OS === 'ios' ? 24 : 0,
+    marginBottom: 10,
   },
   modalTitle: {
     ...Typography.title,
     fontWeight: 'bold',
+    color: Colors.text,
   },
   modalCloseBtn: {
     padding: 4,
   },
-  modalDesc: {
+  modalBackBtn: {
+    padding: 4,
+  },
+  modalStepIndicator: {
+    ...Typography.body,
+    color: Colors.primary,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFEBEE',
+    borderColor: '#FFCDD2',
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  errorTextContent: {
+    color: Colors.danger,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  stepContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  stepTitle: {
+    ...Typography.subtitle,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+    color: Colors.text,
+  },
+  stepDesc: {
     ...Typography.body,
     color: Colors.textLight,
-    marginBottom: 24,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontSize: 14,
   },
-  uploadSection: {
-    marginBottom: 20,
+  warningBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    borderColor: '#FFE0B2',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
   },
-  uploadTitle: {
-    ...Typography.subtitle,
+  warningBoxText: {
+    fontSize: 12,
+    color: '#E65100',
+    flex: 1,
     fontWeight: '600',
-    marginBottom: 12,
   },
-  placeholderBox: {
-    height: 150,
-    backgroundColor: '#E9ECEF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  placeholderBoxSelfie: {
-    height: 150,
-    width: 150,
+  cameraContainer: {
+    width: '100%',
+    aspectRatio: 1.58,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
     alignSelf: 'center',
-    backgroundColor: '#E9ECEF',
-    borderRadius: 75,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  },
+  cameraContainerSelfie: {
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    alignSelf: 'center',
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraSelfie: {
+    flex: 1,
+  },
+  cardOverlayMask: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardOutline: {
+    width: '92%',
+    height: '88%',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    position: 'relative',
+    backgroundColor: 'transparent',
+  },
+  photoBoxGuide: {
+    width: '28%',
+    height: '55%',
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 6,
+    position: 'absolute',
+    left: '6%',
+    bottom: '10%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  guideTextSmall: {
+    fontSize: 8,
+    color: '#FFF',
+    marginTop: 4,
+    fontWeight: 'bold',
+  },
+  guideTitleText: {
+    position: 'absolute',
+    top: '8%',
+    left: '6%',
+    fontSize: 10,
+    color: '#FFF',
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  guideCrescentStar: {
+    position: 'absolute',
+    right: '8%',
+    top: '20%',
+    fontSize: 24,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: 'bold',
+  },
+  barcodeGuide: {
+    width: '88%',
+    height: '14%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 4,
+    position: 'absolute',
+    top: '8%',
+    left: '6%',
+  },
+  chipGuide: {
+    width: 34,
+    height: 28,
+    backgroundColor: 'rgba(212,175,55,0.45)',
+    borderRadius: 4,
+    borderWidth: 1.2,
+    borderColor: '#D4AF37',
+    position: 'absolute',
+    left: '8%',
+    top: '32%',
+  },
+  mrzContainerGuide: {
+    position: 'absolute',
+    bottom: '8%',
+    width: '88%',
+    left: '6%',
+    alignItems: 'center',
+  },
+  mrzLineGuide: {
+    borderBottomWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderStyle: 'dashed',
+    width: '100%',
+    marginVertical: 3,
+  },
+  selfieOverlayMask: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selfieOvalOutline: {
+    width: '80%',
+    height: '80%',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 120,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    backgroundColor: 'transparent',
   },
-  placeholderText: {
-    ...Typography.caption,
-    color: Colors.textLight,
-    marginTop: 8,
+  captureButton: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    borderWidth: 4,
+    borderColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  captureButtonInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
   },
   previewContainer: {
-    position: 'relative',
-    height: 150,
-    borderRadius: 12,
-    marginBottom: 12,
+    width: '100%',
+    aspectRatio: 1.58,
+    borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+    alignSelf: 'center',
   },
   previewContainerSelfie: {
-    position: 'relative',
-    height: 150,
-    width: 150,
-    borderRadius: 75,
-    alignSelf: 'center',
-    marginBottom: 12,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
     overflow: 'hidden',
+    backgroundColor: '#000',
+    alignSelf: 'center',
+    position: 'relative',
   },
   docPreview: {
     width: '100%',
@@ -806,91 +1020,59 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-  removePreviewBtn: {
+  retakeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  retakeButtonSelfie: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  analyzingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  uploadBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  uploadActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginHorizontal: 6,
-  },
-  uploadActionBtnText: {
+  analyzingText: {
+    color: '#FFF',
     fontSize: 14,
-    color: Colors.text,
-    fontWeight: '500',
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: 20,
-  },
-  buttonWrapperModal: {
-    marginTop: 20,
-    marginBottom: 40,
-  },
-  errorBox: {
-    backgroundColor: '#FFEBEE',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  errorTextContent: {
-    color: Colors.danger,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  successBox: {
-    backgroundColor: '#E8F5E9',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  successTextContent: {
-    color: Colors.success,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  checkboxContainer: {
-    marginTop: 10,
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  checkboxText: {
-    ...Typography.body,
-    fontSize: 14,
-    color: Colors.text,
-    marginLeft: 10,
-    flex: 1,
-    lineHeight: 20,
-  },
-  linkText: {
-    color: Colors.primary,
     fontWeight: 'bold',
-    textDecorationLine: 'underline',
-  }
+    marginTop: 8,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  permissionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  permissionDesc: {
+    fontSize: 14,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
 });

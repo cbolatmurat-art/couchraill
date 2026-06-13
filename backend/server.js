@@ -2138,6 +2138,20 @@ app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, async (r
   res.json({ success: true });
 });
 
+// DELETE All Verification Requests
+app.delete('/api/admin/verification-requests', checkAdminAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM verification_requests');
+    const db = readDB();
+    db.verificationRequests = [];
+    writeDB(db);
+    res.json({ success: true, message: 'Tüm kimlik doğrulama talepleri başarıyla silindi.' });
+  } catch (error) {
+    console.error('[ADMIN_VERIFICATIONS_DELETE_ALL_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Kimlik doğrulama talepleri silinemedi.' });
+  }
+});
+
 // DELETE User Account (Purges files & data, logs retention)
 app.delete('/api/users/me', (req, res) => {
   const { userId } = req.query;
