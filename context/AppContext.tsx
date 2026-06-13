@@ -321,6 +321,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const apiUser = await safeFetch(`${API_BASE_URL}/auth/me?userId=${currentUser.id}`);
         if (apiUser && apiUser.user) {
           setCurrentUser(apiUser.user);
+          try {
+            await AsyncStorage.setItem('currentUser', JSON.stringify(apiUser.user));
+            await AsyncStorage.setItem('misafirimol_currentUser', JSON.stringify(apiUser.user));
+            const usersRaw = await AsyncStorage.getItem(USERS_STORAGE_KEY);
+            if (usersRaw) {
+              const localUsers: User[] = JSON.parse(usersRaw);
+              const updatedUsers = localUsers.map(u => u.id === apiUser.user.id ? apiUser.user : u);
+              await AsyncStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updatedUsers));
+            }
+          } catch (e) {
+            console.warn("Failed to update AsyncStorage in refreshData", e);
+          }
         }
         await fetchUserData(currentUser.id);
       } else {
@@ -1055,11 +1067,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     if (apiResult && apiResult.success) {
       const apiUser = await safeFetch(`${API_BASE_URL}/auth/me?userId=${currentUser.id}`);
-      if (apiUser && apiUser.user) {
-        setCurrentUser(apiUser.user);
-      } else {
-        const updatedUser = { ...currentUser, identityVerificationStatus: 'unverified' as const, verified: false };
-        setCurrentUser(updatedUser);
+      const updatedUser = (apiUser && apiUser.user)
+        ? apiUser.user
+        : { ...currentUser, identityVerificationStatus: 'unverified' as const, verified: false };
+
+      setCurrentUser(updatedUser);
+      try {
+        await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        await AsyncStorage.setItem('misafirimol_currentUser', JSON.stringify(updatedUser));
+        const usersRaw = await AsyncStorage.getItem(USERS_STORAGE_KEY);
+        if (usersRaw) {
+          const localUsers: User[] = JSON.parse(usersRaw);
+          const updatedUsers = localUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
+          await AsyncStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updatedUsers));
+        }
+      } catch (e) {
+        console.warn("Failed to update AsyncStorage in deleteVerificationData success", e);
       }
       return { success: true };
     }

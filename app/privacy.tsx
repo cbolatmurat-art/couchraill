@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Platform, Modal, ActivityIndicator } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
@@ -11,34 +11,20 @@ import { useAppContext } from '../context/AppContext';
 import { AlertHelper } from '../utils/AlertHelper';
 
 export default function PrivacyScreen() {
-  const { currentUser, deleteAccount, deleteVerificationData } = useAppContext();
+  const { currentUser, deleteAccount, deleteVerificationData, refreshData } = useAppContext();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
   const [isDeletingData, setIsDeletingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isDataModalVisible, setIsDataModalVisible] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshData();
+    }, [])
+  );
 
   if (!currentUser) return null;
-
-  // 1. Verilerimi İndir
-  const handleDownloadData = () => {
-    // Generate clean JSON of user data
-    const userData = {
-      id: currentUser.id,
-      name: currentUser.name,
-      email: currentUser.email,
-      phone: currentUser.phone || 'Girilmedi',
-      phoneVerified: currentUser.phoneVerified || false,
-      userType: currentUser.userType === 'host' ? 'Ev Sahibi' : 'Misafir Arayan',
-      city: currentUser.city || 'Girilmedi',
-      verified: currentUser.verified || false,
-      identityVerificationStatus: currentUser.identityVerificationStatus || 'unverified',
-      joinedDate: currentUser.joinedDate || 'Bilinmiyor',
-    };
-
-    setIsDataModalVisible(true);
-  };
 
   // 2. Kimlik Verilerimi Sil
   const handleDeleteVerificationData = () => {
@@ -109,19 +95,6 @@ export default function PrivacyScreen() {
     );
   };
 
-  const formattedJson = JSON.stringify({
-    id: currentUser.id,
-    name: currentUser.name,
-    email: currentUser.email,
-    phone: currentUser.phone || null,
-    phoneVerified: currentUser.phoneVerified || false,
-    userType: currentUser.userType,
-    city: currentUser.city || null,
-    verified: currentUser.verified || false,
-    identityVerificationStatus: currentUser.identityVerificationStatus || 'unverified',
-    joinedDate: currentUser.joinedDate || null
-  }, null, 2);
-
   return (
     <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -139,18 +112,6 @@ export default function PrivacyScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
       >
-        {/* Verilerimi İndir */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="download-outline" size={22} color={Colors.primary} style={styles.cardIcon} />
-            <Text style={styles.cardTitle}>Verilerimi İndir</Text>
-          </View>
-          <Text style={styles.cardDesc}>
-            Platformumuzda saklanan ad, soyad, e-posta, telefon ve profil detayları gibi tüm kişisel verilerinizi JSON formatında görüntüleyin.
-          </Text>
-          <Button title="Kişisel Verilerimi Göster / İndir" variant="outline" onPress={handleDownloadData} />
-        </Card>
-
         {/* Kimlik Verilerini Sil */}
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
@@ -238,28 +199,6 @@ export default function PrivacyScreen() {
         <View style={{ height: 260, backgroundColor: 'transparent' }} />
       </ScrollView>
 
-      {/* JSON Veri Modal */}
-      <Modal visible={isDataModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Kişisel Verileriniz</Text>
-              <Pressable onPress={() => setIsDataModalVisible(false)} style={styles.modalClose}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalDesc}>
-              Aşağıdaki veriler sunucumuzda saklanmaktadır ve başka hiçbir kurumla paylaşılmamaktadır.
-            </Text>
-            <ScrollView style={styles.jsonScroll}>
-              <Text style={styles.jsonText}>{formattedJson}</Text>
-            </ScrollView>
-            <View style={{ marginTop: 16 }}>
-              <Button title="Kapat" onPress={() => setIsDataModalVisible(false)} />
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -346,56 +285,5 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
     fontWeight: '500',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  modalTitle: {
-    ...Typography.title,
-    fontWeight: 'bold',
-    fontSize: 20,
-  },
-  modalClose: {
-    padding: 4,
-  },
-  modalDesc: {
-    ...Typography.body,
-    fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 16,
-  },
-  jsonScroll: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    maxHeight: 300,
-  },
-  jsonText: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 12,
-    color: '#333',
   },
 });

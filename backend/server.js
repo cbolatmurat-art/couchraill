@@ -2142,8 +2142,18 @@ app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, async (r
 app.delete('/api/admin/verification-requests', checkAdminAuth, async (req, res) => {
   try {
     await pool.query('DELETE FROM verification_requests');
+    // Also reset any user who is stuck in 'pending' because their request was deleted
+    await pool.query('UPDATE users SET "identityVerificationStatus" = \'unverified\' WHERE "identityVerificationStatus" = \'pending\'');
+
     const db = readDB();
     db.verificationRequests = [];
+    if (db.users) {
+      db.users.forEach(u => {
+        if (u.identityVerificationStatus === 'pending') {
+          u.identityVerificationStatus = 'unverified';
+        }
+      });
+    }
     writeDB(db);
     res.json({ success: true, message: 'Tüm kimlik doğrulama talepleri başarıyla silindi.' });
   } catch (error) {
@@ -2209,12 +2219,11 @@ app.delete('/api/users/me', (req, res) => {
 });
 
 // DELETE User Verification Data (Purges files, resets status)
-app.delete('/api/users/me/verification-data', (req, res) => {
+app.delete('/api/users/me/verification-data', async (req, res) => {
   const { userId } = req.query;
   const db = readDB();
   
   const userIndex = db.users.findIndex(u => u.id === userId);
-  if (userIndex === -1) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
   const deleteLogFile = path.join(__dirname, 'logs', 'retention.log');
   const ensureLogDir = () => {
@@ -2229,17 +2238,77 @@ app.delete('/api/users/me/verification-data', (req, res) => {
     fs.appendFileSync(deleteLogFile, logLine);
   };
 
-  // 1. Delete verification documents on disk
+  // 1. Delete verification documents on disk using local db records
   deleteUserVerificationFiles(userId, db, logDeletion);
 
-  // 2. Clear status fields
-  db.users[userIndex].identityVerificationStatus = 'unverified';
-  db.users[userIndex].verified = false;
+  // 2. Also delete files referenced in PostgreSQL verification requests
+  try {
+    const { rows: pgReqs } = await pool.query(
+      'SELECT "idFrontImageUrl", "idBackImageUrl", "selfieImageUrl" FROM verification_requests WHERE "userId" = $1',
+      [userId]
+    );
+    pgReqs.forEach(r => {
+      const urls = [r.idFrontImageUrl, r.idBackImageUrl, r.selfieImageUrl];
+      urls.forEach(url => {
+        if (url) {
+          const filename = path.basename(url);
+          const filePath = path.join(UPLOADS_DIR, filename);
+          if (fs.existsSync(filePath)) {
+            try {
+              fs.unlinkSync(filePath);
+            } catch (e) {
+              console.error("Failed to delete Postgres verification file", filePath, e);
+            }
+          }
+        }
+      });
+    });
+  } catch (err) {
+    console.error('Postgres files delete error:', err);
+  }
+
+  // 3. Clear status fields in db.json if exists
+  if (userIndex !== -1) {
+    db.users[userIndex].identityVerificationStatus = 'unverified';
+    db.users[userIndex].verified = false;
+    db.users[userIndex].identityVerified = false;
+  }
+  
+  // Clean from db.json requests list
+  if (db.verificationRequests) {
+    db.verificationRequests = db.verificationRequests.filter(r => r.userId !== userId);
+  }
   
   logDeletion(userId, 'Identity verification data deleted permanently on user request.');
-
   writeDB(db);
-  res.json({ success: true, user: db.users[userIndex] });
+
+  // 4. Update Postgres database tables
+  try {
+    await pool.query(
+      'UPDATE users SET "identityVerificationStatus" = $1, verified = false, "identityVerified" = false WHERE id = $2',
+      ['unverified', userId]
+    );
+    await pool.query(
+      'DELETE FROM verification_requests WHERE "userId" = $1',
+      [userId]
+    );
+  } catch (err) {
+    console.error('Postgres user verification status update/delete error:', err);
+    return res.status(500).json({ success: false, error: 'Veritabanı güncelleme hatası.' });
+  }
+
+  // Fetch updated user to return
+  let updatedUser = null;
+  if (userIndex !== -1) {
+    updatedUser = db.users[userIndex];
+  } else {
+    try {
+      const uRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+      updatedUser = uRes.rows[0];
+    } catch (e) {}
+  }
+
+  res.json({ success: true, user: updatedUser });
 });
 
 // ---- CONVERSATIONS & MESSAGES ----
