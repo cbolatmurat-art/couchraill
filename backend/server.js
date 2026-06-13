@@ -95,7 +95,7 @@ app.get("/api/health", (req, res) => {
     dbMode: isPgMem ? "pg-mem (NO DATABASE_URL)" : "PostgreSQL",
     buildId: process.env.RAILWAY_DEPLOYMENT_ID || BUILD_ID,
     uptime: process.uptime(),
-    deploymentMarker: "DEBUG_MARKER_V1"
+    deploymentMarker: "DEBUG_MARKER_V2"
   });
 });
 
