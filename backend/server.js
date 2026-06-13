@@ -4314,115 +4314,155 @@ app.delete('/api/social/friend/:userId', (req, res) => {
 });
 
 // POST Block a user
-app.post('/api/social/block/:userId', (req, res) => {
+app.post('/api/social/block/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.body?.currentUserId || req.query?.currentUserId;
 
   if (!currentUserId) return res.status(400).json({ success: false, error: 'currentUserId required' });
   if (currentUserId === userId) return res.status(400).json({ success: false, error: 'Kendinizi engelleyemezsiniz.' });
 
-  const db = readDB();
+  try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
 
-  // Check if already blocked — idempotent: return success if already blocked
-  const alreadyBlocked = (db.blocked_users || []).some(b => b.blockerUserId === currentUserId && b.blockedUserId === userId);
-  if (alreadyBlocked) {
-    return res.json({ success: true, message: 'Kullanıcı zaten engelli.', alreadyBlocked: true });
+    let cId = currentUserId;
+    const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    if (cRows.length > 0) cId = cRows[0].id;
+
+    if (uRows.length === 0 || cRows.length === 0) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+
+    // Check if already blocked
+    const { rows: existRows } = await query('SELECT 1 FROM blocked_users WHERE "blockerId" = $1 AND "blockedId" = $2', [cId, targetId]);
+    if (existRows.length > 0) {
+      return res.json({ success: true, message: 'Kullanıcı zaten engelli.', alreadyBlocked: true });
+    }
+
+    // Insert block record
+    await query('INSERT INTO blocked_users ("blockerId", "blockedId") VALUES ($1, $2)', [cId, targetId]);
+
+    // Clean up follows between them
+    await query('DELETE FROM follows WHERE ("followerUserId" = $1 AND "followingUserId" = $2) OR ("followerUserId" = $2 AND "followingUserId" = $1)', [cId, targetId]);
+
+    // Clean up friend requests & friends
+    await query('DELETE FROM friend_requests WHERE ("fromUserId" = $1 AND "toUserId" = $2) OR ("fromUserId" = $2 AND "toUserId" = $1)', [cId, targetId]);
+    await query('DELETE FROM friends WHERE ("userId1" = $1 AND "userId2" = $2) OR ("userId1" = $2 AND "userId2" = $1)', [cId, targetId]);
+
+    // Notify socket clients of social stats update
+    const receiverSocketId = activeUsers.get(targetId);
+    if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId: targetId });
+    const senderSocketId = activeUsers.get(cId);
+    if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: cId });
+
+    res.json({ success: true, message: 'Kullanıcı engellendi.' });
+  } catch (error) {
+    console.error('[BLOCK_USER_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Engelleme başarısız: Sunucu hatası.' });
   }
-
-  const blockRecord = {
-    id: `b_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    blockerUserId: currentUserId,
-    blockedUserId: userId,
-    createdAt: new Date().toISOString()
-  };
-
-  if (!db.blocked_users) db.blocked_users = [];
-  db.blocked_users.push(blockRecord);
-
-  // Clean up follows between them
-  db.follows = db.follows.filter(f => !(
-    (f.followerUserId === currentUserId && f.followingUserId === userId) ||
-    (f.followerUserId === userId && f.followingUserId === currentUserId)
-  ));
-
-  writeDB(db);
-
-  // Notify socket clients of social stats update
-  const receiverSocketId = activeUsers.get(userId);
-  if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId });
-  const senderSocketId = activeUsers.get(currentUserId);
-  if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: currentUserId });
-
-  res.json({ success: true, message: 'Kullanıcı engellendi.' });
 });
 
 // DELETE Unblock a user
-app.delete('/api/social/block/:userId', (req, res) => {
+app.delete('/api/social/block/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.body?.currentUserId || req.query?.currentUserId;
 
   if (!currentUserId) return res.status(400).json({ success: false, error: 'currentUserId required' });
 
-  const db = readDB();
+  try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
 
-  if (!db.blocked_users) db.blocked_users = [];
-  const initialLength = db.blocked_users.length;
-  db.blocked_users = db.blocked_users.filter(b => !(b.blockerUserId === currentUserId && b.blockedUserId === userId));
+    let cId = currentUserId;
+    const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    if (cRows.length > 0) cId = cRows[0].id;
 
-  if (db.blocked_users.length === initialLength) {
-    // Idempotent: if no record was removed, still return success
-    return res.json({ success: true, message: 'Engel zaten kaldırılmış.', alreadyUnblocked: true });
+    const { rowCount } = await query('DELETE FROM blocked_users WHERE "blockerId" = $1 AND "blockedId" = $2', [cId, targetId]);
+
+    if (rowCount === 0) {
+      return res.json({ success: true, message: 'Engel zaten kaldırılmış.', alreadyUnblocked: true });
+    }
+
+    // Notify socket clients of social stats update
+    const receiverSocketId = activeUsers.get(targetId);
+    if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId: targetId });
+    const senderSocketId = activeUsers.get(cId);
+    if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: cId });
+
+    res.json({ success: true, message: 'Engeli kaldırıldı.' });
+  } catch (error) {
+    console.error('[UNBLOCK_USER_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Engel kaldırma başarısız: Sunucu hatası.' });
   }
-
-  writeDB(db);
-
-  // Notify socket clients of social stats update
-  const receiverSocketId = activeUsers.get(userId);
-  if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId });
-  const senderSocketId = activeUsers.get(currentUserId);
-  if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: currentUserId });
-
-  res.json({ success: true, message: 'Engeli kaldırıldı.' });
 });
 
 // GET Blocked users list
-app.get('/api/social/blocked-users', (req, res) => {
+app.get('/api/social/blocked-users', async (req, res) => {
   const currentUserId = req.query?.userId || req.query?.currentUserId;
   if (!currentUserId) return res.status(400).json({ success: false, error: 'userId required' });
 
-  const db = readDB();
-  const blockedIds = (db.blocked_users || [])
-    .filter(b => b.blockerUserId === currentUserId)
-    .map(b => b.blockedUserId);
+  try {
+    let cId = currentUserId;
+    const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    if (cRows.length > 0) cId = cRows[0].id;
 
-  const blockedList = db.users
-    .filter(u => blockedIds.includes(u.id) && u.isDeleted !== true && u.active !== false)
-    .map(u => ({ id: u.id, name: u.name, username: u.username, profileImage: u.profileImage || null }));
+    const { rows: blockedUsers } = await query(`
+      SELECT u.id, u.name, u.username, u."profileImage"
+      FROM blocked_users b
+      JOIN users u ON b."blockedId" = u.id
+      WHERE b."blockerId" = $1 AND (u."isDeleted" IS NULL OR u."isDeleted" = false) AND u.active = true
+    `, [cId]);
 
-  res.json({ success: true, users: blockedList });
+    const formattedList = blockedUsers.map(u => ({
+      id: u.id,
+      name: u.name,
+      username: u.username,
+      profileImage: u.profileImage || null
+    }));
+
+    res.json({ success: true, users: formattedList });
+  } catch (error) {
+    console.error('[BLOCKED_USERS_LIST_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Engellenen kullanıcılar listelenirken hata oluştu.' });
+  }
 });
 
 // GET Block status between currentUser and target user
-app.get('/api/social/block-status/:userId', (req, res) => {
+app.get('/api/social/block-status/:userId', async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.query?.currentUserId || req.query?.userId;
 
   if (!currentUserId) return res.status(400).json({ success: false, error: 'currentUserId required' });
 
-  const db = readDB();
-  const isBlockedByMe = (db.blocked_users || []).some(b => b.blockerUserId === currentUserId && b.blockedUserId === userId);
-  const hasBlockedMe  = (db.blocked_users || []).some(b => b.blockerUserId === userId && b.blockedUserId === currentUserId);
-  const isEitherBlocked = isBlockedByMe || hasBlockedMe;
+  try {
+    let targetId = userId;
+    const { rows: uRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [userId]);
+    if (uRows.length > 0) targetId = uRows[0].id;
 
-  console.log(`[BLOCK_STATUS] currentUser=${currentUserId} target=${userId} isBlockedByMe=${isBlockedByMe} hasBlockedMe=${hasBlockedMe}`);
+    let cId = currentUserId;
+    const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    if (cRows.length > 0) cId = cRows[0].id;
 
-  res.json({
-    success: true,
-    isBlockedByMe,
-    hasBlockedMe,
-    isBlockedByThem: hasBlockedMe,  // backward-compat alias
-    isEitherBlocked
-  });
+    const { rows: blockByMeRows } = await query('SELECT 1 FROM blocked_users WHERE "blockerId" = $1 AND "blockedId" = $2', [cId, targetId]);
+    const { rows: blockMeRows } = await query('SELECT 1 FROM blocked_users WHERE "blockerId" = $1 AND "blockedId" = $2', [targetId, cId]);
+
+    const isBlockedByMe = blockByMeRows.length > 0;
+    const hasBlockedMe = blockMeRows.length > 0;
+    const isEitherBlocked = isBlockedByMe || hasBlockedMe;
+
+    console.log(`[BLOCK_STATUS] currentUser=${cId} target=${targetId} isBlockedByMe=${isBlockedByMe} hasBlockedMe=${hasBlockedMe}`);
+
+    res.json({
+      success: true,
+      isBlockedByMe,
+      hasBlockedMe,
+      isBlockedByThem: hasBlockedMe,
+      isEitherBlocked
+    });
+  } catch (error) {
+    console.error('[BLOCK_STATUS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Engelleme durumu sorgulanamadı.' });
+  }
 });
 
 // POST Poke a user
