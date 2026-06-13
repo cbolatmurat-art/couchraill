@@ -448,7 +448,7 @@ export default function SecurityScreen() {
                 <Button title="İzin Ver" onPress={requestPermission} />
               </View>
             ) : (
-              <View style={{ flex: 1 }}>
+              <View>
                 <Text style={styles.modalStepIndicator}>Adım {verificationStep}/3</Text>
 
                 {verificationError ? (
@@ -461,9 +461,12 @@ export default function SecurityScreen() {
                 {/* Step 1: Front of ID Card */}
                 {verificationStep === 1 && (
                   <View style={styles.stepContainer}>
-                    <View>
-                      <Text style={styles.stepTitle}>Kimlik Ön Yüzü</Text>
-                      <Text style={styles.stepDesc}>Kimliğinizin ön yüzünü yatay olarak çerçeveye hizalayın.</Text>
+                    <Text style={styles.stepTitle}>Kimlik Ön Yüzü</Text>
+                    <Text style={styles.stepDesc}>Kimliğinizin ön yüzünü yatay olarak çerçeveye hizalayın.</Text>
+
+                    <View style={styles.warningBox}>
+                      <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
+                      <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
                     </View>
 
                     {idFrontImage ? (
@@ -501,20 +504,18 @@ export default function SecurityScreen() {
                         <View style={styles.captureButtonInner} />
                       </Pressable>
                     )}
-
-                    <View style={styles.warningBox}>
-                      <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
-                      <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
-                    </View>
                   </View>
                 )}
 
                 {/* Step 2: Back of ID Card */}
                 {verificationStep === 2 && (
                   <View style={styles.stepContainer}>
-                    <View>
-                      <Text style={styles.stepTitle}>Kimlik Arka Yüzü</Text>
-                      <Text style={styles.stepDesc}>Kimliğinizin arka yüzünü yatay olarak çerçeveye hizalayın.</Text>
+                    <Text style={styles.stepTitle}>Kimlik Arka Yüzü</Text>
+                    <Text style={styles.stepDesc}>Kimliğinizin arka yüzünü yatay olarak çerçeveye hizalayın.</Text>
+
+                    <View style={styles.warningBox}>
+                      <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
+                      <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
                     </View>
 
                     {idBackImage ? (
@@ -553,21 +554,14 @@ export default function SecurityScreen() {
                         <View style={styles.captureButtonInner} />
                       </Pressable>
                     )}
-
-                    <View style={styles.warningBox}>
-                      <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
-                      <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
-                    </View>
                   </View>
                 )}
 
                 {/* Step 3: Selfie */}
                 {verificationStep === 3 && (
                   <View style={styles.stepContainer}>
-                    <View>
-                      <Text style={styles.stepTitle}>Selfie Fotoğrafı</Text>
-                      <Text style={styles.stepDesc}>Yüzünüzü dairesel alanın içine hizalayarak selfie çekin.</Text>
-                    </View>
+                    <Text style={styles.stepTitle}>Selfie Fotoğrafı</Text>
+                    <Text style={styles.stepDesc}>Yüzünüzü dairesel alanın içine hizalayarak selfie çekin.</Text>
 
                     {selfieImage ? (
                       <View style={styles.previewContainerSelfie}>
@@ -760,7 +754,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: Platform.OS === 'ios' ? 30 : 16,
-    height: '82%',
+    maxHeight: '92%',
   },
   bottomSheetHandle: {
     width: 40,
@@ -811,7 +805,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepContainer: {
-    flex: 1,
     justifyContent: 'flex-start',
     gap: 8,
   },
