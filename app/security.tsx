@@ -194,7 +194,7 @@ export default function SecurityScreen() {
           if (!hasSimulatedFrontFailure) {
             // First attempt: simulate rejection of old ID / invalid card representation
             setHasSimulatedFrontFailure(true);
-            setVerificationError("Lütfen Kimliğinizi Tekrar Hizalayın");
+            setVerificationError("Lütfen Kimliğinize Hizalama Yapınız");
           } else {
             // Second attempt: succeeds
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -207,7 +207,7 @@ export default function SecurityScreen() {
           if (!hasSimulatedBackFailure) {
             // First attempt: simulate rejection of old ID / invalid card representation
             setHasSimulatedBackFailure(true);
-            setVerificationError("Lütfen Kimliğinizi Tekrar Hizalayın");
+            setVerificationError("Lütfen Kimliğinize Hizalama Yapınız");
           } else {
             // Second attempt: succeeds
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
