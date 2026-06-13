@@ -72,6 +72,8 @@ function RootLayoutContent() {
       <Stack.Screen name="legal/kvkk" options={{ title: 'Gizlilik' }} />
       <Stack.Screen name="legal/privacy" options={{ title: 'Gizlilik' }} />
       <Stack.Screen name="legal/explicit-consent" options={{ title: 'Gizlilik' }} />
+      <Stack.Screen name="legal/terms" options={{ title: 'Gizlilik' }} />
+      <Stack.Screen name="legal/community-guidelines" options={{ title: 'Gizlilik' }} />
     </Stack>
   );
 }

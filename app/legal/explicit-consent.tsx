@@ -21,17 +21,27 @@ export default function ExplicitConsentScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Açık Rıza Beyanı</Text>
         <Text style={styles.paragraph}>
-          Kimlik doğrulama işlemi, topluluğumuzun güvenliği ve sahte hesapların önlenmesi amacıyla gerçekleştirilmektedir. Kimliğinizin doğrulanması için yükleyeceğiniz belgelerin ve selfie fotoğrafınızın işlenmesi, açık rızanıza tabidir.
+          Misafirim Ol platformunda gerçekleştireceğiniz doğrulama işlemleri (kimlik doğrulama, telefon numarası doğrulama ve e-posta adresi doğrulama), topluluğumuzun güvenliği ve sahte hesapların önlenmesi amacıyla gerçekleştirilmektedir. Bu kapsamda hassas kişisel verilerinizin işlenmesi tamamen sizin özgür iradenizle vereceğiniz açık rızanıza bağlıdır.
         </Text>
-        <Text style={styles.subtitle}>Verilerinizin İşlenmesine İzin Vermekle:</Text>
+
+        <Text style={styles.subtitle}>1. Kimlik Doğrulama Süreci ve Biyometrik Veriler</Text>
         <Text style={styles.paragraph}>
-          - Kimlik belgenizdeki bilgilerin ve fotoğrafınızın veri tabanımızda güvenli bir biçimde doğrulanmasını,
-          - Yüklediğiniz selfie fotoğrafı ile kimlik fotoğrafınızın karşılaştırılarak eşleştirilmesini,
-          - Verilerinizin güvenli uploads klasörümüzde yetkisiz erişime kapalı saklanmasını onaylamış olursunuz.
+          Kimlik doğrulama sihirbazı aracılığıyla sisteme yükleyeceğiniz resmi T.C. kimlik kartı görselleriniz ile anlık olarak çekilen selfie (özçekim) fotoğrafınız, yapay zeka destekli güvenlik sistemlerimiz veya yetkili moderatörlerimiz tarafından karşılaştırılarak eşleştirilir. Bu süreçte fotoğrafınız üzerinden biyometrik/yüz eşleştirme verileriniz işlenmektedir.
         </Text>
-        <Text style={styles.subtitle}>Rızanın Geri Alınması:</Text>
+
+        <Text style={styles.subtitle}>2. Telefon ve E-posta Doğrulama</Text>
         <Text style={styles.paragraph}>
-          Açık rızanızı dilediğiniz zaman profilinizdeki Gizlilik Ayarları bölümünden kimlik doğrulama verilerinizi silerek geri alabilirsiniz. Bu durumda doğrulanmış durumunuz iptal edilecek ve görselleriniz sunucularımızdan tamamen kalıcı olarak silinecektir.
+          Hesap güvenliğinizi doğrulamak, çift faktörlü koruma sağlamak ve iletişim kanallarımızı açık tutmak amacıyla e-posta adresinize ve telefon numaranıza doğrulama kodları gönderilir. Bu iletişim bilgileri doğrulanarak profilinize işlenmektedir.
+        </Text>
+
+        <Text style={styles.subtitle}>3. Açık Rıza Kapsamı</Text>
+        <Text style={styles.paragraph}>
+          Bu beyanı onaylayarak; resmi kimlik belgenizde yer alan ad-soyad, T.C. kimlik numarası, doğum tarihi, kimlik seri numarası ve fotoğraf bilgileriniz ile doğrulama amaçlı çekilen selfie fotoğrafınızın karşılaştırma ve güvenlik kontrolü süreçlerinde işlenmesine, sunucularımızdaki güvenli dizinlerde Kanun'a uygun olarak geçici süreyle saklanmasına rıza göstermiş olursunuz.
+        </Text>
+
+        <Text style={styles.subtitle}>4. Rızanın Geri Alınması ve Haklar</Text>
+        <Text style={styles.paragraph}>
+          Kişisel verilerinizin işlenmesine verdiğiniz açık rızayı, profil ayarlarınızdaki "Gizlilik" bölümünü kullanarak istediğiniz zaman kimlik verilerinizi silerek geri alabilirsiniz. Rızanızı geri aldığınızda, kimlik doğrulama belgeleriniz sunucularımızdan tamamen ve kalıcı olarak yok edilecek, hesabınızın "doğrulanmış" statüsü iptal edilecektir.
         </Text>
       </ScrollView>
     </View>

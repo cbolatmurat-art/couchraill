@@ -21,23 +21,32 @@ export default function KVKKScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>KVKK Aydınlatma Metni</Text>
         <Text style={styles.paragraph}>
-          Misafirim Ol platformu olarak, kişisel verilerinizin güvenliğine önem veriyor ve 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında veri sorumlusu olarak hareket ediyoruz. Bu metin, kimlik doğrulama işlemi sırasında toplanan kişisel verilerinizin işlenme amaçları, yöntemleri ve haklarınız konusunda sizi bilgilendirmek amacıyla hazırlanmıştır.
+          Misafirim Ol platformu olarak, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca, kişisel verilerinizin güvenliğine ve gizliliğine en üst düzeyde önem veriyoruz. Bu aydınlatma metni, 2026 yılı güncel mevzuat standartlarına uygun olarak veri sorumlusu sıfatıyla işlediğimiz kişisel verilerinize ilişkin detayları açıklamak amacıyla hazırlanmıştır.
         </Text>
-        <Text style={styles.subtitle}>1. İşlenen Kişisel Verileriniz</Text>
+        
+        <Text style={styles.subtitle}>1. Veri Sorumlusu</Text>
         <Text style={styles.paragraph}>
-          Kimlik doğrulama başvurusu kapsamında; kimlik belgenizin ön yüz görseli, arka yüz görseli, selfie görseliniz ile adınız, e-posta adresiniz ve telefon numaranız işlenmektedir.
+          Kişisel verileriniz, veri sorumlusu olarak Misafirim Ol Platformu tarafından Kanun'a ve dürüstlük kurallarına uygun olarak işlenmekte ve korunmaktadır.
         </Text>
-        <Text style={styles.subtitle}>2. Kişisel Verilerinizin İşlenme Amaçları</Text>
+
+        <Text style={styles.subtitle}>2. İşlenen Kişisel Verileriniz</Text>
         <Text style={styles.paragraph}>
-          Bu veriler, yalnızca kimliğinizin doğrulanması, platform güvenliğinin sağlanması, dolandırıcılığın önlenmesi ve topluluk güvenliğinin korunması amaçlarıyla işlenir.
+          Platformumuzu kullanımınız kapsamında; ad-soyad, e-posta adresi, telefon numarası, yaşanılan şehir, profil fotoğrafı, adres gibi temel üyelik bilgilerinizin yanı sıra güvenlik ve kimlik doğrulama amacıyla yüklediğiniz kimlik belgesi görselleri (ön ve arka yüz) ile doğrulama amaçlı selfie (özçekim) fotoğraflarınız işlenmektedir.
         </Text>
-        <Text style={styles.subtitle}>3. Veri Güvenliği ve Saklama Süresi</Text>
+
+        <Text style={styles.subtitle}>3. Kişisel Verilerin İşlenme Amaçları</Text>
         <Text style={styles.paragraph}>
-          Yüklediğiniz belgeler genel erişime kapalıdır ve güvenli klasörlerde (`uploads/private-verifications`) saklanır. Belgeleriniz onaylanması durumunda 90 gün, reddedilmesi durumunda ise 30 gün içinde sistemden fiziksel olarak kalıcı olarak silinmektedir.
+          Kişisel verileriniz; üyelik işlemlerinin tamamlanması, kimlik doğrulama süreçlerinin yürütülmesi, platform içi güvenliğin en üst düzeyde tutulması, dolandırıcılığın önlenmesi, topluluk kurallarının işletilmesi ve yasal mercilerden gelebilecek bilgi/belge taleplerinin karşılanması amaçlarıyla işlenir.
         </Text>
-        <Text style={styles.subtitle}>4. Haklarınız</Text>
+
+        <Text style={styles.subtitle}>4. Kişisel Verilerin Saklama Süreleri</Text>
         <Text style={styles.paragraph}>
-          KVKK Madde 11 uyarınca, verilerinizin silinmesini talep etme, işlenip işlenmediğini öğrenme ve bilgi talep etme haklarına sahipsiniz. Profil {" > "} Gizlilik bölümünden doğrulama verilerinizi istediğiniz zaman tamamen silebilirsiniz.
+          Temel profil verileriniz hesabınız aktif olduğu sürece saklanır. Kimlik doğrulama başvurusu kapsamında yüklediğiniz resmi kimlik ve selfie belgeleri ise, başvurunuzun onaylanması durumunda 90 gün, reddedilmesi durumunda ise 30 gün içinde sistemden ve sunuculardan fiziksel olarak kalıcı olarak silinmektedir.
+        </Text>
+
+        <Text style={styles.subtitle}>5. KVKK Kapsamındaki Haklarınız</Text>
+        <Text style={styles.paragraph}>
+          KVKK Madde 11 uyarınca; verilerinizin işlenip işlenmediğini öğrenme, işleme amaçlarını sorma, verilerin silinmesini veya düzeltilmesini talep etme haklarına sahipsiniz. Platformumuzun {"Ayarlar > Gizlilik"} bölümünden tüm kimlik belgelerinizi dilediğiniz an tek tıkla silebilir veya tüm kişisel verilerinizin kopyasını JSON formatında indirebilirsiniz.
         </Text>
       </ScrollView>
     </View>

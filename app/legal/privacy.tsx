@@ -21,26 +21,35 @@ export default function PrivacyPolicyScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Gizlilik Politikası</Text>
         <Text style={styles.paragraph}>
-          Misafirim Ol olarak, kullanıcılarımızın kişisel verilerinin gizliliğine ve güvenliğine büyük önem veriyoruz. Bu gizlilik politikası, platformumuzu kullanırken toplanan, işlenen ve saklanan verilerinize dair esasları açıklamaktadır.
+          Misafirim Ol olarak, kullanıcılarımızın kişisel verilerinin gizliliğine ve güvenliğine büyük önem veriyoruz. Bu gizlilik politikası, 2026 yılı standartlarına uygun olarak platformumuzu kullanırken toplanan, işlenen ve saklanan verilerinize dair esasları açıklamaktadır.
         </Text>
+        
         <Text style={styles.subtitle}>1. Toplanan Veriler</Text>
         <Text style={styles.paragraph}>
-          Platformumuza kayıt olurken sağladığınız ad, e-posta adresi, telefon numarası gibi temel üyelik bilgilerinin yanı sıra, güvenliğiniz ve kimlik doğrulaması amacıyla yüklediğiniz kimlik ve selfie belgeleri işlenmektedir.
+          Platformumuza kayıt olurken ve profilinizi güncellerken sağladığınız ad-soyad, e-posta adresi, telefon numarası gibi temel üyelik verilerinin yanı sıra güvenliğiniz ve kimlik doğrulaması amacıyla yüklediğiniz kimlik kartı görselleri ile selfie fotoğrafınız işlenmektedir.
         </Text>
-        <Text style={styles.subtitle}>2. Veri Güvenliği ve Saklama Koşulları</Text>
+
+        <Text style={styles.subtitle}>2. Verilerin Kullanım Amaçları</Text>
         <Text style={styles.paragraph}>
-          Kişisel verileriniz ve özellikle kimlik doğrulama belgeleriniz, en yüksek güvenlik standartlarına sahip özel ve dışarıdan erişilemeyen güvenli klasörlerde saklanır. Bu belgelere sadece yetkili yöneticiler şifreli admin paneli üzerinden erişebilir. Verileriniz, yasal saklama süreleri (onay durumunda 90 gün, ret durumunda 30 gün) sonunda otomatik olarak tamamen silinir.
+          Toplanan verileriniz; üyeliğinizin oluşturulması, kimliğinizin doğrulanması, platform güvenliğinin sağlanması, dolandırıcılığın ve sahte hesapların önlenmesi ile yasal yükümlülüklerin yerine getirilmesi amacıyla kullanılır.
         </Text>
-        <Text style={styles.subtitle}>3. Kullanıcı Hakları ve Silme Talepleri</Text>
+
+        <Text style={styles.subtitle}>3. Veri Güvenliği ve Saklama Süreleri</Text>
         <Text style={styles.paragraph}>
-          Kullanıcılarımız her zaman kendi verileri üzerinde tam kontrol sahibidir. Profilinizde yer alan "Gizlilik" sekmesini kullanarak:
-          - Sistemde kayıtlı tüm verilerinizin bir kopyasını indirebilir (JSON formatında),
-          - Kimlik doğrulama verilerinizi ve belgelerinizi anında silebilir,
-          - Hesabınızı kalıcı olarak kapatıp tüm verilerinizin sistemden tamamen temizlenmesini sağlayabilirsiniz.
+          Kişisel verileriniz, en yüksek güvenlik standartlarına sahip özel ve dışarıdan erişilemeyen güvenli klasörlerde saklanır. Kimlik doğrulama belgeleriniz onaylanması durumunda 90 gün, reddedilmesi durumunda ise 30 gün içinde sistemimizden tamamen ve geri döndürülemez şekilde silinir. Profil verileriniz ise üyeliğiniz boyunca saklanmaya devam eder.
         </Text>
-        <Text style={styles.subtitle}>4. Değişiklikler ve İletişim</Text>
+
+        <Text style={styles.subtitle}>4. Üçüncü Kişilerle Paylaşım Sınırları</Text>
         <Text style={styles.paragraph}>
-          Gizlilik politikamız zaman zaman güncellenebilir. Platformumuzun gizlilik pratikleri hakkında her türlü soru ve talebiniz için destek ekibimizle iletişime geçebilirsiniz.
+          Misafirim Ol, kişisel verilerinizi yasal zorunluluklar ve mahkeme kararları gibi resmi makam talepleri haricinde hiçbir şart ve koşulda üçüncü şahıslarla, şirketlerle veya reklam ağlarıyla paylaşmaz, satmaz veya kiralamaz.
+        </Text>
+
+        <Text style={styles.subtitle}>5. Kullanıcı Hakları</Text>
+        <Text style={styles.paragraph}>
+          Kullanıcılarımız kendi verileri üzerinde tam kontrol hakkına sahiptir. {"Ayarlar > Gizlilik"} bölümünden:
+          - Kişisel verilerinizin bir kopyasını JSON formatında indirebilir,
+          - Kimlik doğrulama belgelerinizi anında silip doğrulama durumunuzu sonlandırabilir,
+          - Hesabınızı kalıcı olarak kapatarak tüm platform geçmişinizi tamamen sildirebilirsiniz.
         </Text>
       </ScrollView>
     </View>

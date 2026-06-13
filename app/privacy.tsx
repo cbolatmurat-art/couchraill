@@ -210,6 +210,18 @@ export default function PrivacyScreen() {
             Kişisel verilerinizin işlenme detayları, saklama politikaları ve haklarınız hakkında detaylı bilgi alın.
           </Text>
           
+          <Pressable style={styles.legalLinkRow} onPress={() => router.push('/legal/terms')}>
+            <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+            <Text style={styles.legalLinkText}>Kullanım Koşulları</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+          </Pressable>
+
+          <Pressable style={styles.legalLinkRow} onPress={() => router.push('/legal/community-guidelines')}>
+            <Ionicons name="people-outline" size={20} color={Colors.primary} />
+            <Text style={styles.legalLinkText}>Topluluk Kuralları</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+          </Pressable>
+
           <Pressable style={styles.legalLinkRow} onPress={() => router.push('/legal/kvkk')}>
             <Ionicons name="document-text" size={20} color={Colors.primary} />
             <Text style={styles.legalLinkText}>KVKK Aydınlatma Metni</Text>
