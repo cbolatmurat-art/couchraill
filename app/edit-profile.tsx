@@ -23,13 +23,15 @@ export default function EditProfileScreen() {
   const [phone, setPhone] = useState(currentUser?.phone?.replace(/^\+90/, '') || '');
   const [email, setEmail] = useState(currentUser?.email || '');
   
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
-  
+
   const [profileImage, setProfileImage] = useState(currentUser?.profileImage || null);
   
   const [city, setCity] = useState(currentUser?.city || '');
+  
+  const initialGender = currentUser?.gender || '';
+  const isStandardGender = ['Erkek', 'Kadın', 'Söylemek istemiyorum', ''].includes(initialGender);
+  const [genderType, setGenderType] = useState(isStandardGender ? (initialGender || '') : 'Özel');
+  const [customGender, setCustomGender] = useState(isStandardGender ? '' : initialGender);
 
   // Keep state in sync with currentUser if it loads asynchronously
   React.useEffect(() => {
@@ -40,6 +42,15 @@ export default function EditProfileScreen() {
       setEmail(currentUser.email || '');
       setProfileImage(currentUser.profileImage || null);
       setCity(currentUser.city || '');
+      
+      const g = currentUser.gender || '';
+      if (['Erkek', 'Kadın', 'Söylemek istemiyorum', ''].includes(g)) {
+        setGenderType(g);
+        setCustomGender('');
+      } else {
+        setGenderType('Özel');
+        setCustomGender(g);
+      }
     }
   }, [currentUser]);
 
@@ -391,21 +402,6 @@ export default function EditProfileScreen() {
       return;
     }
 
-    if (newPassword || newPasswordConfirm) {
-      if (newPassword.length < 6) {
-        setErrorMsg('Yeni şifreniz en az 6 karakter olmalıdır.');
-        return;
-      }
-      if (newPassword !== newPasswordConfirm) {
-        setErrorMsg('Yeni şifreler birbiriyle eşleşmiyor.');
-        return;
-      }
-      if (!currentPassword) {
-        setErrorMsg('Şifrenizi değiştirmek için mevcut şifrenizi girmelisiniz.');
-        return;
-      }
-    }
-
     if (usernameStatus === 'taken') {
       return;
     }
@@ -419,14 +415,11 @@ export default function EditProfileScreen() {
         phone: phone.trim() ? `+90${phone.trim()}` : '',
         email,
         city,
-        profileImage
+        profileImage,
+        gender: genderType === 'Özel' ? customGender : genderType
       };
 
-      if (newPassword) {
-        updates.password = newPassword;
-      }
-
-      const result = await updateProfile(updates, currentPassword);
+      const result = await updateProfile(updates);
 
       if (result.success) {
         setSuccessMsg((result as any).message || 'Profil bilgileriniz güncellendi.');
@@ -618,6 +611,34 @@ export default function EditProfileScreen() {
               }
             />
 
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 6, marginLeft: 4 }}>Cinsiyet</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {['Erkek', 'Kadın', 'Söylemek istemiyorum', 'Özel'].map(opt => (
+                  <Pressable
+                    key={opt}
+                    onPress={() => { setGenderType(opt); if (opt !== 'Özel') setCustomGender(''); }}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+                      backgroundColor: genderType === opt ? Colors.primary : '#F1F5F9',
+                      borderWidth: 1, borderColor: genderType === opt ? Colors.primary : '#CBD5E1'
+                    }}
+                  >
+                    <Text style={{ color: genderType === opt ? '#FFF' : Colors.text, fontSize: 13, fontWeight: '500' }}>{opt}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              {genderType === 'Özel' && (
+                <View style={{ marginTop: 8 }}>
+                  <Input
+                    placeholder="Lütfen cinsiyetinizi belirtin..."
+                    value={customGender}
+                    onChangeText={setCustomGender}
+                  />
+                </View>
+              )}
+            </View>
+
             <View style={styles.cityPickerGroup}>
               <Text style={styles.cityPickerLabel}>Yaşadığı Şehir</Text>
               <CityPicker
@@ -696,39 +717,6 @@ export default function EditProfileScreen() {
               </View>
             </View>
 
-
-
-            <View style={styles.divider} />
-            <Text style={styles.sectionTitle}>Şifre Güncelleme</Text>
-            <Text style={styles.sectionHint}>Şifrenizi değiştirmek istemiyorsanız bu alanları boş bırakın.</Text>
-
-            <Input
-              label="Mevcut Şifre"
-              placeholder="••••••••"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry={true}
-              autoCapitalize="none"
-            />
-
-            <Input
-              label="Yeni Şifre"
-              placeholder="En az 6 karakter"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry={true}
-              autoCapitalize="none"
-            />
-
-            <Input
-              label="Yeni Şifre (Tekrar)"
-              placeholder="Yeni şifrenizi doğrulayın"
-              value={newPasswordConfirm}
-              onChangeText={setNewPasswordConfirm}
-              secureTextEntry={true}
-              autoCapitalize="none"
-            />
-            
             <View style={styles.buttonWrapper}>
               <Pressable 
                 style={[styles.submitBtn, (isSubmitting || usernameStatus === 'taken') && styles.submitBtnDisabled]}

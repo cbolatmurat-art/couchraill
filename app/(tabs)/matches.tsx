@@ -636,13 +636,14 @@ export default function DiscoverScreen() {
         transparent={true}
         onRequestClose={closeComments}
       >
-        <KeyboardAvoidingView 
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={closeComments} />
-          
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
+        <View style={styles.modalOverlayFixed}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeComments} />
+          <KeyboardAvoidingView 
+            style={styles.modalSheetWrapper}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            pointerEvents="box-none"
+          >
+            <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
               <TouchableOpacity onPress={closeComments} style={styles.modalCloseBtn}>
@@ -693,8 +694,9 @@ export default function DiscoverScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {reportItem && currentUser && (
@@ -746,7 +748,8 @@ const styles = StyleSheet.create({
   emptyTitle: { ...Typography.header, fontSize: 20, textAlign: 'center', marginBottom: 12, color: Colors.text },
   emptyText: { ...Typography.body, textAlign: 'center', color: Colors.textLight, lineHeight: 22 },
   
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalOverlayFixed: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheetWrapper: { justifyContent: 'flex-end' },
   modalBackground: { ...StyleSheet.absoluteFillObject },
   modalContent: { backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '75%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },

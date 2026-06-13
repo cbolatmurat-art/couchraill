@@ -19,7 +19,6 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [successText, setSuccessText] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   // Şifremi Unuttum state
   const [forgotVisible, setForgotVisible] = useState(false);
@@ -75,7 +74,7 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const user = await login(email, password, rememberMe);
+      const user = await login(email, password, true);
       if (user) {
         setSuccessText("Giriş başarılı, yönlendiriliyorsunuz...");
         setTimeout(() => {
@@ -226,21 +225,7 @@ export default function LoginScreen() {
               <Text style={styles.forgotLinkText}>Şifremi Unuttum?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => !loading && setRememberMe(prev => !prev)}
-              style={styles.checkboxContainer}
-              activeOpacity={0.8}
-            >
-              <View style={[
-                styles.checkbox,
-                rememberMe && styles.checkboxActive
-              ]}>
-                {rememberMe && (
-                  <Ionicons name="checkmark" size={14} color="#FFF" />
-                )}
-              </View>
-              <Text style={styles.checkboxLabel}>Beni hatırla</Text>
-            </TouchableOpacity>
+
 
             <View style={styles.buttonWrapper}>
               <Button
@@ -321,31 +306,7 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 8,
   },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-    paddingVertical: 4,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    backgroundColor: 'transparent',
-  },
-  checkboxActive: {
-    backgroundColor: Colors.primary,
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: Colors.text,
-  },
+
   buttonWrapper: {
     marginTop: 24,
   },

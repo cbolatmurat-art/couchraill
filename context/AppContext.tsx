@@ -367,7 +367,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         console.log("APP_BOOT_START");
         console.log("API_BASE_URL", API_BASE_URL);
         
-        await fetchListingsAndRequests();
+        // Verileri arka planda yüklemeye başla, splash ekranını bloke etme
+        fetchListingsAndRequests().catch(e => console.warn('Background fetch error:', e));
 
         console.log("SESSION_CHECK_START");
         const storedSession = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
@@ -382,9 +383,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             
             // First try backend — this also validates the account is not deleted
             let apiUserResult: any = null;
+            let forceLogout = false;
             try {
               const controller = new AbortController();
-              const id = setTimeout(() => controller.abort(), 3000);
+              const id = setTimeout(() => controller.abort(), 6000);
               const res = await fetch(`${API_BASE_URL}/auth/me?userId=${sessionData.userId}`, {
                 signal: controller.signal as any
               });
@@ -392,20 +394,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               if (res.ok) {
                 apiUserResult = await res.json();
               } else if (res.status === 404 || res.status === 401 || res.status === 403) {
-                // User not found on server — could be deleted by admin
-                // Clear session unconditionally (don't fall back to local)
                 console.log('SESSION_USER_NOT_FOUND_ON_SERVER — clearing session');
+                forceLogout = true;
                 await clearAuthStorage();
                 setCurrentUser(null);
-                apiUserResult = null;
               }
             } catch (_) {
               // Network error — fall through to local fallback
+              console.log('AUTH_ME_NETWORK_ERROR — falling back to local storage');
             }
 
             if (apiUserResult && apiUserResult.user) {
               setCurrentUser(apiUserResult.user);
-              await fetchUserData(sessionData.userId);
+              // Kullanıcıya ait verileri arka planda yükle, splash'ı bekletme
+              fetchUserData(sessionData.userId).catch(e => console.warn('Background user data fetch error:', e));
+            } else if (!forceLogout) {
+              // Local fallback (offline support or timeout)
+              const localUser = await AsyncStorage.getItem('currentUser');
+              if (localUser) {
+                try {
+                  setCurrentUser(JSON.parse(localUser));
+                  fetchUserData(sessionData.userId).catch(e => console.warn('Background user data fetch error:', e));
+                } catch(e) {}
+              }
             }
           } else {
             await clearAuthStorage();
@@ -736,7 +747,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Giriş yapılamadı. Lütfen tekrar deneyin.");
       }
 
-      const duration = rememberMe ? (60 * 60 * 1000) : (15 * 60 * 1000);
+      // Oturum süresi 365 gün olarak ayarlandı
+      const duration = 365 * 24 * 60 * 60 * 1000;
       const sessionData: SessionData = {
         userId: data.user.id,
         expiresAt: Date.now() + duration

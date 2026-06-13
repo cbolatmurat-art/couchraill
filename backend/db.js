@@ -123,10 +123,17 @@ const initDB = async () => {
         "fullName" VARCHAR(255),
         "livingCity" VARCHAR(255),
         "termsAccepted" BOOLEAN DEFAULT false,
-        "termsAcceptedAt" TIMESTAMP
+        "termsAcceptedAt" TIMESTAMP,
+        gender VARCHAR(100)
       )
     `);
 
+    try {
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(100)');
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true');
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS "deactivatedAt" TIMESTAMP');
+    } catch(e) {}
+    
     // Listings
     await client.query(`
       CREATE TABLE IF NOT EXISTS listings (

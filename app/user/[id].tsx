@@ -435,6 +435,13 @@ export default function PublicProfileScreen() {
               <Text style={{ fontSize: 13, color: Colors.textLight, marginBottom: 2 }}>@{profile.username}</Text>
             ) : null}
 
+            {profile.gender && profile.gender !== 'Söylemek istemiyorum' && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginTop: 2 }}>
+                <Ionicons name={profile.gender === 'Erkek' ? 'male' : profile.gender === 'Kadın' ? 'female' : 'person'} size={14} color={Colors.textLight} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 13, color: Colors.textLight }}>{profile.gender}</Text>
+              </View>
+            )}
+
             <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '500', marginBottom: 2, marginTop: 4 }}>
               {profile.city ? `📍 ${profile.city} • ` : ''}{profile.userType === 'host' ? 'Ev Sahibi' : 'Ev Arıyorum'}
             </Text>

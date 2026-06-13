@@ -428,9 +428,10 @@ export default function CreatePostScreen() {
       </KeyboardAvoidingView>
 
       <Modal visible={isTagModalVisible} animationType="slide" transparent={true} onRequestClose={() => setIsTagModalVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={() => setIsTagModalVisible(false)} />
-          <View style={styles.modalContent}>
+        <View style={styles.modalOverlayFixed}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setIsTagModalVisible(false)} />
+          <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+            <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Arkadaş Etiketle</Text>
               <TouchableOpacity onPress={() => setIsTagModalVisible(false)} style={styles.closeBtn}>
@@ -511,14 +512,16 @@ export default function CreatePostScreen() {
             <View style={{ padding: 16, paddingBottom: Math.max(insets.bottom, 16), borderTopWidth: 1, borderTopColor: Colors.border }}>
               <Button title="Tamam" onPress={() => setIsTagModalVisible(false)} />
             </View>
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       <Modal visible={isLocationModalVisible} animationType="slide" transparent={true} onRequestClose={() => setIsLocationModalVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={() => setIsLocationModalVisible(false)} />
-          <View style={styles.modalContent}>
+        <View style={styles.modalOverlayFixed}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setIsLocationModalVisible(false)} />
+          <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+            <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yerimi Bildir</Text>
               <TouchableOpacity onPress={() => setIsLocationModalVisible(false)} style={styles.closeBtn}>
@@ -594,8 +597,9 @@ export default function CreatePostScreen() {
                 )}
               </View>
             )}
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
     </SafeAreaView>
@@ -735,7 +739,8 @@ const styles = StyleSheet.create({
   shareBtnDisabled: {
     backgroundColor: Colors.border,
   },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalOverlayFixed: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheetWrapper: { justifyContent: 'flex-end' },
   modalBackground: { flex: 1 },
   modalContent: {
     backgroundColor: '#fff',

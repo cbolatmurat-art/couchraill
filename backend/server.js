@@ -862,7 +862,8 @@ app.put('/api/users/profile', async (req, res) => {
       phone: 'phone',
       email: 'email',
       password: 'password',
-      username: 'username'
+      username: 'username',
+      gender: 'gender'
     };
 
     for (const [key, value] of Object.entries(updates)) {

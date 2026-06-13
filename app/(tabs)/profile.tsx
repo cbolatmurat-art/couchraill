@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, Image, Button as RNButton, Pressable, Linking, Platform, Modal, Animated, TouchableWithoutFeedback, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, Alert, ScrollView, Image, Button as RNButton, Pressable, Linking, Platform, Modal, Animated, TouchableWithoutFeedback, DeviceEventEmitter, TextInput } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { useAppContext } from '../../context/AppContext';
@@ -13,6 +13,10 @@ import NotificationBell from '../../components/NotificationBell';
 import { SocialListModal } from '../../components/SocialListModal';
 import { UserPosts } from '../../components/UserPosts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { Dimensions } from 'react-native';
+
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ProfileScreen() {
   const { 
@@ -36,7 +40,7 @@ export default function ProfileScreen() {
 
   const insets = useSafeAreaInsets();
   const [menuVisible, setMenuVisible] = useState(false);
-  const slideAnim = React.useRef(new Animated.Value(300)).current;
+  const slideAnim = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('refresh_request_profile', async () => {
@@ -67,7 +71,7 @@ export default function ProfileScreen() {
 
   const closeMenu = () => {
     Animated.timing(slideAnim, {
-      toValue: 300,
+      toValue: SCREEN_WIDTH,
       duration: 250,
       useNativeDriver: true,
     }).start(() => setMenuVisible(false));
@@ -82,7 +86,40 @@ export default function ProfileScreen() {
   const [issueModalVisible, setIssueModalVisible] = useState(false);
   const [issueSubject, setIssueSubject] = useState('');
   const [issueDesc, setIssueDesc] = useState('');
+  const [issueImage, setIssueImage] = useState<string | null>(null);
   const [issueLoading, setIssueLoading] = useState(false);
+  const issueSlideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  const openIssueModal = () => {
+    setIssueModalVisible(true);
+    Animated.timing(issueSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeIssueModal = () => {
+    Animated.timing(issueSlideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setIssueModalVisible(false));
+  };
+
+  const pickIssueImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setIssueImage(base64Image);
+    }
+  };
 
   const handleSubmitIssue = async () => {
     if (!issueSubject.trim() || !issueDesc.trim()) {
@@ -99,15 +136,16 @@ export default function ProfileScreen() {
           userName: currentUser.name || currentUser.fullName || 'Bilinmiyor',
           subject: issueSubject,
           description: issueDesc,
-          imageUrl: null
+          imageUrl: issueImage
         })
       });
       const data = await res.json();
       if (data.success) {
         Alert.alert('Başarılı', data.message || 'Sorun bildiriminiz alındı.');
-        setIssueModalVisible(false);
+        closeIssueModal();
         setIssueSubject('');
         setIssueDesc('');
+        setIssueImage(null);
       } else {
         Alert.alert('Hata', data.error || 'Bildirim gönderilemedi.');
       }
@@ -532,6 +570,13 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: 13, color: Colors.textLight, marginBottom: 2 }}>@{currentUser.username}</Text>
           ) : null}
           
+          {currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginTop: 2 }}>
+              <Ionicons name={currentUser.gender === 'Erkek' ? 'male' : currentUser.gender === 'Kadın' ? 'female' : 'person'} size={14} color={Colors.textLight} style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 13, color: Colors.textLight }}>{currentUser.gender}</Text>
+            </View>
+          )}
+          
           {/* Statuses (Only show action required statuses) */}
           {currentUser.identityVerificationStatus === 'pending' ? (
             <View style={styles.statusBadgePending}>
@@ -615,7 +660,7 @@ export default function ProfileScreen() {
         <TouchableWithoutFeedback onPress={closeMenu}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <Animated.View style={[styles.sideMenu, { transform: [{ translateX: slideAnim }] }, { paddingTop: insets.top || 40 }]}>
+              <Animated.View style={[styles.sideMenu, { transform: [{ translateX: slideAnim }] }, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
                 <View style={styles.menuHeader}>
                   <Text style={styles.menuTitle}>Ayarlar</Text>
                   <Pressable onPress={closeMenu} style={styles.menuCloseBtn}>
@@ -638,7 +683,7 @@ export default function ProfileScreen() {
                   <Text style={styles.menuItemText}>Gizlilik</Text>
                 </Pressable>
                 
-                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); setIssueModalVisible(true); }}>
+                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); setTimeout(openIssueModal, 300); }}>
                   <Ionicons name="alert-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
                   <Text style={styles.menuItemText}>Sorun Bildir</Text>
                 </Pressable>
@@ -665,44 +710,73 @@ export default function ProfileScreen() {
       <Modal
         visible={issueModalVisible}
         transparent={true}
-        animationType="slide"
-        onRequestClose={() => setIssueModalVisible(false)}
+        animationType="fade"
+        onRequestClose={closeIssueModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.issueModalContainer}>
-            <View style={styles.issueModalHeader}>
-              <Text style={styles.issueModalTitle}>Sorun Bildir</Text>
-              <Pressable onPress={() => setIssueModalVisible(false)} style={styles.menuCloseBtn}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </Pressable>
-            </View>
-            <ScrollView style={styles.issueModalBody} keyboardShouldPersistTaps="handled">
-              <Text style={styles.issueModalDesc}>Karşılaştığınız sorunu lütfen detaylıca açıklayın. Geri bildiriminiz bizim için değerlidir.</Text>
-              <Input
-                label="Konu"
-                placeholder="Örn: Uygulama hatası, Kötü niyetli kullanıcı vs."
-                value={issueSubject}
-                onChangeText={setIssueSubject}
-              />
-              <Text style={styles.inputLabel}>Açıklama</Text>
-              <Input
-                placeholder="Sorunu detaylıca açıklayın..."
-                value={issueDesc}
-                onChangeText={setIssueDesc}
-                multiline
-                numberOfLines={5}
-                style={{ height: 120, textAlignVertical: 'top' }}
-              />
-              <View style={{ marginTop: 16 }}>
-                <Button 
-                  title={issueLoading ? "Gönderiliyor..." : "Gönder"} 
-                  onPress={handleSubmitIssue} 
-                  disabled={issueLoading}
-                />
-              </View>
-            </ScrollView>
+        <TouchableWithoutFeedback onPress={closeIssueModal}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <Animated.View style={[styles.issueModalContainer, { transform: [{ translateY: issueSlideAnim }] }]}>
+                <View style={styles.issueModalHeader}>
+                  <Text style={styles.issueModalTitle}>Sorun Bildir</Text>
+                  <Pressable onPress={closeIssueModal} style={styles.menuCloseBtn}>
+                    <Ionicons name="close" size={24} color={Colors.text} />
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.issueModalBody} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.issueModalDesc}>Karşılaştığınız sorunu lütfen detaylıca açıklayın. Geri bildiriminiz bizim için değerlidir.</Text>
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={styles.inputLabel}>Konu</Text>
+                    <TextInput
+                      style={styles.issueInput}
+                      placeholder="Örn: Uygulama hatası, Kötü niyetli kullanıcı vs."
+                      placeholderTextColor={Colors.textLight}
+                      value={issueSubject}
+                      onChangeText={setIssueSubject}
+                    />
+                  </View>
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={styles.inputLabel}>Açıklama</Text>
+                    <TextInput
+                      style={[styles.issueInput, { height: 120, textAlignVertical: 'top' }]}
+                      placeholder="Sorunu detaylıca açıklayın..."
+                      placeholderTextColor={Colors.textLight}
+                      value={issueDesc}
+                      onChangeText={setIssueDesc}
+                      multiline
+                      numberOfLines={5}
+                    />
+                  </View>
+                  
+                  <Text style={[styles.inputLabel, { marginTop: 8 }]}>Ek Dosya / Ekran Görüntüsü (İsteğe Bağlı)</Text>
+                  <Pressable style={styles.issueImagePickerBtn} onPress={pickIssueImage}>
+                    <Ionicons name={issueImage ? 'image' : 'image-outline'} size={24} color={issueImage ? Colors.primary : Colors.textLight} />
+                    <Text style={[styles.issueImagePickerText, issueImage && { color: Colors.primary }]}>
+                      {issueImage ? 'Fotoğraf Seçildi (Değiştir)' : 'Fotoğraf veya Ekran Görüntüsü Ekle'}
+                    </Text>
+                  </Pressable>
+                  
+                  {issueImage && (
+                    <View style={styles.issueImagePreviewContainer}>
+                      <Image source={{ uri: issueImage }} style={styles.issueImagePreview} />
+                      <Pressable style={styles.issueImageRemoveBtn} onPress={() => setIssueImage(null)}>
+                        <Ionicons name="close-circle" size={24} color={Colors.danger} />
+                      </Pressable>
+                    </View>
+                  )}
+
+                  <View style={{ marginTop: 24, paddingBottom: 40 }}>
+                    <Button 
+                      title={issueLoading ? "Gönderiliyor..." : "Gönder"} 
+                      onPress={handleSubmitIssue} 
+                      disabled={issueLoading}
+                    />
+                  </View>
+                </ScrollView>
+              </Animated.View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
@@ -906,10 +980,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   sideMenu: {
-    width: 280,
+    width: '100%',
     height: '100%',
     backgroundColor: '#FFF',
-    padding: 20,
+    paddingHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: -2, height: 0 },
     shadowOpacity: 0.1,
@@ -986,5 +1060,52 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.textLight,
     marginBottom: 16,
+  },
+  issueInput: {
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#FFF',
+    fontSize: 14,
+    color: '#000',
+  },
+  issueImagePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  issueImagePickerText: {
+    marginLeft: 12,
+    fontSize: 14,
+    color: Colors.textLight,
+    fontWeight: '500',
+  },
+  issueImagePreviewContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  issueImagePreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    resizeMode: 'cover',
+  },
+  issueImageRemoveBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 12,
   },
 });

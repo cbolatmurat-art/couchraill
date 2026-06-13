@@ -491,9 +491,10 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
 
       {/* Comments Modal */}
       <Modal visible={commentsModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCommentsModalVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={() => setCommentsModalVisible(false)} />
-          <View style={styles.modalContent}>
+        <View style={styles.modalOverlayFixed}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setCommentsModalVisible(false)} />
+          <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+            <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
               <TouchableOpacity onPress={() => setCommentsModalVisible(false)} style={styles.modalCloseBtn}>
@@ -536,8 +537,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
       <DeleteConfirmModal
         visible={deleteModalVisible}
@@ -616,7 +618,8 @@ const styles = StyleSheet.create({
   },
 
   // Modal Styles
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalOverlayFixed: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheetWrapper: { justifyContent: 'flex-end' },
   modalBackground: { flex: 1 },
   modalContent: {
     backgroundColor: '#fff',

@@ -21,10 +21,10 @@ function RootLayoutContent() {
     // React Native yüklendiğinde varsayılan Expo splash ekranını hemen gizle
     SplashScreen.hideAsync().catch(() => { });
 
-    // Animasyonun en az 1.5 saniye (1500ms) görünmesini garanti et
+    // Animasyonun tamamlanması için bekleme süresi kısaltıldı
     const timer = setTimeout(() => {
       setMinSplashTimeElapsed(true);
-    }, 1500);
+    }, 800);
 
     return () => clearTimeout(timer);
   }, []);

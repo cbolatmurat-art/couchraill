@@ -19,6 +19,10 @@ export default function WelcomeScreen() {
     }, [currentUser])
   );
 
+  if (currentUser) {
+    return null; // Yönlendirme yapılana kadar boş render et (flicker önleme)
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>

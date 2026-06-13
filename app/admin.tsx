@@ -876,6 +876,17 @@ export default function AdminScreen() {
                 <Text style={styles.complaintTarget}><Text style={{ color: '#64748B' }}>Bildiren:</Text> {i.userName || i.userId}</Text>
                 <Text style={styles.complaintDesc}>{i.description}</Text>
 
+                {i.imageUrl && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>Eklenen Dosya/Görsel:</Text>
+                    <Image 
+                      source={{ uri: i.imageUrl }} 
+                      style={{ width: '100%', height: 200, borderRadius: 8, backgroundColor: '#F1F5F9' }} 
+                      resizeMode="contain" 
+                    />
+                  </View>
+                )}
+
                 <View style={[styles.complaintActions, { justifyContent: 'flex-end' }]}>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <Pressable 
