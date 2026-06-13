@@ -194,7 +194,7 @@ export default function SecurityScreen() {
           if (!hasSimulatedFrontFailure) {
             // First attempt: simulate rejection of old ID / invalid card representation
             setHasSimulatedFrontFailure(true);
-            setVerificationError("Lütfen yeni T.C. kimlik kartınızı çekin. Eski nüfus cüzdanı kabul edilmez.");
+            setVerificationError("Lütfen Kimliğinizi Tekrar Hizalayın");
           } else {
             // Second attempt: succeeds
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -207,7 +207,7 @@ export default function SecurityScreen() {
           if (!hasSimulatedBackFailure) {
             // First attempt: simulate rejection of old ID / invalid card representation
             setHasSimulatedBackFailure(true);
-            setVerificationError("Lütfen yeni T.C. kimlik kartınızı çekin. Eski nüfus cüzdanı kabul edilmez.");
+            setVerificationError("Lütfen Kimliğinizi Tekrar Hizalayın");
           } else {
             // Second attempt: succeeds
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -464,11 +464,6 @@ export default function SecurityScreen() {
                     <View>
                       <Text style={styles.stepTitle}>Kimlik Ön Yüzü</Text>
                       <Text style={styles.stepDesc}>Kimliğinizin ön yüzünü yatay olarak çerçeveye hizalayın.</Text>
-                      
-                      <View style={styles.warningBox}>
-                        <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
-                        <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
-                      </View>
                     </View>
 
                     {idFrontImage ? (
@@ -506,7 +501,11 @@ export default function SecurityScreen() {
                         <View style={styles.captureButtonInner} />
                       </Pressable>
                     )}
-                    {(idFrontImage || isAnalyzing) && <View style={{ height: 86 }} />}
+
+                    <View style={styles.warningBox}>
+                      <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
+                      <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
+                    </View>
                   </View>
                 )}
 
@@ -516,11 +515,6 @@ export default function SecurityScreen() {
                     <View>
                       <Text style={styles.stepTitle}>Kimlik Arka Yüzü</Text>
                       <Text style={styles.stepDesc}>Kimliğinizin arka yüzünü yatay olarak çerçeveye hizalayın.</Text>
-                      
-                      <View style={styles.warningBox}>
-                        <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
-                        <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
-                      </View>
                     </View>
 
                     {idBackImage ? (
@@ -559,7 +553,11 @@ export default function SecurityScreen() {
                         <View style={styles.captureButtonInner} />
                       </Pressable>
                     )}
-                    {(idBackImage || isAnalyzing) && <View style={{ height: 86 }} />}
+
+                    <View style={styles.warningBox}>
+                      <Ionicons name="alert-circle" size={18} color="#E65100" style={{ marginRight: 8 }} />
+                      <Text style={styles.warningBoxText}>Sadece yeni çipli T.C. kimlik kartı kabul edilir. Eski nüfus cüzdanı kabul edilmez.</Text>
+                    </View>
                   </View>
                 )}
 
@@ -601,7 +599,6 @@ export default function SecurityScreen() {
                         <View style={styles.captureButtonInner} />
                       </Pressable>
                     )}
-                    {(selfieImage || isAnalyzing) && <View style={{ height: 86 }} />}
                   </View>
                 )}
               </View>
@@ -760,9 +757,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    height: '92%',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+    height: '82%',
   },
   bottomSheetHandle: {
     width: 40,
@@ -770,13 +768,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#DDD',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 4,
   },
   modalTitle: {
     ...Typography.title,
@@ -794,16 +792,16 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   errorBox: {
     flexDirection: 'row',
     backgroundColor: '#FFEBEE',
     borderColor: '#FFCDD2',
     borderWidth: 1,
-    padding: 12,
+    padding: 8,
     borderRadius: 8,
-    marginBottom: 16,
+    marginBottom: 8,
     alignItems: 'center',
   },
   errorTextContent: {
@@ -814,20 +812,21 @@ const styles = StyleSheet.create({
   },
   stepContainer: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 8,
   },
   stepTitle: {
     ...Typography.subtitle,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
     color: Colors.text,
   },
   stepDesc: {
     ...Typography.body,
     color: Colors.textLight,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     fontSize: 14,
   },
   warningBox: {
@@ -837,7 +836,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 10,
     borderRadius: 8,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 8,
     alignItems: 'center',
   },
   warningBoxText: {
@@ -983,8 +983,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 4,
   },
   captureButtonInner: {
     width: 56,
