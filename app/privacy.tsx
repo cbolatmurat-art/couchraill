@@ -139,13 +139,6 @@ export default function PrivacyScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
       >
-        <View style={styles.infoBanner}>
-          <Ionicons name="shield-checkmark" size={24} color={Colors.primary} style={{ marginRight: 12 }} />
-          <Text style={styles.infoBannerText}>
-            6698 sayılı KVKK kapsamında platformumuzda kayıtlı tüm verileriniz üzerinde tam hak sahibi olursunuz.
-          </Text>
-        </View>
-
         {/* Verilerimi İndir */}
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
@@ -297,21 +290,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F0FE',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  infoBannerText: {
-    ...Typography.body,
-    fontSize: 14,
-    color: '#1A73E8',
-    flex: 1,
-    lineHeight: 20,
-  },
+
   card: {
     marginBottom: 16,
     padding: 18,
