@@ -272,18 +272,38 @@ export default function PublicProfileScreen() {
     }
   };
 
-  const getJoinDateText = (joinedDate: string | Date | undefined) => {
-    if (!joinedDate) return "";
-    try {
-      const d = new Date(joinedDate);
-      if (!isNaN(d.getTime())) {
-        const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}’dan beri üye`;
+  const getJoinDateText = (profile: any) => {
+    let dateStr = "";
+    const dateVal = profile?.joinedDate || profile?.createdAt;
+    if (dateVal) {
+      try {
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+          dateStr = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}’dan beri üye`;
+        } else {
+          dateStr = `${dateVal}’dan beri üye`;
+        }
+      } catch (e) {
+        dateStr = `${dateVal}’dan beri üye`;
       }
-      return `${joinedDate}’dan beri üye`;
-    } catch (e) {
-      return `${joinedDate}’dan beri üye`;
     }
+
+    let parts = [];
+    if (profile?.gender && profile.gender !== 'Söylemek istemiyorum') {
+      parts.push(profile.gender);
+    }
+    if (profile?.city) {
+      parts.push(`📍 ${profile.city}`);
+    }
+    if (dateStr) {
+      parts.push(dateStr);
+    }
+    if (profile?.userType) {
+      parts.push(profile.userType === 'host' ? 'Ev Sahibi' : 'Ev Arıyorum');
+    }
+    
+    return parts.join(' • ');
   };
 
   const isFullyVerified = (user: any) => {
@@ -435,20 +455,11 @@ export default function PublicProfileScreen() {
               <Text style={{ fontSize: 13, color: Colors.textLight, marginBottom: 2 }}>@{profile.username}</Text>
             ) : null}
 
-            {profile.gender && profile.gender !== 'Söylemek istemiyorum' && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginTop: 2 }}>
-                <Ionicons name={profile.gender === 'Erkek' ? 'male' : profile.gender === 'Kadın' ? 'female' : 'person'} size={14} color={Colors.textLight} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 13, color: Colors.textLight }}>{profile.gender}</Text>
-              </View>
-            )}
-
-            <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '500', marginBottom: 2, marginTop: 4 }}>
-              {profile.city ? `📍 ${profile.city} • ` : ''}{profile.userType === 'host' ? 'Ev Sahibi' : 'Ev Arıyorum'}
-            </Text>
-
-            <Text style={{ fontSize: 12, color: Colors.textLight }}>
-              {getJoinDateText(profile.joinedDate)}
-            </Text>
+            {getJoinDateText(profile) ? (
+              <Text style={{ marginTop: 8, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
+                {getJoinDateText(profile)}
+              </Text>
+            ) : null}
 
             <Text style={{ marginTop: 4, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
               {(profile.ratingCount && profile.ratingCount > 0)

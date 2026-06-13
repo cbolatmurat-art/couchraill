@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, Image, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, Image, Modal, TextInput, Animated } from 'react-native';
 import { useRouter, Stack, Redirect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
@@ -12,6 +12,31 @@ import { API_BASE_URL } from '../constants/config';
 import { CityPicker } from '../components/CityPicker';
 import { AlertHelper } from '../utils/AlertHelper';
 import { WebView } from 'react-native-webview';
+const AnimatedFocusWrapper = ({ children, isFocused }: { children: React.ReactNode, isFocused: boolean }) => {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const translateY = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(scale, {
+        toValue: isFocused ? 1.05 : 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: isFocused ? -10 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, [isFocused]);
+
+  return (
+    <Animated.View style={{ transform: [{ scale }, { translateY }] }}>
+      {children}
+    </Animated.View>
+  );
+};
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -22,6 +47,18 @@ export default function EditProfileScreen() {
   const [username, setUsername] = useState(currentUser?.username || '');
   const [phone, setPhone] = useState(currentUser?.phone?.replace(/^\+90/, '') || '');
   const [email, setEmail] = useState(currentUser?.email || '');
+  const [birthDate, setBirthDate] = useState(currentUser?.birthDate || '');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const handleBirthDateChange = (text: string) => {
+    let cleaned = text.replace(/[^0-9]/g, '');
+    if (cleaned.length >= 3 && cleaned.length <= 4) {
+      cleaned = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    } else if (cleaned.length > 4) {
+      cleaned = cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4) + '/' + cleaned.slice(4, 8);
+    }
+    setBirthDate(cleaned);
+  };
   
 
   const [profileImage, setProfileImage] = useState(currentUser?.profileImage || null);
@@ -29,9 +66,8 @@ export default function EditProfileScreen() {
   const [city, setCity] = useState(currentUser?.city || '');
   
   const initialGender = currentUser?.gender || '';
-  const isStandardGender = ['Erkek', 'Kadın', 'Söylemek istemiyorum', ''].includes(initialGender);
-  const [genderType, setGenderType] = useState(isStandardGender ? (initialGender || '') : 'Özel');
-  const [customGender, setCustomGender] = useState(isStandardGender ? '' : initialGender);
+  const [genderType, setGenderType] = useState(initialGender);
+  const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
 
   // Keep state in sync with currentUser if it loads asynchronously
   React.useEffect(() => {
@@ -40,17 +76,12 @@ export default function EditProfileScreen() {
       setUsername(currentUser.username || '');
       setPhone(currentUser.phone?.replace(/^\+90/, '') || '');
       setEmail(currentUser.email || '');
+      setBirthDate(currentUser.birthDate || '');
       setProfileImage(currentUser.profileImage || null);
       setCity(currentUser.city || '');
       
       const g = currentUser.gender || '';
-      if (['Erkek', 'Kadın', 'Söylemek istemiyorum', ''].includes(g)) {
-        setGenderType(g);
-        setCustomGender('');
-      } else {
-        setGenderType('Özel');
-        setCustomGender(g);
-      }
+      setGenderType(g);
     }
   }, [currentUser]);
 
@@ -406,6 +437,36 @@ export default function EditProfileScreen() {
       return;
     }
 
+    if (birthDate) {
+      if (birthDate.length !== 10) {
+        setErrorMsg('Doğum tarihi GG/AA/YYYY formatında olmalıdır.');
+        return;
+      }
+      const [day, month, year] = birthDate.split('/');
+      const d = parseInt(day, 10);
+      const m = parseInt(month, 10);
+      const y = parseInt(year, 10);
+      const currentYear = new Date().getFullYear();
+
+      if (d < 1 || d > 31) {
+        setErrorMsg('Doğum tarihi için gün 01-31 aralığında olmalıdır.');
+        return;
+      }
+      if (m < 1 || m > 12) {
+        setErrorMsg('Doğum tarihi için ay 01-12 aralığında olmalıdır.');
+        return;
+      }
+      if (y < 1900 || y > currentYear) {
+        setErrorMsg('Lütfen geçerli bir doğum yılı girin.');
+        return;
+      }
+      const dateObj = new Date(y, m - 1, d);
+      if (dateObj > new Date()) {
+        setErrorMsg('Doğum tarihi gelecekte bir tarih olamaz.');
+        return;
+      }
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -416,7 +477,8 @@ export default function EditProfileScreen() {
         email,
         city,
         profileImage,
-        gender: genderType === 'Özel' ? customGender : genderType
+        gender: genderType,
+        birthDate
       };
 
       const result = await updateProfile(updates);
@@ -539,11 +601,13 @@ export default function EditProfileScreen() {
       />
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
         <ScrollView 
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 100, 100) }]}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.avatarSection}>
             <View style={styles.avatarContainer}>
@@ -588,134 +652,192 @@ export default function EditProfileScreen() {
 
             <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
             
-            <Input
-              label="Ad Soyad"
-              placeholder="Adınız Soyadınız"
-              value={name}
-              onChangeText={setName}
-            />
-
-            <Input
-              label="Kullanıcı Adı"
-              placeholder="kullaniciadi"
-              value={username}
-              onChangeText={handleUsernameChange}
-              autoCapitalize="none"
-              autoCorrect={false}
-              rightElement={
-                usernameStatus === 'available' ? (
-                  <Ionicons name="checkmark" size={20} color={Colors.success} />
-                ) : usernameStatus === 'taken' ? (
-                  <Ionicons name="close" size={20} color={Colors.danger} />
-                ) : null
-              }
-            />
-
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 6, marginLeft: 4 }}>Cinsiyet</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {['Erkek', 'Kadın', 'Söylemek istemiyorum', 'Özel'].map(opt => (
-                  <Pressable
-                    key={opt}
-                    onPress={() => { setGenderType(opt); if (opt !== 'Özel') setCustomGender(''); }}
-                    style={{
-                      paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-                      backgroundColor: genderType === opt ? Colors.primary : '#F1F5F9',
-                      borderWidth: 1, borderColor: genderType === opt ? Colors.primary : '#CBD5E1'
-                    }}
-                  >
-                    <Text style={{ color: genderType === opt ? '#FFF' : Colors.text, fontSize: 13, fontWeight: '500' }}>{opt}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              {genderType === 'Özel' && (
-                <View style={{ marginTop: 8 }}>
-                  <Input
-                    placeholder="Lütfen cinsiyetinizi belirtin..."
-                    value={customGender}
-                    onChangeText={setCustomGender}
-                  />
-                </View>
-              )}
-            </View>
-
-            <View style={styles.cityPickerGroup}>
-              <Text style={styles.cityPickerLabel}>Yaşadığı Şehir</Text>
-              <CityPicker
-                selectedCity={city}
-                onSelectCity={setCity}
-                placeholder="Şehir seçin..."
-                showAllOption={false}
+            <AnimatedFocusWrapper isFocused={focusedField === 'name'}>
+              <Input
+                label="Ad Soyad"
+                placeholder="Adınız Soyadınız"
+                value={name}
+                onChangeText={setName}
+                onFocus={() => setFocusedField('name')}
+                onBlur={() => setFocusedField(null)}
               />
-            </View>
+            </AnimatedFocusWrapper>
 
-            <View style={styles.emailRow}>
-              <View style={{ flex: 1, paddingRight: isEmailVerified ? 0 : 12 }}>
-                <Input
-                  label="E-posta Adresi"
-                  placeholder="ornek@email.com"
-                  value={email}
-                  onChangeText={(val) => setEmail(val)}
-                  keyboardType="email-address"
-                  textContentType="emailAddress"
-                  autoCapitalize="none"
+            <AnimatedFocusWrapper isFocused={focusedField === 'username'}>
+              <Input
+                label="Kullanıcı Adı"
+                placeholder="kullaniciadi"
+                value={username}
+                onChangeText={handleUsernameChange}
+                autoCapitalize="none"
+                autoCorrect={false}
+                onFocus={() => setFocusedField('username')}
+                onBlur={() => setFocusedField(null)}
+                rightElement={
+                  usernameStatus === 'available' ? (
+                    <Ionicons name="checkmark" size={20} color={Colors.success} />
+                  ) : usernameStatus === 'taken' ? (
+                    <Ionicons name="close" size={20} color={Colors.danger} />
+                  ) : null
+                }
+              />
+            </AnimatedFocusWrapper>
+
+            <AnimatedFocusWrapper isFocused={focusedField === 'email'}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.inputLabel}>E-posta Adresi</Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <TextInput
+                    style={{
+                      backgroundColor: Colors.cardBackground,
+                      borderWidth: 1,
+                      borderColor: Colors.border,
+                      borderRadius: 16,
+                      paddingLeft: 16,
+                      paddingRight: !isEmailVerified ? 95 : 16,
+                      paddingVertical: 14,
+                      fontSize: 16,
+                      color: Colors.text,
+                    }}
+                    placeholder="ornek@email.com"
+                    placeholderTextColor={Colors.textLight}
+                    value={email}
+                    onChangeText={(val) => setEmail(val)}
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    autoCapitalize="none"
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                  {!isEmailVerified && (
+                    <View style={{ position: 'absolute', right: 8 }}>
+                      <Pressable 
+                        style={[styles.emailBadgeUnverified, isVerifying && { opacity: 0.7 }, { paddingVertical: 6, paddingHorizontal: 12 }]}
+                        onPress={handleOpenEmailVerification}
+                        disabled={isVerifying}
+                      >
+                        <Text style={styles.emailBadgeTextUnverified}>Doğrula</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </AnimatedFocusWrapper>
+
+            <AnimatedFocusWrapper isFocused={focusedField === 'phone'}>
+              <View style={styles.phoneInputGroup}>
+                <Text style={styles.inputLabel}>Telefon Numarası</Text>
+                <View style={[styles.phoneInputContainer, { position: 'relative' }]}>
+                  <View style={styles.phonePrefix}>
+                    <Text style={styles.phonePrefixText}>+90</Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.phoneInput,
+                      { paddingRight: isPhoneVerified ? 165 : 140 }
+                    ]}
+                    placeholder="5xxxxxxxxx"
+                    placeholderTextColor={Colors.textLight}
+                    value={phone}
+                    onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))}
+                    keyboardType="numeric"
+                    maxLength={10}
+                    onFocus={() => setFocusedField('phone')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                  <View style={{ position: 'absolute', right: 8, justifyContent: 'center' }}>
+                    {isPhoneVerified ? (
+                      <View style={[styles.emailBadgeVerified, { paddingVertical: 6, paddingHorizontal: 10 }]}>
+                        <Ionicons name="checkmark" size={16} color={Colors.success} />
+                        <Text style={styles.emailBadgeTextVerified}>Telefon doğrulandı</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.phoneBadgeUnverifiedStatus, { paddingVertical: 6, paddingHorizontal: 10 }]}>
+                        <Ionicons name="close" size={16} color={Colors.danger} />
+                        <Text style={styles.phoneBadgeTextUnverifiedStatus}>Doğrulanmadı</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </AnimatedFocusWrapper>
+            <AnimatedFocusWrapper isFocused={focusedField === 'birthDate'}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.inputLabel}>Doğum Tarihi</Text>
+                <TextInput
+                  style={{
+                    backgroundColor: Colors.cardBackground,
+                    borderWidth: 1,
+                    borderColor: Colors.border,
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    fontSize: 16,
+                    color: Colors.text,
+                  }}
+                  placeholder="GG/AA/YYYY"
+                  placeholderTextColor={Colors.textLight}
+                  value={birthDate}
+                  onChangeText={handleBirthDateChange}
+                  keyboardType="numeric"
+                  maxLength={10}
+                  onFocus={() => setFocusedField('birthDate')}
+                  onBlur={() => setFocusedField(null)}
                 />
               </View>
-              {!isEmailVerified && (
-                <View style={styles.emailStatusContainer}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, color: Colors.danger, marginBottom: 4 }}>E-posta doğrulanmadı</Text>
-                    <Pressable 
-                      style={[styles.emailBadgeUnverified, isVerifying && { opacity: 0.7 }]}
-                      onPress={handleOpenEmailVerification}
-                      disabled={isVerifying}
-                    >
-                      <Text style={styles.emailBadgeTextUnverified}>Doğrula</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-            </View>
+            </AnimatedFocusWrapper>
 
-            <View style={styles.emailRow}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <View style={styles.phoneInputGroup}>
-                  <Text style={styles.inputLabel}>Telefon Numarası</Text>
-                  <View style={styles.phoneInputContainer}>
-                    <View style={styles.phonePrefix}>
-                      <Text style={styles.phonePrefixText}>+90</Text>
+            <AnimatedFocusWrapper isFocused={focusedField === 'city'}>
+              <View style={styles.cityPickerGroup}>
+                <Text style={styles.cityPickerLabel}>Yaşadığı Şehir</Text>
+                <CityPicker
+                  selectedCity={city}
+                  onSelectCity={setCity}
+                  placeholder="Şehir seçin..."
+                  showAllOption={false}
+                  onFocus={() => setFocusedField('city')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </View>
+            </AnimatedFocusWrapper>
+
+            <AnimatedFocusWrapper isFocused={focusedField === 'gender'}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.inputLabel}>Cinsiyet</Text>
+                <Pressable
+                  style={[styles.phoneInputContainer, { paddingHorizontal: 16, paddingVertical: 14, justifyContent: 'space-between' }]}
+                  onPress={() => { setIsGenderModalVisible(true); setFocusedField('gender'); }}
+                >
+                  <Text style={{ fontSize: 16, color: genderType ? Colors.text : Colors.textLight }}>
+                    {genderType || 'Cinsiyet seçin...'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color={Colors.textLight} />
+                </Pressable>
+
+                <Modal visible={isGenderModalVisible} transparent animationType="fade">
+                  <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => { setIsGenderModalVisible(false); setFocusedField(null); }}>
+                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 30 }}>
+                      <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Cinsiyet Seç</Text>
+                      </View>
+                      {['Erkek', 'Kadın', 'Söylemek istemiyorum'].map(opt => (
+                        <Pressable
+                          key={opt}
+                          style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', flexDirection: 'row', justifyContent: 'space-between' }}
+                          onPress={() => { setGenderType(opt); setIsGenderModalVisible(false); setFocusedField(null); }}
+                        >
+                          <Text style={{ fontSize: 16, color: Colors.text }}>{opt}</Text>
+                          {genderType === opt && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                        </Pressable>
+                      ))}
+                      <Pressable style={{ padding: 16, alignItems: 'center' }} onPress={() => { setIsGenderModalVisible(false); setFocusedField(null); }}>
+                        <Text style={{ fontSize: 16, color: Colors.danger, fontWeight: '600' }}>İptal</Text>
+                      </Pressable>
                     </View>
-                    <TextInput
-                      style={styles.phoneInput}
-                      placeholder="5xxxxxxxxx"
-                      placeholderTextColor={Colors.textLight}
-                      value={phone}
-                      onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))}
-                      keyboardType="numeric"
-                      maxLength={10}
-                    />
-                  </View>
-                </View>
+                  </Pressable>
+                </Modal>
               </View>
-              <View style={styles.emailStatusContainer}>
-                {isPhoneVerified ? (
-                  <View style={styles.emailBadgeVerified}>
-                    <Ionicons name="checkmark" size={16} color={Colors.success} />
-                    <Text style={styles.emailBadgeTextVerified}>Telefon doğrulandı</Text>
-                  </View>
-                ) : (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, color: Colors.danger, marginBottom: 4 }}>Telefon doğrulanmadı</Text>
-                    <Pressable 
-                      style={styles.emailBadgeUnverified}
-                      onPress={handleOpenPhoneVerification}
-                    >
-                      <Text style={styles.emailBadgeTextUnverified}>Doğrula</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-            </View>
+            </AnimatedFocusWrapper>
 
             <View style={styles.buttonWrapper}>
               <Pressable 
@@ -1198,6 +1320,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 13,
   },
+  phoneBadgeUnverifiedStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+  },
+  phoneBadgeTextUnverifiedStatus: {
+    marginLeft: 4,
+    color: Colors.danger,
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
   emailBadgeUnverified: {
     backgroundColor: Colors.danger,
     paddingHorizontal: 16,
@@ -1229,18 +1367,18 @@ const styles = StyleSheet.create({
   phoneInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: Colors.cardBackground,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    borderColor: Colors.border,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   phonePrefix: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: Colors.background,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRightWidth: 1,
-    borderRightColor: '#E0E0E0',
+    borderRightColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },

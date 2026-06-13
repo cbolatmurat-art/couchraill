@@ -528,10 +528,17 @@ export default function ProfileScreen() {
       }
     }
     
-    if (currentUser.city) {
-      return dateStr ? `📍 ${currentUser.city} • ${dateStr}` : `📍 ${currentUser.city}`;
+    let parts = [];
+    if (currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum') {
+      parts.push(currentUser.gender);
     }
-    return dateStr;
+    if (currentUser.city) {
+      parts.push(`📍 ${currentUser.city}`);
+    }
+    if (dateStr) {
+      parts.push(dateStr);
+    }
+    return parts.join(' • ');
   };
 
   const isFullyVerified = (user: any) => {
@@ -570,13 +577,6 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: 13, color: Colors.textLight, marginBottom: 2 }}>@{currentUser.username}</Text>
           ) : null}
           
-          {currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum' && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginTop: 2 }}>
-              <Ionicons name={currentUser.gender === 'Erkek' ? 'male' : currentUser.gender === 'Kadın' ? 'female' : 'person'} size={14} color={Colors.textLight} style={{ marginRight: 4 }} />
-              <Text style={{ fontSize: 13, color: Colors.textLight }}>{currentUser.gender}</Text>
-            </View>
-          )}
-          
           {/* Statuses (Only show action required statuses) */}
           {currentUser.identityVerificationStatus === 'pending' ? (
             <View style={styles.statusBadgePending}>
@@ -593,11 +593,6 @@ export default function ProfileScreen() {
                 <Text style={styles.resendBtnText}>Tekrar Gönder</Text>
               </Pressable>
             </View>
-          ) : !(currentUser.verified || currentUser.identityVerificationStatus === 'verified') ? (
-            <Pressable onPress={() => router.push('/security')} style={styles.verifyBtn}>
-              <Text style={styles.verifyBtnIcon}>🪪</Text>
-              <Text style={styles.verifyBtnText}>Kimliğini Doğrula</Text>
-            </Pressable>
           ) : null}
 
           {getJoinDateText() ? (
@@ -632,12 +627,23 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      <View style={{ marginBottom: 16 }}>
-        <Button 
-          title="Profili Düzenle" 
-          variant="outline"
-          onPress={() => router.push('/edit-profile')} 
-        />
+      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+        <View style={{ flex: 1 }}>
+          <Button 
+            title="Profili Düzenle" 
+            variant="outline"
+            onPress={() => router.push('/edit-profile')} 
+          />
+        </View>
+        {!(currentUser.verified || currentUser.identityVerificationStatus === 'verified') && (
+          <View style={{ flex: 1 }}>
+            <Button 
+              title="Profilini Doğrula" 
+              variant="outline"
+              onPress={() => router.push('/security')} 
+            />
+          </View>
+        )}
       </View>
 
       <UserPosts userId={currentUser.id} currentUserId={currentUser.id} currentUser={currentUser} profile={currentUser} />

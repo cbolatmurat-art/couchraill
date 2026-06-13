@@ -12,11 +12,21 @@ interface CityPickerProps {
   onSelectCity: (city: string) => void;
   placeholder?: string;
   showAllOption?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
-export function CityPicker({ selectedCity, onSelectCity, placeholder = "Şehir seçin...", showAllOption = false }: CityPickerProps) {
+export function CityPicker({ selectedCity, onSelectCity, placeholder = "Şehir seçin...", showAllOption = false, onFocus, onBlur }: CityPickerProps) {
   const [isModalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  React.useEffect(() => {
+    if (isModalVisible) {
+      onFocus?.();
+    } else {
+      onBlur?.();
+    }
+  }, [isModalVisible]);
 
   const filteredCities = TURKISH_CITIES.filter(c => normalizeCity(c).includes(normalizeCity(searchQuery)));
   
@@ -83,11 +93,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.cardBackground,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 16,
   },

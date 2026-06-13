@@ -22,6 +22,7 @@ export interface User {
   hiddenConversations?: string[];
   termsAccepted?: boolean;
   termsAcceptedAt?: string;
+  birthDate?: string;
 }
 
 export interface Review {

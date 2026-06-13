@@ -863,7 +863,8 @@ app.put('/api/users/profile', async (req, res) => {
       email: 'email',
       password: 'password',
       username: 'username',
-      gender: 'gender'
+      gender: 'gender',
+      birthDate: '"birthDate"'
     };
 
     for (const [key, value] of Object.entries(updates)) {
@@ -3699,7 +3700,8 @@ app.get('/api/users/:id/public', async (req, res) => {
       ratingAverage,
       ratingCount,
       recentReviews,
-      activeListings
+      activeListings,
+      joinedDate: user.joinedDate || user.createdAt || null
     };
 
     res.json({ success: true, profile: publicProfile });
