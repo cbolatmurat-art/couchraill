@@ -629,7 +629,7 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.emailRow}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
+              <View style={{ flex: 1, paddingRight: isEmailVerified ? 0 : 12 }}>
                 <Input
                   label="E-posta Adresi"
                   placeholder="ornek@email.com"
@@ -640,13 +640,8 @@ export default function EditProfileScreen() {
                   autoCapitalize="none"
                 />
               </View>
-              <View style={styles.emailStatusContainer}>
-                {isEmailVerified ? (
-                  <View style={styles.emailBadgeVerified}>
-                    <Ionicons name="checkmark" size={16} color={Colors.success} />
-                    <Text style={styles.emailBadgeTextVerified}>E-posta doğrulandı</Text>
-                  </View>
-                ) : (
+              {!isEmailVerified && (
+                <View style={styles.emailStatusContainer}>
                   <View style={{ alignItems: 'center' }}>
                     <Text style={{ fontSize: 10, color: Colors.danger, marginBottom: 4 }}>E-posta doğrulanmadı</Text>
                     <Pressable 
@@ -657,8 +652,8 @@ export default function EditProfileScreen() {
                       <Text style={styles.emailBadgeTextUnverified}>Doğrula</Text>
                     </Pressable>
                   </View>
-                )}
-              </View>
+                </View>
+              )}
             </View>
 
             <View style={styles.emailRow}>
