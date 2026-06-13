@@ -420,7 +420,7 @@ export default function SecurityScreen() {
                   <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </Pressable>
               ) : <View style={{ width: 32 }} />}
-              <Text style={[styles.modalTitle, { flex: 1, textAlign: 'center' }]}>Profil Doğrulama</Text>
+              <Text style={[styles.modalStepIndicator, { flex: 1, textAlign: 'center', marginBottom: 0 }]}>Adım {verificationStep}/3</Text>
               {!isSubmittingVerification ? (
                 <Pressable onPress={handleCloseModal} style={styles.modalCloseBtn}>
                   <Ionicons name="close" size={24} color={Colors.text} />
@@ -449,7 +449,7 @@ export default function SecurityScreen() {
               </View>
             ) : (
               <View>
-                <Text style={styles.modalStepIndicator}>Adım {verificationStep}/3</Text>
+
 
                 {verificationError ? (
                   <View style={styles.errorBox}>
