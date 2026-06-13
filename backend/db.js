@@ -317,6 +317,20 @@ const initDB = async () => {
       )
     `);
 
+    // Sorun Bildirimleri
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS issue_reports (
+        id VARCHAR(255) PRIMARY KEY,
+        "userId" VARCHAR(255),
+        "userName" VARCHAR(255),
+        subject VARCHAR(255),
+        description TEXT,
+        "imageUrl" TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS friend_requests (
         id VARCHAR(255) PRIMARY KEY,

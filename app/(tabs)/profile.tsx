@@ -79,6 +79,45 @@ export default function ProfileScreen() {
   const [modalUsers, setModalUsers] = useState<any[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
+  const [issueModalVisible, setIssueModalVisible] = useState(false);
+  const [issueSubject, setIssueSubject] = useState('');
+  const [issueDesc, setIssueDesc] = useState('');
+  const [issueLoading, setIssueLoading] = useState(false);
+
+  const handleSubmitIssue = async () => {
+    if (!issueSubject.trim() || !issueDesc.trim()) {
+      Alert.alert('Hata', 'Lütfen konu ve açıklama alanlarını doldurun.');
+      return;
+    }
+    setIssueLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/issues`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          userName: currentUser.name || currentUser.fullName || 'Bilinmiyor',
+          subject: issueSubject,
+          description: issueDesc,
+          imageUrl: null
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert('Başarılı', data.message || 'Sorun bildiriminiz alındı.');
+        setIssueModalVisible(false);
+        setIssueSubject('');
+        setIssueDesc('');
+      } else {
+        Alert.alert('Hata', data.error || 'Bildirim gönderilemedi.');
+      }
+    } catch (e) {
+      Alert.alert('Hata', 'Sunucuya bağlanılamadı.');
+    } finally {
+      setIssueLoading(false);
+    }
+  };
+
   const loadSocialStats = async () => {
     if (!currentUser) return;
     const res = await getSocialStats(currentUser.id);
@@ -599,6 +638,11 @@ export default function ProfileScreen() {
                   <Text style={styles.menuItemText}>Gizlilik</Text>
                 </Pressable>
                 
+                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); setIssueModalVisible(true); }}>
+                  <Ionicons name="alert-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Sorun Bildir</Text>
+                </Pressable>
+                
                 <View style={styles.menuDivider} />
                 
                 <Pressable 
@@ -615,6 +659,50 @@ export default function ProfileScreen() {
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Sorun Bildir Modal */}
+      <Modal
+        visible={issueModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIssueModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.issueModalContainer}>
+            <View style={styles.issueModalHeader}>
+              <Text style={styles.issueModalTitle}>Sorun Bildir</Text>
+              <Pressable onPress={() => setIssueModalVisible(false)} style={styles.menuCloseBtn}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.issueModalBody} keyboardShouldPersistTaps="handled">
+              <Text style={styles.issueModalDesc}>Karşılaştığınız sorunu lütfen detaylıca açıklayın. Geri bildiriminiz bizim için değerlidir.</Text>
+              <Input
+                label="Konu"
+                placeholder="Örn: Uygulama hatası, Kötü niyetli kullanıcı vs."
+                value={issueSubject}
+                onChangeText={setIssueSubject}
+              />
+              <Text style={styles.inputLabel}>Açıklama</Text>
+              <Input
+                placeholder="Sorunu detaylıca açıklayın..."
+                value={issueDesc}
+                onChangeText={setIssueDesc}
+                multiline
+                numberOfLines={5}
+                style={{ height: 120, textAlignVertical: 'top' }}
+              />
+              <View style={{ marginTop: 16 }}>
+                <Button 
+                  title={issueLoading ? "Gönderiliyor..." : "Gönder"} 
+                  onPress={handleSubmitIssue} 
+                  disabled={issueLoading}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -861,5 +949,42 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
     marginVertical: 16,
-  }
+  },
+  inputLabel: {
+    ...Typography.caption,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginLeft: 4,
+    color: Colors.text,
+  },
+  issueModalContainer: {
+    backgroundColor: Colors.cardBackground,
+    width: '100%',
+    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    position: 'absolute',
+    bottom: 0,
+    paddingBottom: 24,
+  },
+  issueModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  issueModalTitle: {
+    ...Typography.title,
+    fontWeight: 'bold',
+  },
+  issueModalBody: {
+    padding: 20,
+  },
+  issueModalDesc: {
+    ...Typography.body,
+    color: Colors.textLight,
+    marginBottom: 16,
+  },
 });

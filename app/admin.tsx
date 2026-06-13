@@ -106,6 +106,12 @@ export default function AdminScreen() {
   const [isDeleteVerificationsModalVisible, setIsDeleteVerificationsModalVisible] = useState(false);
   const [deleteVerificationsError, setDeleteVerificationsError] = useState<string | null>(null);
 
+  // Issues state
+  const [issues, setIssues] = useState<any[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesError, setIssuesError] = useState('');
+  const [issueFilter, setIssueFilter] = useState('all');
+
   const clearAdminSession = async () => {
     localRemove('misafirimol_adminUser', 'misafirimol_adminToken', 'misafirimol_adminExpiresAt', 'misafirimol_adminRememberMe');
     try {
@@ -250,6 +256,26 @@ export default function AdminScreen() {
       setReportsError(e?.message || 'Sunucu bağlantı hatası.');
     } finally {
       setReportsLoading(false);
+    }
+  };
+
+  const fetchIssues = async (token?: string) => {
+    const activeToken = token || adminToken;
+    if (!activeToken) return;
+
+    setIssuesLoading(true);
+    setIssuesError('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/issues`, {
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (!res.ok) throw new Error('Sorunlar alınamadı.');
+      const data = await res.json();
+      setIssues(data.issues || []);
+    } catch (e: any) {
+      setIssuesError(e?.message || 'Sunucu bağlantı hatası.');
+    } finally {
+      setIssuesLoading(false);
     }
   };
 
@@ -453,6 +479,9 @@ export default function AdminScreen() {
   useEffect(() => {
     if (isAuthorized && (activeTab === 'moderation' || activeTab === 'overview')) {
       fetchReports(undefined, reportTypeFilter);
+    }
+    if (isAuthorized && activeTab === 'issues') {
+      fetchIssues();
     }
   }, [activeTab, reportTypeFilter, isAuthorized]);
 
@@ -746,6 +775,139 @@ export default function AdminScreen() {
     );
   };
 
+  const handleResolveIssue = async (id: string) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/issues/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ status: 'resolved' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', 'Sorun çözüldü olarak işaretlendi.');
+        fetchIssues();
+      } else {
+        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleDeleteIssue = async (id: string) => {
+    if (!adminToken) return;
+    setActionInProgress(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/issues/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        AlertHelper.alert('Başarılı', 'Sorun silindi.');
+        fetchIssues();
+      } else {
+        AlertHelper.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (e) {
+      AlertHelper.alert('Hata', 'Sunucu hatası.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const renderIssues = () => {
+    const statusTabs = [
+      { id: 'all', label: 'Tümü' },
+      { id: 'pending', label: 'Bekleyenler' },
+      { id: 'resolved', label: 'Çözüldü' }
+    ];
+
+    const filtered = issues.filter(i => issueFilter === 'all' || i.status === issueFilter);
+
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.pageHeaderSticky}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.pageTitle}>Sorun Bildirimleri</Text>
+            <Pressable onPress={() => fetchIssues()} style={styles.refreshIconBtn} disabled={issuesLoading}>
+              <Ionicons name="refresh" size={20} color="#4F46E5" />
+            </Pressable>
+          </View>
+          <View style={styles.modTabsRow}>
+            {statusTabs.map(t => (
+              <Pressable key={t.id} style={[styles.modTab, issueFilter === t.id && styles.modTabActive]} onPress={() => setIssueFilter(t.id)}>
+                <Text style={[styles.modTabText, issueFilter === t.id && styles.modTabTextActive]}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.contentScroll}>
+          {issuesLoading ? (
+            <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 40 }} />
+          ) : issuesError ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle" size={48} color="#EF4444" />
+              <Text style={styles.emptyStateText}>{issuesError}</Text>
+            </View>
+          ) : filtered.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="checkmark-done-circle" size={48} color="#CBD5E1" />
+              <Text style={styles.emptyStateText}>Henüz sorun bildirimi yok.</Text>
+            </View>
+          ) : (
+            filtered.map(i => (
+              <View key={i.id} style={styles.complaintCard}>
+                <View style={styles.complaintHeader}>
+                  <View style={styles.complaintHeaderLeft}>
+                    <Text style={styles.complaintType}>{i.subject}</Text>
+                    <View style={[styles.badge, i.status === 'pending' ? styles.badgeWarning : styles.badgeSuccess]}>
+                      <Text style={styles.badgeText}>{i.status === 'pending' ? 'Bekliyor' : 'Çözüldü'}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.complaintDate}>{new Date(i.createdAt).toLocaleDateString('tr-TR')}</Text>
+                </View>
+
+                <Text style={styles.complaintTarget}><Text style={{ color: '#64748B' }}>Bildiren:</Text> {i.userName || i.userId}</Text>
+                <Text style={styles.complaintDesc}>{i.description}</Text>
+
+                <View style={[styles.complaintActions, { justifyContent: 'flex-end' }]}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Pressable 
+                      style={[styles.outlineBtn, { borderColor: '#EF4444' }]} 
+                      onPress={() => {
+                        AlertHelper.confirm(
+                          'Sil',
+                          'Bu bildirimi silmek istediğinize emin misiniz?',
+                          () => handleDeleteIssue(i.id)
+                        );
+                      }}
+                    >
+                      <Text style={[styles.outlineBtnText, { color: '#EF4444' }]}>Sil</Text>
+                    </Pressable>
+                    {i.status === 'pending' && (
+                      <Pressable 
+                        style={[styles.solidBtn, { backgroundColor: '#10B981' }]} 
+                        onPress={() => handleResolveIssue(i.id)}
+                      >
+                        <Text style={styles.solidBtnText}>Çözüldü İşaretle</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
   const renderVerifications = () => (
     <View style={{ flex: 1 }}>
       <View style={styles.pageHeaderSticky}>
@@ -887,6 +1049,7 @@ export default function AdminScreen() {
             <Text style={styles.sidebarSectionTitle}>MENU</Text>
             {renderSidebarItem('overview', 'Genel Bakış', 'grid')}
             {renderSidebarItem('moderation', 'Şikayet Talepleri', 'flag')}
+            {renderSidebarItem('issues', 'Sorun Bildirimleri', 'alert-circle')}
             {renderSidebarItem('verifications', 'Kimlik Doğrulama', 'id-card')}
             {renderSidebarItem('ban_system', 'Ban Sistemi', 'ban')}
             <Text style={styles.sidebarSectionTitle}>İÇERİKLER</Text>
@@ -922,6 +1085,7 @@ export default function AdminScreen() {
         <View style={styles.contentArea}>
           {activeTab === 'overview' && renderOverview()}
           {activeTab === 'moderation' && renderModeration()}
+          {activeTab === 'issues' && renderIssues()}
           {activeTab === 'verifications' && renderVerifications()}
           {activeTab === 'ban_system' && renderPlaceholder('Ban Sistemi', 'ban', 'Ban yönetim paneli çok yakında burada olacak.')}
           {activeTab === 'listings' && renderPlaceholder('İlan Yönetimi', 'home', 'İlanları yönetme ve onaylama paneli hazırlanıyor.')}

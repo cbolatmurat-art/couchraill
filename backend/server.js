@@ -5558,6 +5558,58 @@ app.post('/api/admin/notifications/broadcast', checkAdminAuth, async (req, res) 
   }
 });
 
+// === ISSUES (Sorun Bildirimleri) ===
+app.post('/api/issues', async (req, res) => {
+  try {
+    const { userId, userName, subject, description, imageUrl } = req.body;
+    if (!userId || !subject || !description) {
+      return res.status(400).json({ success: false, error: 'Kullanıcı ID, konu ve açıklama zorunludur.' });
+    }
+    const id = 'issue_' + Date.now();
+    await query(
+      'INSERT INTO issue_reports (id, "userId", "userName", subject, description, "imageUrl") VALUES ($1, $2, $3, $4, $5, $6)',
+      [id, userId, userName || 'Bilinmiyor', subject, description, imageUrl || null]
+    );
+    res.json({ success: true, message: 'Sorun bildiriminiz başarıyla alındı.' });
+  } catch (err) {
+    console.error('Error submitting issue:', err);
+    res.status(500).json({ success: false, error: 'Sorun bildirilemedi.' });
+  }
+});
+
+app.get('/api/admin/issues', checkAdminAuth, async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM issue_reports ORDER BY "createdAt" DESC');
+    res.json({ success: true, issues: rows });
+  } catch (err) {
+    console.error('Error fetching issues:', err);
+    res.status(500).json({ success: false, error: 'Sorunlar alınamadı.' });
+  }
+});
+
+app.put('/api/admin/issues/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    await query('UPDATE issue_reports SET status = $1 WHERE id = $2', [status || 'resolved', id]);
+    res.json({ success: true, message: 'Sorun durumu güncellendi.' });
+  } catch (err) {
+    console.error('Error updating issue:', err);
+    res.status(500).json({ success: false, error: 'Durum güncellenemedi.' });
+  }
+});
+
+app.delete('/api/admin/issues/:id', checkAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM issue_reports WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Sorun silindi.' });
+  } catch (err) {
+    console.error('Error deleting issue:', err);
+    res.status(500).json({ success: false, error: 'Sorun silinemedi.' });
+  }
+});
+
 // POST Submit Report
 app.post('/api/reports', async (req, res) => {
   const { reporterUserId, contentType, contentId, reason, description } = req.body;
