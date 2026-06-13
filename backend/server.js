@@ -3701,7 +3701,8 @@ app.get('/api/users/:id/public', async (req, res) => {
       ratingCount,
       recentReviews,
       activeListings,
-      joinedDate: user.joinedDate || user.createdAt || null
+      joinedDate: user.joinedDate || user.createdAt || null,
+      gender: user.gender || null
     };
 
     res.json({ success: true, profile: publicProfile });
