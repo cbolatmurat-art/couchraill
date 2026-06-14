@@ -483,7 +483,11 @@ const initDB = async () => {
       `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "selfieImageUrl" TEXT`,
       `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
       `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userEmail" VARCHAR(255)`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userPhone" VARCHAR(255)`
+      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userPhone" VARCHAR(255)`,
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "mediaUrl" TEXT`,
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "messageType" VARCHAR(50) DEFAULT 'text'`,
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "isViewOnce" BOOLEAN DEFAULT false`,
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedOnceAt" TIMESTAMP`
     ];
     for (const alt of alters) {
       try {

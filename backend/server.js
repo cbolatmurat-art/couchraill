@@ -2730,7 +2730,11 @@ app.get('/api/messages/:conversationId', async (req, res) => {
       readAt: message.readAt,
       status: message.status,
       replyTo: message.replyTo || null,
-      reactions: message.reactions || []
+      reactions: message.reactions || [],
+      messageType: message.messageType || 'text',
+      mediaUrl: message.mediaUrl || null,
+      isViewOnce: message.isViewOnce || false,
+      viewedOnceAt: message.viewedOnceAt || null
     }));
     res.json(formattedMsgs);
   } catch (error) {
@@ -2740,7 +2744,7 @@ app.get('/api/messages/:conversationId', async (req, res) => {
 });
 
 app.post('/api/messages', async (req, res) => {
-  const { conversationId, senderId, text, replyTo } = req.body;
+  const { conversationId, senderId, text, replyTo, messageType, mediaUrl, isViewOnce } = req.body;
   
   try {
     const { rows: convRows } = await query(`SELECT * FROM conversations WHERE id = $1`, [conversationId]);
@@ -2765,13 +2769,16 @@ app.post('/api/messages', async (req, res) => {
       conversationId,
       senderId,
       receiverId,
-      text,
+      text: text || '',
       replyTo: replyTo ? {
         messageId: replyTo.messageId,
         text: replyTo.text,
         senderId: replyTo.senderId,
         senderName: replyTo.senderName
       } : null,
+      messageType: messageType || 'text',
+      mediaUrl: mediaUrl || null,
+      isViewOnce: isViewOnce || false,
       createdAt: new Date().toISOString(),
       read: false,
       status: 'sent',
@@ -2818,12 +2825,13 @@ app.post('/api/messages', async (req, res) => {
 
     // Insert message into Postgres
     await query(`
-      INSERT INTO messages (id, "conversationId", "senderId", "receiverId", text, read, status, "replyTo", reactions, "createdAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)
+      INSERT INTO messages (id, "conversationId", "senderId", "receiverId", text, read, status, "replyTo", reactions, "createdAt", "messageType", "mediaUrl", "isViewOnce")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13)
     `, [
       newMessage.id, newMessage.conversationId, newMessage.senderId, newMessage.receiverId,
       newMessage.text, newMessage.read, newMessage.status,
-      JSON.stringify(newMessage.replyTo), JSON.stringify(newMessage.reactions), newMessage.createdAt
+      JSON.stringify(newMessage.replyTo), JSON.stringify(newMessage.reactions), newMessage.createdAt,
+      newMessage.messageType, newMessage.mediaUrl, newMessage.isViewOnce
     ]);
 
     // Update conversation lastMessageTime
@@ -2836,6 +2844,46 @@ app.post('/api/messages', async (req, res) => {
   } catch (error) {
     console.error('[POST_MESSAGES_ERROR]', error.message);
     res.status(500).json({ error: 'Mesaj gönderilemedi' });
+  }
+});
+
+app.post('/api/messages/:id/view-once', async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
+
+  try {
+    const { rows } = await query('SELECT * FROM messages WHERE id = $1', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+    
+    const msg = rows[0];
+    if (msg.receiverId !== userId) return res.status(403).json({ error: 'Unauthorized' });
+    if (!msg.isViewOnce) return res.status(400).json({ error: 'Not a view-once message' });
+    if (msg.viewedOnceAt) return res.status(400).json({ error: 'Already viewed' });
+
+    const viewedAt = new Date().toISOString();
+    
+    // Clear mediaUrl so it cannot be accessed again, and set viewedOnceAt
+    await query(`
+      UPDATE messages 
+      SET "viewedOnceAt" = $1, "mediaUrl" = NULL, "read" = true, "status" = 'read'
+      WHERE id = $2
+    `, [viewedAt, id]);
+
+    // Emit event to sender so they see it was viewed
+    const senderSocketId = activeUsers.get(msg.senderId);
+    if (senderSocketId) {
+      io.to(senderSocketId).emit('message_status_changed', {
+        messageId: id,
+        conversationId: msg.conversationId,
+        status: 'read',
+        viewedOnceAt: viewedAt
+      });
+    }
+
+    res.json({ success: true, viewedOnceAt: viewedAt });
+  } catch (err) {
+    console.error('[VIEW_ONCE_ERROR]', err);
+    res.status(500).json({ error: 'Failed to mark view-once message as viewed' });
   }
 });
 
