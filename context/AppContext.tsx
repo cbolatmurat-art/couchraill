@@ -16,6 +16,7 @@ const USERS_STORAGE_KEY = 'misafirimol_users';
 interface SessionData {
   userId: string;
   expiresAt: number;
+  sessionId?: string;
 }
 
 interface AppContextType {
@@ -342,8 +343,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           let sessionData = null;
           try { sessionData = JSON.parse(storedSession); } catch(e){}
           if (sessionData && sessionData.userId) {
-            const apiUser = await safeFetch(`${API_BASE_URL}/auth/me?userId=${sessionData.userId}`);
+            const deviceInfo = {
+              deviceName: Constants.deviceName || (Platform.OS === 'ios' ? 'iOS Cihaz' : Platform.OS === 'android' ? 'Android Cihaz' : 'Web Tarayıcı'),
+              platform: Platform.OS,
+              os: Platform.Version ? String(Platform.Version) : 'Bilinmiyor'
+            };
+            const qs = `userId=${sessionData.userId}${sessionData.sessionId ? '&sessionId=' + sessionData.sessionId : ''}&deviceName=${encodeURIComponent(deviceInfo.deviceName)}&platform=${encodeURIComponent(deviceInfo.platform)}&os=${encodeURIComponent(deviceInfo.os)}`;
+
+            const apiUser = await safeFetch(`${API_BASE_URL}/auth/me?${qs}`);
             if (apiUser && apiUser.user) {
+              if (apiUser.sessionId && apiUser.sessionId !== sessionData.sessionId) {
+                sessionData.sessionId = apiUser.sessionId;
+                await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+              }
               setCurrentUser(apiUser.user);
               await fetchUserData(sessionData.userId);
             }
@@ -387,12 +399,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             try {
               const controller = new AbortController();
               const id = setTimeout(() => controller.abort(), 6000);
-              const res = await fetch(`${API_BASE_URL}/auth/me?userId=${sessionData.userId}`, {
+              const deviceInfo = {
+                deviceName: Constants.deviceName || (Platform.OS === 'ios' ? 'iOS Cihaz' : Platform.OS === 'android' ? 'Android Cihaz' : 'Web Tarayıcı'),
+                platform: Platform.OS,
+                os: Platform.Version ? String(Platform.Version) : 'Bilinmiyor'
+              };
+              const qs = `userId=${sessionData.userId}${sessionData.sessionId ? '&sessionId=' + sessionData.sessionId : ''}&deviceName=${encodeURIComponent(deviceInfo.deviceName)}&platform=${encodeURIComponent(deviceInfo.platform)}&os=${encodeURIComponent(deviceInfo.os)}`;
+
+              const res = await fetch(`${API_BASE_URL}/auth/me?${qs}`, {
                 signal: controller.signal as any
               });
               clearTimeout(id);
               if (res.ok) {
                 apiUserResult = await res.json();
+                if (apiUserResult?.sessionId && apiUserResult.sessionId !== sessionData.sessionId) {
+                  sessionData.sessionId = apiUserResult.sessionId;
+                  await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+                }
               } else if (res.status === 404 || res.status === 401 || res.status === 403) {
                 console.log('SESSION_USER_NOT_FOUND_ON_SERVER — clearing session');
                 forceLogout = true;
@@ -723,10 +746,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
+      const deviceInfo = {
+        deviceName: Constants.deviceName || (Platform.OS === 'ios' ? 'iOS Cihaz' : Platform.OS === 'android' ? 'Android Cihaz' : 'Web Tarayıcı'),
+        platform: Platform.OS,
+        os: Platform.Version ? String(Platform.Version) : 'Bilinmiyor'
+      };
+
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, deviceInfo }),
         signal: controller.signal as any
       });
       clearTimeout(timeoutId);
@@ -751,7 +780,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const duration = 365 * 24 * 60 * 60 * 1000;
       const sessionData: SessionData = {
         userId: data.user.id,
-        expiresAt: Date.now() + duration
+        expiresAt: Date.now() + duration,
+        sessionId: data.sessionId
       };
       await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
       await fetchUserData(data.user.id);

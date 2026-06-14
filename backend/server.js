@@ -577,7 +577,23 @@ app.post('/api/auth/login', async (req, res) => {
       }
       
       console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> success`);
-      return res.json({ success: true, user: activeUser });
+      
+      let sessionId = null;
+      if (req.body.deviceInfo) {
+        sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const { deviceName, platform, os } = req.body.deviceInfo;
+        const sessionIdDb = `ds_${Date.now()}`;
+        try {
+          await query(`
+            INSERT INTO device_sessions (id, "userId", "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive")
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true)
+          `, [sessionIdDb, activeUser.id, sessionId, deviceName || 'Bilinmeyen Cihaz', platform || 'Bilinmiyor', os || 'Bilinmiyor']);
+        } catch(dbErr) {
+          console.error('[LOGIN_DEVICE_SESSION_ERROR]', dbErr);
+        }
+      }
+
+      return res.json({ success: true, user: activeUser, sessionId });
     }
 
     const { rows: blocklistRows } = await query(`SELECT * FROM deleted_users WHERE LOWER(email) = $1`, [normalizedEmail]);
@@ -624,7 +640,7 @@ app.get('/api/auth/check-username', async (req, res) => {
 
 app.get('/api/auth/me', async (req, res) => {
   try {
-    const { userId } = req.query; 
+    const { userId, sessionId, deviceName, platform, os } = req.query; 
     const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [userId]);
     const user = users[0];
     
@@ -634,11 +650,100 @@ app.get('/api/auth/me', async (req, res) => {
     if (!user || isDeleted) {
       return res.status(401).json({ error: 'Oturum geçersiz. Lütfen tekrar giriş yapın.', deleted: true });
     }
+
+    let activeSessionId = sessionId;
+    let newSessionCreated = false;
+
+    if (sessionId) {
+      const { rows: sessions } = await query('SELECT * FROM device_sessions WHERE "sessionId" = $1 AND "userId" = $2', [sessionId, userId]);
+      if (sessions.length > 0) {
+        if (!sessions[0].isActive) {
+          return res.status(401).json({ error: 'Oturum başka bir cihazdan veya güvenlik nedeniyle kapatıldı.', invalidSession: true });
+        } else {
+          try {
+            await query('UPDATE device_sessions SET "lastActiveAt" = NOW() WHERE "sessionId" = $1', [sessionId]);
+          } catch(e) {}
+        }
+      } else {
+        // Session ID passed but not in DB (e.g. wiped DB), treat as missing session
+        activeSessionId = null; 
+      }
+    }
     
-    res.json({ success: true, user });
+    if (!activeSessionId && deviceName) {
+      // Create new session
+      activeSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const sessionIdDb = `ds_${Date.now()}`;
+      try {
+        await query(`
+          INSERT INTO device_sessions (id, "userId", "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive")
+          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true)
+        `, [sessionIdDb, userId, activeSessionId, deviceName || 'Bilinmeyen Cihaz', platform || 'Bilinmiyor', os || 'Bilinmiyor']);
+        newSessionCreated = true;
+      } catch(dbErr) {
+        console.error('[AUTH_ME_SESSION_CREATE_ERROR]', dbErr);
+        activeSessionId = null;
+      }
+    }
+    
+    res.json({ success: true, user, sessionId: newSessionCreated ? activeSessionId : undefined });
   } catch (error) {
     console.error('[AUTH_ME_ERROR]', error);
     return res.status(500).json({ error: 'Sunucu hatası' });
+  }
+});
+
+// --- DEVICE SESSIONS ---
+app.get('/api/auth/devices', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: 'User ID gerekli.' });
+    
+    const { rows: devices } = await query(
+      'SELECT id, "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive", "createdAt" FROM device_sessions WHERE "userId" = $1 AND "isActive" = true ORDER BY "lastActiveAt" DESC',
+      [userId]
+    );
+    res.json({ success: true, devices });
+  } catch(error) {
+    console.error('[GET_DEVICES_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Cihazlar alınamadı.' });
+  }
+});
+
+app.post('/api/auth/devices/logout', async (req, res) => {
+  try {
+    const { userId, sessionIdToLogout } = req.body;
+    if (!userId || !sessionIdToLogout) return res.status(400).json({ success: false, error: 'Gerekli bilgiler eksik.' });
+    
+    await query(
+      'UPDATE device_sessions SET "isActive" = false WHERE "sessionId" = $1 AND "userId" = $2',
+      [sessionIdToLogout, userId]
+    );
+    res.json({ success: true });
+  } catch(error) {
+    console.error('[LOGOUT_DEVICE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Cihazdan çıkış yapılamadı.' });
+  }
+});
+
+app.post('/api/auth/devices/logout-all', async (req, res) => {
+  try {
+    const { userId, currentSessionId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'User ID gerekli.' });
+    
+    let dbQuery = 'UPDATE device_sessions SET "isActive" = false WHERE "userId" = $1';
+    let params = [userId];
+    
+    if (currentSessionId) {
+      dbQuery += ' AND "sessionId" != $2';
+      params.push(currentSessionId);
+    }
+    
+    await query(dbQuery, params);
+    res.json({ success: true });
+  } catch(error) {
+    console.error('[LOGOUT_ALL_DEVICES_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Tüm cihazlardan çıkış yapılamadı.' });
   }
 });
 

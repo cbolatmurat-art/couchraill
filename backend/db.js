@@ -427,7 +427,21 @@ const initDB = async () => {
       )
     `);
 
-
+    // Device Sessions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS device_sessions (
+        id VARCHAR(255) PRIMARY KEY,
+        "userId" VARCHAR(255),
+        "sessionId" VARCHAR(255) UNIQUE,
+        "deviceName" VARCHAR(255),
+        platform VARCHAR(50),
+        os VARCHAR(100),
+        "lastLoginAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "lastActiveAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "isActive" BOOLEAN DEFAULT true
+      )
+    `);
 
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');

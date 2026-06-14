@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
 import { AlertHelper } from '../utils/AlertHelper';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { API_BASE_URL } from '../constants/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SecurityScreen() {
   const { currentUser, updateProfile, submitVerificationRequest } = useAppContext();
@@ -137,6 +139,119 @@ export default function SecurityScreen() {
   const cameraRef = useRef<CameraView>(null);
 
   const currentStatus = currentUser?.identityVerificationStatus || 'unverified';
+
+  // Logged in Devices state
+  const [isDevicesModalVisible, setIsDevicesModalVisible] = useState(false);
+  const [devices, setDevices] = useState<any[]>([]);
+  const [isDevicesLoading, setIsDevicesLoading] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  const devicesSlideAnim = useRef(new Animated.Value(800)).current;
+
+  const handleOpenDevices = async () => {
+    setIsDevicesModalVisible(true);
+    Animated.timing(devicesSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    fetchDevices();
+  };
+
+  const handleCloseDevices = () => {
+    Animated.timing(devicesSlideAnim, {
+      toValue: 800,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsDevicesModalVisible(false);
+    });
+  };
+
+  const fetchDevices = async () => {
+    if (!currentUser) return;
+    setIsDevicesLoading(true);
+    try {
+      const stored = await AsyncStorage.getItem('misafirimol_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCurrentSessionId(parsed.sessionId || null);
+      }
+      
+      const res = await fetch(`${API_BASE_URL}/auth/devices?userId=${currentUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setDevices(data.devices || []);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch devices", e);
+    } finally {
+      setIsDevicesLoading(false);
+    }
+  };
+
+  const handleLogoutDevice = (sessionIdToLogout: string) => {
+    Alert.alert(
+      "Oturumu Kapat",
+      "Bu cihazdan çıkış yapmak istediğinize emin misiniz?",
+      [
+        { text: "İptal", style: "cancel" },
+        { 
+          text: "Çıkış Yap", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/auth/devices/logout`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: currentUser?.id, sessionIdToLogout })
+              });
+              if (res.ok) {
+                fetchDevices();
+              } else {
+                AlertHelper.alert("Hata", "Oturum kapatılamadı.");
+              }
+            } catch(e) {
+              AlertHelper.alert("Hata", "Oturum kapatılamadı.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleLogoutAllOtherDevices = () => {
+    Alert.alert(
+      "Tüm Cihazlardan Çık",
+      "Mevcut cihazınız hariç diğer tüm cihazlardan çıkış yapılacaktır. Onaylıyor musunuz?",
+      [
+        { text: "İptal", style: "cancel" },
+        { 
+          text: "Çıkış Yap", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/auth/devices/logout-all`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: currentUser?.id, currentSessionId })
+              });
+              if (res.ok) {
+                fetchDevices();
+                AlertHelper.alert("Başarılı", "Diğer tüm cihazlardan çıkış yapıldı.");
+              } else {
+                AlertHelper.alert("Hata", "İşlem başarısız.");
+              }
+            } catch(e) {
+              AlertHelper.alert("Hata", "İşlem başarısız.");
+            }
+          }
+        }
+      ]
+    );
+  };
 
   // ---- Phone Verification Actions ----
   const handleSendCode = async () => {
@@ -486,6 +601,17 @@ export default function SecurityScreen() {
         <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
       </Pressable>
 
+      {/* Giriş Yapılan Cihazlar Card */}
+      <Pressable onPress={handleOpenDevices} style={({ pressed }) => [styles.passwordRow, { marginTop: 8 }, pressed && { opacity: 0.7 }]}>
+        <View style={styles.passwordRowLeft}>
+          <View style={[styles.passwordIconBox, { backgroundColor: '#E8F5E9' }]}>
+            <Ionicons name="hardware-chip" size={20} color="#4CAF50" />
+          </View>
+          <Text style={styles.passwordRowText}>Giriş Yapılan Cihazlar</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+      </Pressable>
+
       <View style={{ height: 260, backgroundColor: 'transparent' }} />
 
       {/* Change Password Bottom Sheet Modal */}
@@ -598,6 +724,109 @@ export default function SecurityScreen() {
                     loading={isChangingPassword}
                   />
                 </View>
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Devices Bottom Sheet Modal */}
+      <Modal
+        visible={isDevicesModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleCloseDevices}
+      >
+        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCloseDevices} />
+          <KeyboardAvoidingView
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            pointerEvents="box-none"
+          >
+            <Animated.View style={[
+              styles.bottomSheetContent, 
+              { 
+                transform: [{ translateY: devicesSlideAnim }],
+                paddingBottom: 0,
+                flexShrink: 1,
+                maxHeight: '85%',
+                backgroundColor: '#F0F2F5',
+                borderTopWidth: 1,
+                borderTopColor: '#E9ECEF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 12,
+                elevation: 10,
+              }
+            ]}>
+              <View style={styles.bottomSheetHandle} />
+
+              <View style={styles.pwModalHeader}>
+                <View style={{ width: 32 }} />
+                <Text style={styles.pwModalTitle}>Giriş Yapılan Cihazlar</Text>
+                <Pressable onPress={handleCloseDevices} style={styles.modalCloseBtn}>
+                  <Ionicons name="close" size={24} color={Colors.text} />
+                </Pressable>
+              </View>
+
+              <ScrollView 
+                style={{ flexShrink: 1, width: '100%', paddingHorizontal: 16 }} 
+                contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 40 : 30 }}
+                showsVerticalScrollIndicator={true}
+              >
+                {isDevicesLoading ? (
+                  <View style={{ padding: 40, alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                  </View>
+                ) : (
+                  <>
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 14, color: Colors.textLight, textAlign: 'center' }}>Hesabınıza giriş yapmış olan cihazları buradan yönetebilirsiniz. Şüpheli bir cihaz görürseniz çıkış yapabilirsiniz.</Text>
+                    </View>
+
+                    {devices.map((dev, idx) => {
+                      const isCurrent = currentSessionId === dev.sessionId;
+                      return (
+                        <View key={idx} style={{ backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E9ECEF' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Ionicons name={dev.platform === 'ios' || dev.platform === 'android' ? 'phone-portrait-outline' : 'desktop-outline'} size={24} color={isCurrent ? Colors.primary : Colors.textLight} />
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.text }}>{dev.deviceName}</Text>
+                                {isCurrent && (
+                                  <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                    <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>BU CİHAZ</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={{ fontSize: 13, color: Colors.textLight, marginTop: 2 }}>{dev.os} • Son Görülme: {new Date(dev.lastActiveAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                            </View>
+                          </View>
+                          
+                          {!isCurrent && (
+                            <Pressable 
+                              onPress={() => handleLogoutDevice(dev.sessionId)}
+                              style={{ alignSelf: 'flex-end', paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#FFEBEE', borderRadius: 6 }}
+                            >
+                              <Text style={{ color: Colors.danger, fontSize: 13, fontWeight: 'bold' }}>Çıkış Yap</Text>
+                            </Pressable>
+                          )}
+                        </View>
+                      );
+                    })}
+
+                    {devices.length > 1 && (
+                      <Button 
+                        title="Tüm Diğer Cihazlardan Çıkış Yap" 
+                        onPress={handleLogoutAllOtherDevices} 
+                        style={{ marginTop: 16, backgroundColor: Colors.danger }}
+                        textStyle={{ color: '#FFF' }}
+                      />
+                    )}
+                  </>
+                )}
               </ScrollView>
             </Animated.View>
           </KeyboardAvoidingView>

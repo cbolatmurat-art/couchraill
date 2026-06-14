@@ -451,9 +451,6 @@ export default function PublicProfileScreen() {
                 <Ionicons name="checkmark-circle" size={18} color="#1DA1F2" style={{ marginLeft: 6 }} />
               )}
             </View>
-            {profile.username ? (
-              <Text style={{ fontSize: 13, color: Colors.textLight, marginBottom: 2 }}>@{profile.username}</Text>
-            ) : null}
 
             {getJoinDateText(profile) ? (
               <Text style={{ marginTop: 8, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
