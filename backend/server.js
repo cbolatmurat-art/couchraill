@@ -622,7 +622,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.json({ success: true, user: activeUser, sessionId });
     }
 
-    const { rows: blocklistRows } = await query(`SELECT * FROM deleted_users WHERE LOWER(email) = $1 OR phone = $2`, [identifier, normalizedPhone || 'INVALID_PHONE']);
+    const { rows: blocklistRows } = await query(`SELECT * FROM deleted_users WHERE LOWER(email) = $1`, [identifier]);
     const isDeletedBlocklist = blocklistRows.length > 0;
 
     if (deletedDuplicateCount > 0 || isDeletedBlocklist) {
