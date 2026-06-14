@@ -2734,7 +2734,8 @@ app.get('/api/messages/:conversationId', async (req, res) => {
       messageType: message.messageType || 'text',
       mediaUrl: message.mediaUrl || null,
       isViewOnce: message.isViewOnce || false,
-      viewedOnceAt: message.viewedOnceAt || null
+      viewedOnceAt: message.viewedOnceAt || null,
+      viewedBy: message.viewedBy || {}
     }));
     res.json(formattedMsgs);
   } catch (error) {
@@ -2856,31 +2857,47 @@ app.post('/api/messages/:id/view-once', async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
     
     const msg = rows[0];
-    if (msg.receiverId !== userId) return res.status(403).json({ error: 'Unauthorized' });
+    if (msg.receiverId !== userId && msg.senderId !== userId) return res.status(403).json({ error: 'Unauthorized' });
     if (!msg.isViewOnce) return res.status(400).json({ error: 'Not a view-once message' });
-    if (msg.viewedOnceAt) return res.status(400).json({ error: 'Already viewed' });
 
-    const viewedAt = new Date().toISOString();
+    let viewedBy = typeof msg.viewedBy === 'string' ? JSON.parse(msg.viewedBy || '{}') : (msg.viewedBy || {});
     
-    // Clear mediaUrl so it cannot be accessed again, and set viewedOnceAt
-    await query(`
-      UPDATE messages 
-      SET "viewedOnceAt" = $1, "mediaUrl" = NULL, "read" = true, "status" = 'read'
-      WHERE id = $2
-    `, [viewedAt, id]);
-
-    // Emit event to sender so they see it was viewed
-    const senderSocketId = activeUsers.get(msg.senderId);
-    if (senderSocketId) {
-      io.to(senderSocketId).emit('message_status_changed', {
-        messageId: id,
-        conversationId: msg.conversationId,
-        status: 'read',
-        viewedOnceAt: viewedAt
-      });
+    // Legacy support
+    if (msg.viewedOnceAt && !viewedBy[msg.receiverId]) {
+      viewedBy[msg.receiverId] = msg.viewedOnceAt;
     }
 
-    res.json({ success: true, viewedOnceAt: viewedAt });
+    if (viewedBy[userId]) return res.status(400).json({ error: 'Already viewed by this user' });
+
+    viewedBy[userId] = new Date().toISOString();
+    
+    const hasSenderViewed = !!viewedBy[msg.senderId];
+    const hasReceiverViewed = !!viewedBy[msg.receiverId];
+    
+    const shouldClearMediaUrl = hasSenderViewed && hasReceiverViewed;
+    const newMediaUrl = shouldClearMediaUrl ? null : msg.mediaUrl;
+
+    await query(`
+      UPDATE messages 
+      SET "viewedBy" = $1::jsonb, "mediaUrl" = $2, "read" = true, "status" = 'read'
+      WHERE id = $3
+    `, [JSON.stringify(viewedBy), newMediaUrl, id]);
+
+    // Emit event to both
+    [msg.senderId, msg.receiverId].forEach(pId => {
+       const socketId = activeUsers.get(pId);
+       if (socketId) {
+         io.to(socketId).emit('message_status_changed', {
+           messageId: id,
+           conversationId: msg.conversationId,
+           status: 'read',
+           viewedBy,
+           mediaUrl: newMediaUrl
+         });
+       }
+    });
+
+    res.json({ success: true, viewedBy, mediaUrl: newMediaUrl });
   } catch (err) {
     console.error('[VIEW_ONCE_ERROR]', err);
     res.status(500).json({ error: 'Failed to mark view-once message as viewed' });

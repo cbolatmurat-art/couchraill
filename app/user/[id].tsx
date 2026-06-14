@@ -468,14 +468,14 @@ export default function PublicProfileScreen() {
 
         {/* Stats */}
         <View style={styles.statsBox}>
-          <Pressable style={styles.statItem} onPress={() => handleOpenSocialList('followers')}>
-            <Text style={styles.statNum}>{stats.followersCount}</Text>
-            <Text style={styles.statLbl}>Takipçi</Text>
-          </Pressable>
-          <View style={styles.statDiv} />
           <Pressable style={styles.statItem} onPress={() => handleOpenSocialList('following')}>
             <Text style={styles.statNum}>{stats.followingCount}</Text>
             <Text style={styles.statLbl}>Takip</Text>
+          </Pressable>
+          <View style={styles.statDiv} />
+          <Pressable style={styles.statItem} onPress={() => handleOpenSocialList('followers')}>
+            <Text style={styles.statNum}>{stats.followersCount}</Text>
+            <Text style={styles.statLbl}>Takipçi</Text>
           </Pressable>
           <View style={styles.statDiv} />
           <Pressable style={styles.statItem} onPress={() => handleOpenSocialList('friends')}>

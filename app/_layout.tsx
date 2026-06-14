@@ -9,6 +9,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CustomSplashScreen from '../components/CustomSplashScreen';
 import { Colors } from '../constants/Colors';
 import { AppProvider, clearAuthStorage, useAppContext } from '../context/AppContext';
+import * as Updates from 'expo-updates';
+import * as Network from 'expo-network';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync().catch(() => { });
@@ -27,6 +30,35 @@ function RootLayoutContent() {
     }, 800);
 
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    async function checkOTAUpdates() {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          const anyNetworkStr = await AsyncStorage.getItem('any_network_updates');
+          const isAnyNetwork = anyNetworkStr === null || anyNetworkStr === 'true'; // Default true
+
+          if (!isAnyNetwork) {
+            const networkState = await Network.getNetworkStateAsync();
+            if (networkState.type !== Network.NetworkStateType.WIFI) {
+              console.log('Update available, but skipping download because not on Wi-Fi.');
+              return;
+            }
+          }
+
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (error) {
+        console.log(`Error fetching OTA update: ${error}`);
+      }
+    }
+
+    if (!__DEV__) {
+      checkOTAUpdates();
+    }
   }, []);
 
   const showCustomSplash = !isReady || !minSplashTimeElapsed;

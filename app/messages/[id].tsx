@@ -42,6 +42,15 @@ export default function ChatScreen() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewOnceImage, setViewOnceImage] = useState<string | null>(null);
+  const [viewOnceTimer, setViewOnceTimer] = useState<number>(15);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isTimerPausedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -214,21 +223,39 @@ export default function ChatScreen() {
     }
   };
 
+  const startViewOnceTimer = () => {
+    setViewOnceTimer(15);
+    isTimerPausedRef.current = false;
+    timerIntervalRef.current = setInterval(() => {
+      if (!isTimerPausedRef.current) {
+        setViewOnceTimer(prev => {
+          if (prev <= 1) {
+            handleCloseViewOnce();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+  };
+
+  const handleCloseViewOnce = () => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    setViewOnceImage(null);
+  };
+
   const handleViewOncePhoto = (item: Message) => {
-    if (item.senderId === currentUser?.id) {
-      Alert.alert('Bilgi', 'Gönderdiğiniz tek görüntülemelik fotoğrafı açamazsınız.');
-      return;
-    }
+    const hasViewed = item.viewedBy && currentUser && item.viewedBy[currentUser.id];
     
-    if (item.viewedOnceAt || !item.mediaUrl) {
+    if (hasViewed || !item.mediaUrl) {
       Alert.alert('Bilgi', 'Bu görsel artık görüntülenemez.');
       return;
     }
 
     setViewOnceImage(item.mediaUrl);
+    startViewOnceTimer();
     markMessageViewedOnce(item.id);
   };
-
 
   const handleReaction = async (emoji: string) => {
     if (!longPressedMessage) return;
@@ -388,28 +415,31 @@ export default function ChatScreen() {
                   </TouchableOpacity>
                 ) : null}
 
-                {item.messageType === 'image' && item.isViewOnce ? (
+                {item.messageType === 'image' && item.isViewOnce ? (() => {
+                  const hasViewed = item.viewedBy && currentUser && item.viewedBy[currentUser.id];
+                  return (
                   <TouchableOpacity 
                     onPress={() => handleViewOncePhoto(item)}
                     style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 4 }}
                   >
                     <View style={{ position: 'relative', marginRight: 12 }}>
                       <Ionicons 
-                        name={item.viewedOnceAt ? "eye-off-outline" : "image-outline"} 
+                        name={hasViewed ? "eye-off-outline" : "image-outline"} 
                         size={22} 
                         color={isMine ? '#FFF' : Colors.text} 
                       />
-                      {!item.viewedOnceAt && (
+                      {!hasViewed && (
                         <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: isMine ? '#FFF' : Colors.primary, borderRadius: 10, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
                           <Text style={{ color: isMine ? Colors.primary : '#FFF', fontSize: 9, fontWeight: 'bold' }}>1</Text>
                         </View>
                       )}
                     </View>
                     <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther, { fontWeight: '600' }]}>
-                      {item.viewedOnceAt ? "Görüntülendi" : "Fotoğraf"}
+                      {hasViewed ? "Görüntülendi" : "Fotoğraf"}
                     </Text>
                   </TouchableOpacity>
-                ) : (
+                  );
+                })() : (
                   <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther]}>
                     {item.text}
                   </Text>
@@ -596,15 +626,18 @@ export default function ChatScreen() {
         visible={!!viewOnceImage}
         transparent={false}
         animationType="fade"
-        onRequestClose={() => setViewOnceImage(null)}
+        onRequestClose={() => {}}
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
-          <View style={{ padding: 16, alignItems: 'flex-end' }}>
-            <TouchableOpacity onPress={() => setViewOnceImage(null)}>
-              <Ionicons name="close" size={32} color="#FFF" />
-            </TouchableOpacity>
+          <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 20, minWidth: 40, alignItems: 'center' }}>
+            <Text style={{ color: '#FFF', fontSize: 18, fontWeight: 'bold' }}>{viewOnceTimer}</Text>
           </View>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity 
+            activeOpacity={1}
+            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            onPressIn={() => { isTimerPausedRef.current = true; }}
+            onPressOut={() => { isTimerPausedRef.current = false; }}
+          >
             {viewOnceImage && (
               <Image 
                 source={{ uri: viewOnceImage }} 
@@ -612,10 +645,10 @@ export default function ChatScreen() {
                 resizeMode="contain" 
               />
             )}
-            <Text style={{ color: '#FFF', marginTop: 20, fontSize: 14, textAlign: 'center' }}>
-              Bu fotoğraf kapatıldıktan sonra bir daha görüntülenemez.
+            <Text style={{ color: '#FFF', marginTop: 20, fontSize: 14, textAlign: 'center', paddingHorizontal: 20 }}>
+              Süreyi durdurmak için ekrana basılı tutun.{'\n'}Süre dolduğunda otomatik kapanır.
             </Text>
-          </View>
+          </TouchableOpacity>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

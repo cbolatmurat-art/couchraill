@@ -50,7 +50,8 @@ interface AppContextType {
   typingStatuses: { [conversationId: string]: { [userId: string]: boolean } };
   sendTypingStatus: (conversationId: string, isTyping: boolean) => void;
   startConversation: (targetUser: { id: string, name: string, profileImage?: string | null }) => Promise<Conversation>;
-  sendMessage: (conversationId: string, text: string, replyTo?: any) => Promise<void>;
+  sendMessage: (conversationId: string, text: string, replyTo?: any, messageType?: string, mediaUrl?: string, isViewOnce?: boolean) => Promise<void>;
+  markMessageViewedOnce: (messageId: string) => Promise<any>;
   addMessageReaction: (conversationId: string, messageId: string, emoji: string, userId: string) => Promise<void>;
   muteConversation: (conversationId: string) => Promise<{ success: boolean; error?: string }>;
   unmuteConversation: (conversationId: string) => Promise<{ success: boolean; error?: string }>;
@@ -1307,7 +1308,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const sendMessage = async (conversationId: string, text: string, replyTo?: any) => {
+  const sendMessage = async (conversationId: string, text: string, replyTo?: any, messageType?: string, mediaUrl?: string, isViewOnce?: boolean) => {
     if (!currentUser) return;
     
     let apiResult: any = null;
@@ -1316,7 +1317,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       apiResult = await safeFetch(`${API_BASE_URL}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, senderId: currentUser.id, text, replyTo })
+        body: JSON.stringify({ conversationId, senderId: currentUser.id, text, replyTo, messageType, mediaUrl, isViewOnce })
       });
     } catch (e: any) {
       if (e.code === 'BLOCKED_CONVERSATION' || e.message === 'Bu kullanıcıyla mesajlaşamazsınız.') {
@@ -1376,6 +1377,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       );
       setConversations(newConvs);
       await AsyncStorage.setItem('misafirimol_conversations', JSON.stringify(newConvs));
+    }
+  };
+
+  const markMessageViewedOnce = async (messageId: string) => {
+    if (!currentUser) return;
+    try {
+      const res = await safeFetch(`${API_BASE_URL}/messages/${messageId}/view-once`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id })
+      });
+      if (res && res.success) {
+        setMessages(prev => prev.map(m => 
+          m.id === messageId ? { ...m, viewedBy: res.viewedBy, mediaUrl: res.mediaUrl, read: true, status: 'read' } : m
+        ));
+      }
+      return res;
+    } catch (e) {
+      console.error('markMessageViewedOnce error', e);
     }
   };
 
@@ -1892,7 +1912,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       conversations, messages, unreadMessageCount,
       activeConversationId, setActiveConversationId,
       typingStatuses, sendTypingStatus,
-      startConversation, sendMessage, muteConversation, unmuteConversation, hideConversationForCurrentUser, getConversationsForCurrentUser, getMessagesForConversation, markConversationAsRead, addMessageReaction,
+      startConversation, sendMessage, muteConversation, unmuteConversation, hideConversationForCurrentUser, getConversationsForCurrentUser, getMessagesForConversation, markConversationAsRead, addMessageReaction, markMessageViewedOnce,
       notifications, unreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead, clearNotifications,
       getPublicProfile, submitReview,
       followUser, unfollowUser, sendFriendRequest, acceptFriendRequest, rejectFriendRequest, unfriendUser, pokeUser, getSocialStats, getSocialList,

@@ -487,7 +487,8 @@ const initDB = async () => {
       `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "mediaUrl" TEXT`,
       `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "messageType" VARCHAR(50) DEFAULT 'text'`,
       `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "isViewOnce" BOOLEAN DEFAULT false`,
-      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedOnceAt" TIMESTAMP`
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedOnceAt" TIMESTAMP`,
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedBy" JSONB DEFAULT '{}'`
     ];
     for (const alt of alters) {
       try {

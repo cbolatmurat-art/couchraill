@@ -81,9 +81,14 @@ export interface Message {
   text: string;
   createdAt: string;
   read: boolean;
+  status?: string;
   readAt?: string;
   reactions?: { userId: string; emoji: string; createdAt: string }[];
   replyTo?: { messageId: string; text: string; senderId: string; senderName?: string };
+  messageType?: string;
+  mediaUrl?: string | null;
+  isViewOnce?: boolean;
+  viewedBy?: Record<string, string>;
 }
 
 export interface Conversation {

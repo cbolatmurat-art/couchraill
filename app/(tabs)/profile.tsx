@@ -626,14 +626,14 @@ export default function ProfileScreen() {
 
       {/* Social Statistics */}
       <View style={styles.statsContainer}>
-        <Pressable style={styles.statBox} onPress={() => handleOpenSocialList('followers')}>
-          <Text style={styles.statValue}>{socialStats.followersCount}</Text>
-          <Text style={styles.statLabel}>Takipçi</Text>
-        </Pressable>
-        <View style={styles.statSeparator} />
         <Pressable style={styles.statBox} onPress={() => handleOpenSocialList('following')}>
           <Text style={styles.statValue}>{socialStats.followingCount}</Text>
           <Text style={styles.statLabel}>Takip</Text>
+        </Pressable>
+        <View style={styles.statSeparator} />
+        <Pressable style={styles.statBox} onPress={() => handleOpenSocialList('followers')}>
+          <Text style={styles.statValue}>{socialStats.followersCount}</Text>
+          <Text style={styles.statLabel}>Takipçi</Text>
         </Pressable>
         <View style={styles.statSeparator} />
         <Pressable style={styles.statBox} onPress={() => handleOpenSocialList('friends')}>
@@ -727,6 +727,11 @@ export default function ProfileScreen() {
                 <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/privacy'); }}>
                   <Ionicons name="document-text-outline" size={22} color={Colors.text} style={styles.menuIcon} />
                   <Text style={styles.menuItemText}>Gizlilik</Text>
+                </Pressable>
+
+                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/about'); }}>
+                  <Ionicons name="information-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Hakkında</Text>
                 </Pressable>
                 
                 <Pressable style={styles.menuItem} onPress={() => { closeMenu(); setTimeout(openIssueModal, 300); }}>
