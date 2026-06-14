@@ -590,24 +590,24 @@ export default function SecurityScreen() {
         )}
       </Card>
 
-      {/* Şifreyi Değiştir Card */}
-      <Pressable onPress={handleOpenPasswordModal} style={({ pressed }) => [styles.passwordRow, pressed && { opacity: 0.7 }]}>
-        <View style={styles.passwordRowLeft}>
-          <View style={styles.passwordIconBox}>
-            <Ionicons name="lock-closed" size={20} color={Colors.primary} />
-          </View>
-          <Text style={styles.passwordRowText}>Şifreyi Değiştir</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-      </Pressable>
-
       {/* Giriş Yapılan Cihazlar Card */}
-      <Pressable onPress={handleOpenDevices} style={({ pressed }) => [styles.passwordRow, { marginTop: 8 }, pressed && { opacity: 0.7 }]}>
+      <Pressable onPress={handleOpenDevices} style={({ pressed }) => [styles.passwordRow, pressed && { opacity: 0.7 }]}>
         <View style={styles.passwordRowLeft}>
           <View style={[styles.passwordIconBox, { backgroundColor: '#E8F5E9' }]}>
             <Ionicons name="hardware-chip" size={20} color="#4CAF50" />
           </View>
           <Text style={styles.passwordRowText}>Giriş Yapılan Cihazlar</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+      </Pressable>
+
+      {/* Şifreyi Değiştir Card */}
+      <Pressable onPress={handleOpenPasswordModal} style={({ pressed }) => [styles.passwordRow, { marginTop: 8 }, pressed && { opacity: 0.7 }]}>
+        <View style={styles.passwordRowLeft}>
+          <View style={styles.passwordIconBox}>
+            <Ionicons name="lock-closed" size={20} color={Colors.primary} />
+          </View>
+          <Text style={styles.passwordRowText}>Şifreyi Değiştir</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
       </Pressable>

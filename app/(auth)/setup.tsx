@@ -72,6 +72,7 @@ export default function SetupScreen() {
         phone: params.phone as string,
         userType: role,
         city: params.city as string,
+        gender: params.gender as string,
         acceptsGuests: false,
         termsAccepted: params.termsAccepted === 'true',
         termsAcceptedAt: new Date().toISOString(),

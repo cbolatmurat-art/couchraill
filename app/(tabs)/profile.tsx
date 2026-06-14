@@ -549,6 +549,21 @@ export default function ProfileScreen() {
     return isIdVerified && isEmailVerified && isPhoneVerified;
   };
 
+  const getMissingFields = () => {
+    const missing = [];
+    if (!currentUser.email) missing.push('E-posta adresi');
+    if (!currentUser.emailVerified && currentUser.email) missing.push('E-posta doğrulaması');
+    if (!currentUser.phoneVerified) missing.push('Telefon doğrulaması');
+    if (!currentUser.gender || currentUser.gender === 'Söylemek istemiyorum') missing.push('Cinsiyet bilgisi');
+    if (!currentUser.birthDate) missing.push('Doğum tarihi');
+    if (!currentUser.profileImage) missing.push('Profil fotoğrafı');
+    if (currentUser.identityVerificationStatus !== 'verified') missing.push('Kimlik doğrulaması');
+    return missing;
+  };
+
+  const missingFields = getMissingFields();
+  const showCompleteProfile = missingFields.length > 0;
+
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -645,6 +660,31 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      {showCompleteProfile && (
+        <Pressable 
+          style={{
+            backgroundColor: '#FFF8E1',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderWidth: 1,
+            borderColor: '#FFE082'
+          }}
+          onPress={() => router.push('/edit-profile')}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FF8F00', marginBottom: 4 }}>Profilini Tamamla</Text>
+            <Text style={{ fontSize: 13, color: '#F57C00', lineHeight: 18 }}>
+              Eksik bilgilerin var: {missingFields.join(', ')}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#FF8F00" />
+        </Pressable>
+      )}
 
       <UserPosts userId={currentUser.id} currentUserId={currentUser.id} currentUser={currentUser} profile={currentUser} />
 

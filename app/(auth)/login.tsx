@@ -65,7 +65,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setError('Lütfen e-posta ve şifre alanlarını doldurun.');
+      setError('Lütfen giriş bilgilerinizi ve şifrenizi doldurun.');
       return;
     }
     
@@ -182,12 +182,11 @@ export default function LoginScreen() {
             ) : null}
 
             <Input
-              label="E-posta Adresi"
-              placeholder="ornek@email.com"
+              label="E-Posta / Tel. No"
+              placeholder="ornek@email.com veya 5xxxxxxxxx"
               value={email}
               onChangeText={setEmail}
-              keyboardType="email-address"
-              textContentType="emailAddress"
+              keyboardType="default"
               autoCapitalize="none"
               autoCorrect={false}
               editable={!loading}

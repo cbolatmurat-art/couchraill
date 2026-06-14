@@ -657,7 +657,10 @@ export default function EditProfileScreen() {
                 label="Ad Soyad"
                 placeholder="Adınız Soyadınız"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(val) => {
+                  const titleCased = val.split(' ').map(w => w ? w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR') : '').join(' ');
+                  setName(titleCased);
+                }}
                 onFocus={() => setFocusedField('name')}
                 onBlur={() => setFocusedField(null)}
               />
@@ -789,7 +792,7 @@ export default function EditProfileScreen() {
 
             <AnimatedFocusWrapper isFocused={focusedField === 'city'}>
               <View style={styles.cityPickerGroup}>
-                <Text style={styles.cityPickerLabel}>Yaşadığı Şehir</Text>
+                <Text style={styles.cityPickerLabel}>Yaşadığınız Yer</Text>
                 <CityPicker
                   selectedCity={city}
                   onSelectCity={setCity}
@@ -805,14 +808,24 @@ export default function EditProfileScreen() {
               <View style={{ marginBottom: 16 }}>
                 <Text style={styles.inputLabel}>Cinsiyet</Text>
                 <Pressable
-                  style={[styles.phoneInputContainer, { paddingHorizontal: 16, paddingVertical: 14, justifyContent: 'space-between' }]}
-                  onPress={() => { setIsGenderModalVisible(true); setFocusedField('gender'); }}
+                  style={[styles.phoneInputContainer, { paddingHorizontal: 16, paddingVertical: 14, justifyContent: 'space-between', opacity: currentUser?.genderChangedOnce ? 0.6 : 1 }]}
+                  onPress={() => { 
+                    if (currentUser?.genderChangedOnce) return;
+                    setIsGenderModalVisible(true); 
+                    setFocusedField('gender'); 
+                  }}
                 >
                   <Text style={{ fontSize: 16, color: genderType ? Colors.text : Colors.textLight }}>
                     {genderType || 'Cinsiyet seçin...'}
                   </Text>
-                  <Ionicons name="chevron-down" size={20} color={Colors.textLight} />
+                  {!currentUser?.genderChangedOnce && <Ionicons name="chevron-down" size={20} color={Colors.textLight} />}
                 </Pressable>
+
+                {currentUser?.genderChangedOnce ? (
+                  <Text style={{ fontSize: 12, color: Colors.danger, marginTop: 4 }}>Cinsiyet değiştirme hakkınızı kullandınız.</Text>
+                ) : (
+                  <Text style={{ fontSize: 12, color: Colors.textLight, marginTop: 4 }}>Cinsiyet bilginizi yalnızca 1 kez değiştirebilirsiniz. Lütfen seçiminizi dikkatli yapın.</Text>
+                )}
 
                 <Modal visible={isGenderModalVisible} transparent animationType="fade">
                   <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => { setIsGenderModalVisible(false); setFocusedField(null); }}>

@@ -13,10 +13,10 @@ export default function RegisterScreen() {
   const router = useRouter();
 
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('');
+  const [gender, setGender] = useState('');
+  const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
@@ -34,24 +34,15 @@ export default function RegisterScreen() {
       return;
     }
 
-    const trimmedEmail = email ? email.trim() : '';
-    if (!trimmedEmail) {
-      setErrorMsg('E-posta adresi gereklidir.');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setErrorMsg('Geçerli bir e-posta adresi giriniz.');
-      return;
-    }
+    // E-posta adresi artık kayıt aşamasında zorunlu değil. İsteyen profil düzenlemeden ekleyebilir.
 
     if (!name || !password || !phone) {
       setErrorMsg('Lütfen zorunlu alanları doldurun.');
       return;
     }
     
-    if (!city) {
-      setErrorMsg('Lütfen şehrinizi seçin.');
+    if (!gender) {
+      setErrorMsg('Lütfen cinsiyetinizi seçin.');
       return;
     }
     
@@ -113,10 +104,11 @@ export default function RegisterScreen() {
       pathname: '/(auth)/setup',
       params: {
         name,
-        email,
+        email: '',
         password,
         phone: `+90${phone}`,
-        city,
+        city: '',
+        gender,
         termsAccepted: termsAccepted ? 'true' : 'false'
       }
     });
@@ -161,21 +153,50 @@ export default function RegisterScreen() {
               label="Ad Soyad"
               placeholder="Adınız Soyadınız"
               value={name}
-              onChangeText={setName}
+              onChangeText={(val) => {
+                const titleCased = val.split(' ').map(w => w ? w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR') : '').join(' ');
+                setName(titleCased);
+              }}
             />
 
-            <Input
-              label="E-posta Adresi"
-              placeholder="ornek@email.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              autoCapitalize="none"
-            />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Cinsiyet</Text>
+              <Pressable
+                style={[styles.inputBox, { justifyContent: 'space-between' }]}
+                onPress={() => setIsGenderModalVisible(true)}
+              >
+                <Text style={{ fontSize: 16, color: gender ? Colors.text : Colors.textLight }}>
+                  {gender || 'Cinsiyet seçin...'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color={Colors.textLight} />
+              </Pressable>
 
-            <View style={styles.phoneInputGroup}>
-              <Text style={styles.inputLabel}>Telefon Numarası</Text>
+              <Modal visible={isGenderModalVisible} transparent animationType="fade">
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => setIsGenderModalVisible(false)}>
+                  <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 30 }}>
+                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Cinsiyet Seç</Text>
+                    </View>
+                    {['Erkek', 'Kadın', 'Söylemek istemiyorum'].map(opt => (
+                      <Pressable
+                        key={opt}
+                        style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', flexDirection: 'row', justifyContent: 'space-between' }}
+                        onPress={() => { setGender(opt); setIsGenderModalVisible(false); }}
+                      >
+                        <Text style={{ fontSize: 16, color: Colors.text }}>{opt}</Text>
+                        {gender === opt && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                      </Pressable>
+                    ))}
+                    <Pressable style={{ padding: 16, alignItems: 'center' }} onPress={() => setIsGenderModalVisible(false)}>
+                      <Text style={{ fontSize: 16, color: Colors.danger, fontWeight: '600' }}>İptal</Text>
+                    </Pressable>
+                  </View>
+                </Pressable>
+              </Modal>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Telefon Numarası</Text>
               <View style={styles.phoneInputContainer}>
                 <View style={styles.phonePrefix}>
                   <Text style={styles.phonePrefixText}>+90</Text>
@@ -192,17 +213,7 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Hangi Şehirdesiniz?</Text>
-              <CityPicker 
-                selectedCity={city}
-                onSelectCity={setCity}
-                placeholder="Şehir seçin..."
-                showAllOption={false}
-              />
-            </View>
-
-            <View style={styles.passwordContainer}>
+            <View style={styles.inputContainer}>
               <Text style={styles.label}>Şifre</Text>
               <View style={styles.passwordInputWrapper}>
                 <TextInput
@@ -376,16 +387,7 @@ const styles = StyleSheet.create({
     color: '#2e7d32',
     fontSize: 14,
   },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    ...Typography.subtitle,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: Colors.text,
-  },
-  passwordContainer: {
+  inputContainer: {
     marginVertical: 10,
     width: '100%',
   },
@@ -394,6 +396,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 6,
     marginLeft: 4,
+    color: Colors.text,
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.cardBackground,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   passwordInputWrapper: {
     flexDirection: 'row',
@@ -412,9 +425,6 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 8,
-  },
-  phoneInputGroup: {
-    marginBottom: 16,
   },
   phoneInputContainer: {
     flexDirection: 'row',

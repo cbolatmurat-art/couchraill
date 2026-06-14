@@ -402,22 +402,21 @@ app.get('/api/debug/users-by-email', (req, res) => {
 // ---- AUTH & USERS ----
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name, phone, userType, city, termsAccepted, termsAcceptedAt } = req.body;
+    const { email, password, name, phone, userType, city, gender, termsAccepted, termsAcceptedAt } = req.body;
     
     if (termsAccepted !== true) {
       return res.status(400).json({ success: false, error: 'Üyelik oluşturmak için şartları kabul etmelisiniz.', message: 'Üyelik oluşturmak için şartları kabul etmelisiniz.' });
     }
-    if (!email || !password || !name || !phone) {
+    if (!password || !name || !phone) {
       return res.status(400).json({ success: false, error: 'Zorunlu alanlar eksik.', message: 'Zorunlu alanlar eksik.' });
     }
 
-    const trimmedEmail = email ? String(email).trim() : '';
-    if (!trimmedEmail) {
-      return res.status(400).json({ success: false, error: 'E-posta adresi gereklidir.', message: 'E-posta adresi gereklidir.' });
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
+    const trimmedEmail = email ? String(email).trim() : null;
+    if (trimmedEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
+      }
     }
 
     if (password.length < 6) {
@@ -464,20 +463,29 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Telefon numarası geçerli görünmüyor.', message: 'Telefon numarası geçerli görünmüyor.' });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
     const normalizedPhone = String(phone).trim();
     
     const { isPgMem } = require('./db');
     console.log(`[REGISTER_HIT] email: ${normalizedEmail}, dbMode: ${isPgMem ? 'pg-mem' : 'PostgreSQL'}`);
 
-    const { rows: existingRows } = await query(
-      'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(TRIM(email)) = $1 OR phone = $2', 
-      [normalizedEmail, normalizedPhone]
-    );
+    let conflict = null;
+    if (normalizedEmail) {
+      const { rows: existingRows } = await query(
+        'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(TRIM(email)) = $1 OR phone = $2', 
+        [normalizedEmail, normalizedPhone]
+      );
+      if (existingRows.length > 0) conflict = existingRows[0];
+    } else {
+      const { rows: existingRows } = await query(
+        'SELECT id, email, phone, "emailVerified" FROM users WHERE phone = $1', 
+        [normalizedPhone]
+      );
+      if (existingRows.length > 0) conflict = existingRows[0];
+    }
     
-    if (existingRows.length > 0) {
-      const conflict = existingRows[0];
-      if (conflict.email && conflict.email.toLowerCase() === normalizedEmail) {
+    if (conflict) {
+      if (normalizedEmail && conflict.email && conflict.email.toLowerCase() === normalizedEmail) {
         if (conflict.emailVerified === true) {
           return res.status(400).json({
             success: false,
@@ -490,7 +498,8 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.', message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.' });
     }
 
-    const username = await generateUniqueUsername(name);
+    const formattedName = name.split(' ').map((w: string) => w ? w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR') : '').join(' ');
+    const username = await generateUniqueUsername(formattedName);
     const newId = `u${Date.now()}`;
     const joinedDate = new Date().toISOString().split('T')[0];
     
@@ -501,19 +510,19 @@ app.post('/api/auth/register', async (req, res) => {
       INSERT INTO users (
         id, email, password, name, username, phone, "userType", city,
         verified, "joinedDate", "profileImage", "phoneVerified", "emailVerified", "identityVerificationStatus",
-        active, "isDeleted", "fullName", "termsAccepted", "termsAcceptedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        active, "isDeleted", "fullName", "termsAccepted", "termsAcceptedAt", gender, "genderChangedOnce"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, false)
     `, [
-      newId, normalizedEmail, hashedPassword, name, username, normalizedPhone, userType || 'seeker', city || '',
+      newId, normalizedEmail, hashedPassword, formattedName, username, normalizedPhone, userType || 'seeker', city || '',
       false, joinedDate, null, false, false, 'unverified',
-      true, false, name, termsAccepted, termsAcceptedAt || new Date().toISOString()
+      true, false, formattedName, termsAccepted, termsAcceptedAt || new Date().toISOString(), gender || null
     ]);
 
     console.log(`[REGISTER_SUCCESS] inserted user id: ${newId}, email: ${normalizedEmail}`);
 
     res.json({ 
       success: true, 
-      user: { id: newId, name, email: normalizedEmail, userType, profileImage: null },
+      user: { id: newId, name: formattedName, email: normalizedEmail, userType, profileImage: null },
       message: 'Kayıt başarıyla oluşturuldu.'
     });
   } catch (error) {
@@ -538,29 +547,46 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(401).json({ success: false, message: 'E-posta veya şifre boş olamaz.' });
+      return res.status(401).json({ success: false, message: 'Giriş bilgileri boş olamaz.' });
     }
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const identifier = String(email).trim().toLowerCase();
+
+    // Check if identifier is phone number
+    let normalizedPhone = identifier.replace(/[^0-9+]/g, '');
+    if (normalizedPhone.startsWith('+90')) {
+      // already good
+    } else if (normalizedPhone.startsWith('90') && normalizedPhone.length === 12) {
+      normalizedPhone = '+' + normalizedPhone;
+    } else if (normalizedPhone.startsWith('05') && normalizedPhone.length === 11) {
+      normalizedPhone = '+90' + normalizedPhone.substring(1);
+    } else if (normalizedPhone.startsWith('5') && normalizedPhone.length === 10) {
+      normalizedPhone = '+90' + normalizedPhone;
+    } else {
+      normalizedPhone = null;
+    }
 
     const { rows: activeUsers } = await query(`
       SELECT * FROM users 
-      WHERE LOWER(email) = $1 AND "isDeleted" = false AND active = true
-    `, [normalizedEmail]);
+      WHERE (LOWER(email) = $1 OR phone = $2) AND "isDeleted" = false AND active = true
+    `, [identifier, normalizedPhone || 'INVALID_PHONE']);
 
     const activeUser = activeUsers[0];
 
     const { rows: deletedRows } = await query(`
       SELECT id FROM users 
-      WHERE LOWER(email) = $1 AND ("isDeleted" = true OR active = false)
-    `, [normalizedEmail]);
+      WHERE (LOWER(email) = $1 OR phone = $2) AND ("isDeleted" = true OR active = false)
+    `, [identifier, normalizedPhone || 'INVALID_PHONE']);
     const deletedDuplicateCount = deletedRows.length;
 
-    console.log(`[LOGIN_ATTEMPT] email: ${normalizedEmail}, activeUserFound: ${!!activeUser}, deletedDuplicateCount: ${deletedDuplicateCount}`);
+    console.log(`[LOGIN_ATTEMPT] identifier: ${identifier}, activeUserFound: ${!!activeUser}, deletedDuplicateCount: ${deletedDuplicateCount}`);
+
+    const isPhoneAttempt = !!normalizedPhone;
+    const errorMsg = isPhoneAttempt ? 'Telefon Numarası veya Şifre Hatalı' : 'E-Posta veya Şifre Hatalı';
 
     if (activeUser) {
       if (!activeUser.password) {
-        console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> missing password hash`);
-        return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
+        console.log(`[LOGIN_RESULT] identifier: ${identifier} -> missing password hash`);
+        return res.status(401).json({ success: false, message: errorMsg });
       }
 
       // Check if the password is plain text (legacy) or bcrypt hash
@@ -572,11 +598,11 @@ app.post('/api/auth/login', async (req, res) => {
       }
 
       if (!isMatch) {
-        console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> password mismatch`);
-        return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
+        console.log(`[LOGIN_RESULT] identifier: ${identifier} -> password mismatch`);
+        return res.status(401).json({ success: false, message: errorMsg });
       }
       
-      console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> success`);
+      console.log(`[LOGIN_RESULT] identifier: ${identifier} -> success`);
       
       let sessionId = null;
       if (req.body.deviceInfo) {
@@ -596,19 +622,19 @@ app.post('/api/auth/login', async (req, res) => {
       return res.json({ success: true, user: activeUser, sessionId });
     }
 
-    const { rows: blocklistRows } = await query(`SELECT * FROM deleted_users WHERE LOWER(email) = $1`, [normalizedEmail]);
+    const { rows: blocklistRows } = await query(`SELECT * FROM deleted_users WHERE LOWER(email) = $1 OR phone = $2`, [identifier, normalizedPhone || 'INVALID_PHONE']);
     const isDeletedBlocklist = blocklistRows.length > 0;
 
     if (deletedDuplicateCount > 0 || isDeletedBlocklist) {
-      console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> deleted/inactive account`);
+      console.log(`[LOGIN_RESULT] identifier: ${identifier} -> deleted/inactive account`);
       return res.status(401).json({ success: false, deleted: true, message: 'Bu hesap silinmiş veya pasif durumda.' });
     }
     
-    console.log(`[LOGIN_RESULT] email: ${normalizedEmail} -> not found`);
-    return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
+    console.log(`[LOGIN_RESULT] identifier: ${identifier} -> not found`);
+    return res.status(401).json({ success: false, message: isPhoneAttempt ? 'Telefon Numarası veya Şifre Hatalı' : 'E-Posta veya Şifre Hatalı' });
   } catch (error) {
     console.error('[LOGIN_ERROR]', error);
-    return res.status(401).json({ success: false, message: 'E-posta veya şifre hatalı.' });
+    return res.status(401).json({ success: false, message: 'Giriş bilgileri hatalı veya sunucu hatası.' });
   }
 });
 
@@ -949,6 +975,17 @@ app.put('/api/users/profile', async (req, res) => {
       updates.fullName = updates.name;
     }
 
+    if (updates.gender !== undefined && updates.gender !== user.gender) {
+      if (user.genderChangedOnce) {
+        return res.status(400).json({ success: false, error: 'Cinsiyet değiştirme hakkınızı kullandınız.', message: 'Cinsiyet değiştirme hakkınızı kullandınız.' });
+      }
+      // If it's the first time they are saving it AND it's different from what was there 
+      // (Wait, what if they didn't have it on signup but set it later? That counts as the 1 time.
+      // But actually, the prompt says "Kullanıcı kayıt sonrası cinsiyet bilgisini Profili Düzenle ekranından sadece 1 defa değiştirebilsin."
+      // Let's just set it to true if they change it.
+      updates.genderChangedOnce = true;
+    }
+
     const setKeys = [];
     const setValues = [];
     let paramIndex = 1;
@@ -969,6 +1006,7 @@ app.put('/api/users/profile', async (req, res) => {
       password: 'password',
       username: 'username',
       gender: 'gender',
+      genderChangedOnce: '"genderChangedOnce"',
       birthDate: '"birthDate"'
     };
 
