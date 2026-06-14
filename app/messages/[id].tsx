@@ -251,7 +251,7 @@ export default function ChatScreen() {
     const hasViewed = item.viewedBy && currentUser && item.viewedBy[currentUser.id];
     
     if (hasViewed || !item.mediaUrl) {
-      Alert.alert('Bilgi', 'Bu görsel artık görüntülenemez.');
+      Alert.alert('Bilgi', 'Bu fotoğraf artık görüntülenemez.');
       return;
     }
 
@@ -419,7 +419,18 @@ export default function ChatScreen() {
                 ) : null}
 
                 {item.messageType === 'image' && item.isViewOnce ? (() => {
-                  const hasViewed = item.viewedBy && currentUser && item.viewedBy[currentUser.id];
+                  const hasViewedByMe = item.viewedBy && currentUser && item.viewedBy[currentUser.id];
+                  const hasViewedByOther = item.viewedBy && Object.keys(item.viewedBy).some(id => id !== currentUser?.id);
+                  
+                  let displayText = "Fotoğraf";
+                  if (isMine) {
+                    if (hasViewedByOther) {
+                      displayText = "Açıldı";
+                    } else if (hasViewedByMe) {
+                      displayText = "Görüntülendi";
+                    }
+                  }
+
                   return (
                   <TouchableOpacity 
                     onPress={() => handleViewOncePhoto(item)}
@@ -427,18 +438,16 @@ export default function ChatScreen() {
                   >
                     <View style={{ position: 'relative', marginRight: 12 }}>
                       <Ionicons 
-                        name={hasViewed ? "eye-off-outline" : "image-outline"} 
+                        name="image-outline" 
                         size={22} 
                         color={isMine ? '#FFF' : Colors.text} 
                       />
-                      {!hasViewed && (
-                        <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: isMine ? '#FFF' : Colors.primary, borderRadius: 10, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
-                          <Text style={{ color: isMine ? Colors.primary : '#FFF', fontSize: 9, fontWeight: 'bold' }}>1</Text>
-                        </View>
-                      )}
+                      <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: isMine ? '#FFF' : Colors.primary, borderRadius: 10, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: isMine ? Colors.primary : '#FFF', fontSize: 9, fontWeight: 'bold' }}>1</Text>
+                      </View>
                     </View>
                     <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther, { fontWeight: '600' }]}>
-                      {hasViewed ? "Görüntülendi" : "Fotoğraf"}
+                      {displayText}
                     </Text>
                   </TouchableOpacity>
                   );

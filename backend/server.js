@@ -2734,24 +2734,45 @@ app.get('/api/messages/:conversationId', async (req, res) => {
       ORDER BY "createdAt" ASC
     `, [req.params.conversationId]);
 
-    const formattedMsgs = rows.map(message => ({
-      id: message.id,
-      conversationId: message.conversationId,
-      senderId: message.senderId,
-      receiverId: message.receiverId,
-      text: message.text,
-      createdAt: message.createdAt,
-      read: message.read,
-      readAt: message.readAt,
-      status: message.status,
-      replyTo: message.replyTo || null,
-      reactions: message.reactions || [],
-      messageType: message.messageType || 'text',
-      mediaUrl: message.mediaUrl || null,
-      isViewOnce: message.isViewOnce || false,
-      viewedOnceAt: message.viewedOnceAt || null,
-      viewedBy: message.viewedBy || {}
-    }));
+    const now = new Date();
+    const formattedMsgs = rows.map(message => {
+      let currentMediaUrl = message.mediaUrl || null;
+      let viewedByObj = typeof message.viewedBy === 'string' ? JSON.parse(message.viewedBy || '{}') : (message.viewedBy || {});
+
+      if (message.isViewOnce && currentMediaUrl) {
+        const hasSenderViewed = !!viewedByObj[message.senderId];
+        const hasReceiverViewed = !!viewedByObj[message.receiverId];
+        const bothViewed = hasSenderViewed && hasReceiverViewed;
+        
+        const createdAtDate = new Date(message.createdAt);
+        const hoursPassed = (now - createdAtDate) / (1000 * 60 * 60);
+        const timeExpired = hoursPassed >= 24;
+        
+        if (bothViewed || timeExpired) {
+           currentMediaUrl = null;
+           query(`UPDATE messages SET "mediaUrl" = null WHERE id = $1`, [message.id]).catch(e => console.error("ViewOnce cleanup error:", e));
+        }
+      }
+
+      return {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        receiverId: message.receiverId,
+        text: message.text,
+        createdAt: message.createdAt,
+        read: message.read,
+        readAt: message.readAt,
+        status: message.status,
+        replyTo: message.replyTo || null,
+        reactions: message.reactions || [],
+        messageType: message.messageType || 'text',
+        mediaUrl: currentMediaUrl,
+        isViewOnce: message.isViewOnce || false,
+        viewedOnceAt: message.viewedOnceAt || null,
+        viewedBy: viewedByObj
+      };
+    });
     res.json(formattedMsgs);
   } catch (error) {
     console.error('[GET_MESSAGES_ERROR]', error.message);
