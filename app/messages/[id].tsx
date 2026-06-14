@@ -429,7 +429,13 @@ export default function ChatScreen() {
                     } else if (hasViewedByMe) {
                       displayText = "Görüntülendi";
                     }
+                  } else {
+                    if (hasViewedByMe) {
+                      displayText = "Açıldı";
+                    }
                   }
+                  
+                  const showBadge = displayText === "Fotoğraf";
 
                   return (
                   <TouchableOpacity 
@@ -438,13 +444,15 @@ export default function ChatScreen() {
                   >
                     <View style={{ position: 'relative', marginRight: 12 }}>
                       <Ionicons 
-                        name="image-outline" 
+                        name={showBadge ? "image-outline" : "eye-off-outline"} 
                         size={22} 
                         color={isMine ? '#FFF' : Colors.text} 
                       />
-                      <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: isMine ? '#FFF' : Colors.primary, borderRadius: 10, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
-                        <Text style={{ color: isMine ? Colors.primary : '#FFF', fontSize: 9, fontWeight: 'bold' }}>1</Text>
-                      </View>
+                      {showBadge && (
+                        <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: isMine ? '#FFF' : Colors.primary, borderRadius: 10, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ color: isMine ? Colors.primary : '#FFF', fontSize: 9, fontWeight: 'bold' }}>1</Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther, { fontWeight: '600' }]}>
                       {displayText}
