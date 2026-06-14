@@ -608,12 +608,30 @@ app.post('/api/auth/login', async (req, res) => {
       if (req.body.deviceInfo) {
         sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         const { deviceName, platform, os } = req.body.deviceInfo;
-        const sessionIdDb = `ds_${Date.now()}`;
+        const dName = deviceName || 'Bilinmeyen Cihaz';
+        const dPlatform = platform || 'Bilinmiyor';
+        const dOs = os || 'Bilinmiyor';
+        
         try {
-          await query(`
-            INSERT INTO device_sessions (id, "userId", "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive")
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true)
-          `, [sessionIdDb, activeUser.id, sessionId, deviceName || 'Bilinmeyen Cihaz', platform || 'Bilinmiyor', os || 'Bilinmiyor']);
+          const { rows: existing } = await query(`
+            SELECT id FROM device_sessions 
+            WHERE "userId" = $1 AND "deviceName" = $2 AND platform = $3 AND os = $4
+            ORDER BY "lastActiveAt" DESC LIMIT 1
+          `, [activeUser.id, dName, dPlatform, dOs]);
+
+          if (existing.length > 0) {
+            await query(`
+              UPDATE device_sessions 
+              SET "sessionId" = $1, "lastLoginAt" = NOW(), "lastActiveAt" = NOW(), "isActive" = true
+              WHERE id = $2
+            `, [sessionId, existing[0].id]);
+          } else {
+            const sessionIdDb = `ds_${Date.now()}`;
+            await query(`
+              INSERT INTO device_sessions (id, "userId", "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive")
+              VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true)
+            `, [sessionIdDb, activeUser.id, sessionId, dName, dPlatform, dOs]);
+          }
         } catch(dbErr) {
           console.error('[LOGIN_DEVICE_SESSION_ERROR]', dbErr);
         }
@@ -697,14 +715,31 @@ app.get('/api/auth/me', async (req, res) => {
     }
     
     if (!activeSessionId && deviceName) {
-      // Create new session
+      // Create or update session
       activeSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      const sessionIdDb = `ds_${Date.now()}`;
+      const dName = deviceName || 'Bilinmeyen Cihaz';
+      const dPlatform = platform || 'Bilinmiyor';
+      const dOs = os || 'Bilinmiyor';
       try {
-        await query(`
-          INSERT INTO device_sessions (id, "userId", "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive")
-          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true)
-        `, [sessionIdDb, userId, activeSessionId, deviceName || 'Bilinmeyen Cihaz', platform || 'Bilinmiyor', os || 'Bilinmiyor']);
+        const { rows: existing } = await query(`
+          SELECT id FROM device_sessions 
+          WHERE "userId" = $1 AND "deviceName" = $2 AND platform = $3 AND os = $4
+          ORDER BY "lastActiveAt" DESC LIMIT 1
+        `, [userId, dName, dPlatform, dOs]);
+
+        if (existing.length > 0) {
+          await query(`
+            UPDATE device_sessions 
+            SET "sessionId" = $1, "lastLoginAt" = NOW(), "lastActiveAt" = NOW(), "isActive" = true
+            WHERE id = $2
+          `, [activeSessionId, existing[0].id]);
+        } else {
+          const sessionIdDb = `ds_${Date.now()}`;
+          await query(`
+            INSERT INTO device_sessions (id, "userId", "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive")
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true)
+          `, [sessionIdDb, userId, activeSessionId, dName, dPlatform, dOs]);
+        }
         newSessionCreated = true;
       } catch(dbErr) {
         console.error('[AUTH_ME_SESSION_CREATE_ERROR]', dbErr);
@@ -729,7 +764,30 @@ app.get('/api/auth/devices', async (req, res) => {
       'SELECT id, "sessionId", "deviceName", platform, os, "lastLoginAt", "lastActiveAt", "isActive", "createdAt" FROM device_sessions WHERE "userId" = $1 AND "isActive" = true ORDER BY "lastActiveAt" DESC',
       [userId]
     );
-    res.json({ success: true, devices });
+
+    const uniqueDevices = [];
+    const seen = new Set();
+    const duplicateIds = [];
+
+    for (const d of devices) {
+      const key = `${d.deviceName}_${d.platform}_${d.os}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueDevices.push(d);
+      } else {
+        duplicateIds.push(d.id);
+      }
+    }
+
+    if (duplicateIds.length > 0) {
+      try {
+        await query(`UPDATE device_sessions SET "isActive" = false WHERE id = ANY($1)`, [duplicateIds]);
+      } catch(e) {
+        console.error('[CLEANUP_DUPLICATE_DEVICES_ERROR]', e);
+      }
+    }
+
+    res.json({ success: true, devices: uniqueDevices });
   } catch(error) {
     console.error('[GET_DEVICES_ERROR]', error);
     res.status(500).json({ success: false, error: 'Cihazlar alınamadı.' });
