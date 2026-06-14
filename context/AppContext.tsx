@@ -642,7 +642,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       });
     });
 
-    newSocket.on('message_status_changed', (data: { messageId?: string; conversationId: string; status: 'sent' | 'delivered' | 'read' }) => {
+    newSocket.on('message_status_changed', (data: { messageId?: string; conversationId: string; status: 'sent' | 'delivered' | 'read', viewedBy?: any, mediaUrl?: string | null }) => {
       console.log('[SOCKET] message_status_changed:', data);
       
       setMessages(prevMsgs => {
@@ -653,7 +653,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 ...m,
                 status: data.status,
                 read: data.status === 'read',
-                readAt: data.status === 'read' ? new Date().toISOString() : m.readAt
+                readAt: data.status === 'read' ? new Date().toISOString() : m.readAt,
+                ...(data.viewedBy !== undefined ? { viewedBy: data.viewedBy } : {}),
+                ...(data.mediaUrl !== undefined ? { mediaUrl: data.mediaUrl } : {})
               };
             }
           } else if (data.conversationId) {
