@@ -79,6 +79,9 @@ export default function ChatScreen() {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+      if (id) {
+        sendTypingStatus(id, false);
+      }
     };
   }, [id]);
 

@@ -732,9 +732,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const sendTypingStatus = (conversationId: string, isTyping: boolean) => {
     if (socket && currentUser) {
+      const conv = conversations.find(c => c.id === conversationId);
+      const receiverId = conv ? conv.participantIds.find(id => id !== currentUser.id) : null;
       socket.emit('typing_status', {
         conversationId,
         userId: currentUser.id,
+        receiverId,
         isTyping
       });
     }

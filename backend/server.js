@@ -254,23 +254,38 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('typing_status', (data) => {
-    const { conversationId, userId, isTyping } = data;
+  socket.on('typing_status', async (data) => {
+    const { conversationId, userId, isTyping, receiverId } = data;
     if (!conversationId || !userId) return;
 
-    const db = readDB();
-    const conv = db.conversations.find(c => c.id === conversationId);
-    if (conv) {
-      const recipientId = conv.participantIds.find(id => id !== userId);
-      if (recipientId) {
-        const recipientSocketId = activeUsers.get(recipientId);
-        if (recipientSocketId) {
-          io.to(recipientSocketId).emit('typing_status', {
-            conversationId,
-            userId,
-            isTyping
-          });
+    let recipientId = receiverId;
+
+    if (!recipientId) {
+      try {
+        const { rows } = await pool.query('SELECT "participantIds" FROM conversations WHERE id = $1', [conversationId]);
+        if (rows.length > 0) {
+          const pIds = typeof rows[0].participantIds === 'string' ? JSON.parse(rows[0].participantIds) : rows[0].participantIds;
+          recipientId = pIds.find(id => id !== userId);
         }
+      } catch (e) {}
+    }
+
+    if (!recipientId) {
+      const db = readDB();
+      const conv = db.conversations.find(c => c.id === conversationId);
+      if (conv) {
+        recipientId = conv.participantIds.find(id => id !== userId);
+      }
+    }
+
+    if (recipientId) {
+      const recipientSocketId = activeUsers.get(recipientId);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit('typing_status', {
+          conversationId,
+          userId,
+          isTyping
+        });
       }
     }
   });

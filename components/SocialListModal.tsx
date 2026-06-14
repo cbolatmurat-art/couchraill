@@ -8,7 +8,8 @@ import {
   Image, 
   Pressable, 
   ActivityIndicator, 
-  Dimensions 
+  Dimensions,
+  Animated
 } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,12 +39,34 @@ export const SocialListModal: React.FC<SocialListModalProps> = ({
   users,
   loading
 }) => {
+  const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      slideAnim.setValue(SCREEN_HEIGHT);
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => onClose());
+  };
+
   const handleUserPress = (userId: string) => {
-    onClose();
+    handleClose();
     // Use timeout to let the modal close animation finish before routing
     setTimeout(() => {
       router.push(`/user/${userId}`);
-    }, 200);
+    }, 250);
   };
 
   const getInitials = (name: string) => {
@@ -87,18 +110,18 @@ export const SocialListModal: React.FC<SocialListModalProps> = ({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.modalOverlay}>
-        <Pressable style={styles.dismissOverlay} onPress={onClose} />
-        <View style={styles.modalContent}>
+        <Pressable style={styles.dismissOverlay} onPress={handleClose} />
+        <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.dragIndicator} />
           
           <View style={styles.header}>
             <Text style={styles.headerTitle}>{title}</Text>
-            <Pressable onPress={onClose} style={styles.closeButton}>
+            <Pressable onPress={handleClose} style={styles.closeButton}>
               <Ionicons name="close-circle" size={24} color="#B0BEC5" />
             </Pressable>
           </View>
@@ -122,7 +145,7 @@ export const SocialListModal: React.FC<SocialListModalProps> = ({
               }
             />
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

@@ -3,6 +3,13 @@
     "name": "misafirim-ol",
     "slug": "misafirim-ol",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d59e6fcc-7b66-44f7-b7db-db10cf708168",
+      "checkAutomatically": "ON_ERROR_RECOVERY"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "misafirimol",
