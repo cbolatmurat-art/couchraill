@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -8,6 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { useAppContext } from '../../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Message } from '../../data/MockData';
 
 export default function ChatScreen() {
@@ -24,7 +25,8 @@ export default function ChatScreen() {
     sendTypingStatus,
     getBlockStatus,
     addMessageReaction,
-    getPublicProfile
+    getPublicProfile,
+    markMessageViewedOnce
   } = useAppContext();
   
   const [text, setText] = useState(initialMessage || '');
@@ -39,6 +41,7 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [viewOnceImage, setViewOnceImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -186,6 +189,44 @@ export default function ChatScreen() {
         Alert.alert("Bilgi", "Bu kullanıcıyla mesajlaşamazsınız.");
       }
     }
+  };
+
+  const handleCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('İzin Gerekli', 'Kamera erişim izni vermeniz gerekiyor.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.5,
+      base64: true
+    });
+
+    if (!result.canceled && result.assets && result.assets[0].base64 && id) {
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      await sendMessage(id, '📸 Fotoğraf', undefined, 'image', base64Image, true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  };
+
+  const handleViewOncePhoto = (item: Message) => {
+    if (item.senderId === currentUser?.id) {
+      Alert.alert('Bilgi', 'Gönderdiğiniz tek görüntülemelik fotoğrafı açamazsınız.');
+      return;
+    }
+    
+    if (item.viewedOnceAt || !item.mediaUrl) {
+      Alert.alert('Bilgi', 'Bu görsel artık görüntülenemez.');
+      return;
+    }
+
+    setViewOnceImage(item.mediaUrl);
+    markMessageViewedOnce(item.id);
   };
 
 
@@ -346,9 +387,33 @@ export default function ChatScreen() {
                     </Text>
                   </TouchableOpacity>
                 ) : null}
-                <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther]}>
-                  {item.text}
-                </Text>
+
+                {item.messageType === 'image' && item.isViewOnce ? (
+                  <TouchableOpacity 
+                    onPress={() => handleViewOncePhoto(item)}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 4 }}
+                  >
+                    <View style={{ position: 'relative', marginRight: 12 }}>
+                      <Ionicons 
+                        name={item.viewedOnceAt ? "eye-off-outline" : "image-outline"} 
+                        size={22} 
+                        color={isMine ? '#FFF' : Colors.text} 
+                      />
+                      {!item.viewedOnceAt && (
+                        <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: isMine ? '#FFF' : Colors.primary, borderRadius: 10, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ color: isMine ? Colors.primary : '#FFF', fontSize: 9, fontWeight: 'bold' }}>1</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther, { fontWeight: '600' }]}>
+                      {item.viewedOnceAt ? "Görüntülendi" : "Fotoğraf"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther]}>
+                    {item.text}
+                  </Text>
+                )}
               </TouchableOpacity>
               
               {item.reactions && item.reactions.length > 0 && (
@@ -476,6 +541,9 @@ export default function ChatScreen() {
             </View>
           )}
             <View style={styles.inputContainer}>
+              <TouchableOpacity style={styles.cameraButton} onPress={handleCamera}>
+                <Ionicons name="camera-outline" size={24} color={Colors.primary} />
+              </TouchableOpacity>
               <TextInput
               style={styles.input}
               placeholder="Mesajınızı yazın..."
@@ -522,6 +590,33 @@ export default function ChatScreen() {
             ))}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={!!viewOnceImage}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={() => setViewOnceImage(null)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+          <View style={{ padding: 16, alignItems: 'flex-end' }}>
+            <TouchableOpacity onPress={() => setViewOnceImage(null)}>
+              <Ionicons name="close" size={32} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            {viewOnceImage && (
+              <Image 
+                source={{ uri: viewOnceImage }} 
+                style={{ width: '100%', height: '80%' }} 
+                resizeMode="contain" 
+              />
+            )}
+            <Text style={{ color: '#FFF', marginTop: 20, fontSize: 14, textAlign: 'center' }}>
+              Bu fotoğraf kapatıldıktan sonra bir daha görüntülenemez.
+            </Text>
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -678,6 +773,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     alignItems: 'flex-end',
+  },
+  cameraButton: {
+    padding: 10,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   input: {
     flex: 1,
