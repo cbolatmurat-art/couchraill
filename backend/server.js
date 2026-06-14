@@ -498,7 +498,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.', message: 'Bu telefon numarası başka bir hesapta kullanılmaktadır.' });
     }
 
-    const formattedName = name.split(' ').map((w: string) => w ? w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR') : '').join(' ');
+    const formattedName = name.split(' ').map((w) => w ? w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR') : '').join(' ');
     const username = await generateUniqueUsername(formattedName);
     const newId = `u${Date.now()}`;
     const joinedDate = new Date().toISOString().split('T')[0];
