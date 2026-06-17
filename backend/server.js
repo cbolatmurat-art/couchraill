@@ -887,6 +887,12 @@ app.post('/api/auth/logout-all-devices', async (req, res) => {
     if (!userId) return res.status(400).json({ success: false, error: 'User ID gerekli.' });
     
     await query('UPDATE device_sessions SET "isActive" = false WHERE "userId" = $1', [userId]);
+    
+    // Broadcast force_logout to all connected clients
+    if (typeof io !== 'undefined' && io) {
+      io.emit('force_logout', { userId });
+    }
+    
     res.json({ success: true });
   } catch(error) {
     console.error('[LOGOUT_ALL_DEVICES_ERROR]', error);

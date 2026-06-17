@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Alert, DeviceEventEmitter, AppState, AppStateStatus, Animated, Pressable, StyleSheet, View, Text } from 'react-native';
+import { Alert, DeviceEventEmitter, AppState, AppStateStatus, Animated, Pressable, StyleSheet, View, Text, Modal } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -461,6 +461,71 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return () => authSub.remove();
   }, [fetchUserData]);
 
+  const [isSessionClosedModalVisible, setIsSessionClosedModalVisible] = useState(false);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    const checkSession = async () => {
+      if (!currentUser) return;
+      if (AppState.currentState !== 'active') return;
+      if (isSessionClosedModalVisible) return;
+
+      try {
+        const storedSession = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+        if (!storedSession) return;
+        const sessionData = JSON.parse(storedSession);
+        
+        const deviceInfo = {
+          deviceName: Constants.deviceName || (Platform.OS === 'ios' ? 'iOS Cihaz' : Platform.OS === 'android' ? 'Android Cihaz' : 'Web Tarayıcı'),
+          platform: Platform.OS,
+          os: Platform.Version ? String(Platform.Version) : 'Bilinmiyor'
+        };
+        const qs = `userId=${sessionData.userId}${sessionData.sessionId ? '&sessionId=' + sessionData.sessionId : ''}&deviceName=${encodeURIComponent(deviceInfo.deviceName)}&platform=${encodeURIComponent(deviceInfo.platform)}&os=${encodeURIComponent(deviceInfo.os)}`;
+
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(`${API_BASE_URL}/auth/me?${qs}`, {
+          method: 'GET',
+          signal: controller.signal as any
+        });
+        clearTimeout(id);
+        
+        if (res.status === 401 || res.status === 403 || res.status === 404) {
+          triggerSessionClosed();
+        }
+      } catch (e) {
+        // network errors ignored during polling
+      }
+    };
+
+    const triggerSessionClosed = async () => {
+      setIsSessionClosedModalVisible(true);
+      await clearAuthStorage();
+    };
+
+    if (currentUser) {
+      intervalId = setInterval(checkSession, 5000);
+      
+      const appStateSubscription = AppState.addEventListener('change', nextAppState => {
+        if (nextAppState === 'active') {
+          checkSession();
+        }
+      });
+      
+      return () => {
+        clearInterval(intervalId);
+        appStateSubscription.remove();
+      };
+    }
+  }, [currentUser, isSessionClosedModalVisible]);
+
+  const handleCloseSessionModal = () => {
+    setIsSessionClosedModalVisible(false);
+    setCurrentUser(null);
+    router.replace('/(auth)/login');
+  };
+
   const activeConversationIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
@@ -537,6 +602,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     newSocket.on('connect', () => {
       console.log('[SOCKET] Connected, emitting user_connected for:', currentUser.id);
       newSocket.emit('user_connected', currentUser.id);
+    });
+
+    newSocket.on('force_logout', (data: { userId: string }) => {
+      if (data.userId === currentUser.id) {
+        console.log('[SOCKET] force_logout received for currentUser');
+        setIsSessionClosedModalVisible(true);
+        clearAuthStorage();
+      }
     });
 
     newSocket.on('user_status_changed', (data: { userId: string; isOnline: boolean; lastSeen: string }) => {
@@ -1953,6 +2026,28 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           </Pressable>
         </Animated.View>
       )}
+
+      <Modal
+        visible={isSessionClosedModalVisible}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, width: '100%', alignItems: 'center' }}>
+            <Ionicons name="warning" size={48} color={Colors.danger} style={{ marginBottom: 16 }} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 8, textAlign: 'center' }}>
+              Oturumunuz kapatıldı.
+            </Text>
+            <Pressable 
+              style={{ backgroundColor: Colors.primary, width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 20 }}
+              onPress={handleCloseSessionModal}
+            >
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Tamam</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
     </AppContext.Provider>
   );
 };
