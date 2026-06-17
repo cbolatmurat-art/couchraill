@@ -94,6 +94,7 @@ export default function NotificationsScreen() {
         break;
       case 'new_follower':
       case 'follow':
+      case 'refollow':
       case 'unfollow':
       case 'poke':
       case 'friend_request':
@@ -131,7 +132,8 @@ export default function NotificationsScreen() {
       case 'phone_verified': return 'shield-checkmark';
       case 'identity_rejected': return 'shield-half';
       case 'new_follower':
-      case 'follow': return 'person-add-outline';
+      case 'follow':
+      case 'refollow': return 'person-add-outline';
       case 'unfollow': return 'person-remove-outline';
       case 'poke': return 'hand-right-outline';
       case 'friend_request': return 'people-outline';
@@ -157,7 +159,8 @@ export default function NotificationsScreen() {
       case 'phone_verified': return Colors.success;
       case 'identity_rejected': return Colors.danger;
       case 'new_follower':
-      case 'follow': return '#9C27B0';
+      case 'follow':
+      case 'refollow': return '#9C27B0';
       case 'unfollow': return '#757575';
       case 'poke': return '#FF9800';
       case 'friend_request': return '#2196F3';

@@ -445,6 +445,20 @@ const initDB = async () => {
       )
     `);
 
+    // Pending Notifications
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_follow_notifications (
+        id VARCHAR(255) PRIMARY KEY,
+        actor_id VARCHAR(255) NOT NULL,
+        target_user_id VARCHAR(255) NOT NULL,
+        action_type VARCHAR(50) NOT NULL,
+        scheduled_at TIMESTAMP NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'pending'
+      )
+    `);
+
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');
     

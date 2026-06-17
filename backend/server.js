@@ -4389,17 +4389,37 @@ app.post('/api/social/follow/:userId', async (req, res) => {
     // Send real-time notification
     const db = readDB();
     
-    // Check spam (24 hours) for 'follow'
-    let canSendFollowNotif = true;
     try {
-      const { rows: recentFollowNotifs } = await query(`
-        SELECT 1 FROM notifications
-        WHERE "userId" = $1 AND "relatedId" = $2 AND type = 'follow' AND "createdAt" >= NOW() - INTERVAL '24 hours'
-      `, [targetId, cId]);
-      if (recentFollowNotifs.length > 0) canSendFollowNotif = false;
-    } catch(e) {} // Fallback to sending if query fails
+      const { rows: pending } = await query(`
+        SELECT id FROM pending_follow_notifications 
+        WHERE actor_id = $1 AND target_user_id = $2 AND status = 'pending' AND action_type = 'unfollow'
+      `, [cId, targetId]);
 
-    if (canSendFollowNotif) {
+      if (pending.length > 0) {
+        // Cancel the pending unfollow
+        await query(`UPDATE pending_follow_notifications SET status = 'cancelled', "updatedAt" = CURRENT_TIMESTAMP WHERE id = $1`, [pending[0].id]);
+        
+        // Send 'refollow'
+        createAndSendSocialNotification(db, {
+          userId: targetId,
+          type: 'refollow',
+          title: 'Tekrar Takip',
+          message: `${currentUser.name} seni tekrar takip etmeye başladı.`,
+          relatedUserId: cId
+        });
+      } else {
+        // Send 'follow'
+        createAndSendSocialNotification(db, {
+          userId: targetId,
+          type: 'follow',
+          title: 'Yeni Takipçi',
+          message: `${currentUser.name} seni takip etmeye başladı.`,
+          relatedUserId: cId
+        });
+      }
+    } catch(e) {
+      console.error('Pending follow check error:', e);
+      // Fallback
       createAndSendSocialNotification(db, {
         userId: targetId,
         type: 'follow',
@@ -4448,25 +4468,30 @@ app.delete('/api/social/follow/:userId', async (req, res) => {
     const senderSocketId = activeUsers.get(cId);
     if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: cId });
 
-    // Send unfollow notification
-    const db = readDB();
-    let canSendUnfollowNotif = true;
+    // Send unfollow notification - PENDING (1 hour)
     try {
-      const { rows: recentUnfollowNotifs } = await query(`
-        SELECT 1 FROM notifications
-        WHERE "userId" = $1 AND "relatedId" = $2 AND type = 'unfollow' AND "createdAt" >= NOW() - INTERVAL '24 hours'
-      `, [targetId, cId]);
-      if (recentUnfollowNotifs.length > 0) canSendUnfollowNotif = false;
-    } catch(e) {}
+      const { rows: existing } = await query(`
+        SELECT id FROM pending_follow_notifications 
+        WHERE actor_id = $1 AND target_user_id = $2 AND status = 'pending' AND action_type = 'unfollow'
+      `, [cId, targetId]);
 
-    if (canSendUnfollowNotif) {
-      createAndSendSocialNotification(db, {
-        userId: targetId,
-        type: 'unfollow',
-        title: 'Takipten Çıkma',
-        message: `${currentUser.name} seni takip etmeyi sonlandırdı.`,
-        relatedUserId: cId
-      });
+      if (existing.length > 0) {
+        // Update existing pending record
+        await query(`
+          UPDATE pending_follow_notifications 
+          SET scheduled_at = NOW() + INTERVAL '1 hour', "updatedAt" = CURRENT_TIMESTAMP 
+          WHERE id = $1
+        `, [existing[0].id]);
+      } else {
+        // Create new pending record
+        const pendingId = 'pfn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        await query(`
+          INSERT INTO pending_follow_notifications (id, actor_id, target_user_id, action_type, scheduled_at)
+          VALUES ($1, $2, $3, 'unfollow', NOW() + INTERVAL '1 hour')
+        `, [pendingId, cId, targetId]);
+      }
+    } catch(e) {
+      console.error('Pending unfollow insert error:', e);
     }
 
     res.json({ success: true, message: 'Takipten çıkıldı.' });
@@ -6092,6 +6117,36 @@ app.post('/api/messages/:id/reaction', (req, res) => {
 // Use http server (not app.listen) to support Socket.IO
 const rawPort = process.env.PORT;
 const PORT = rawPort ? parseInt(String(rawPort).trim(), 10) : 8080;
+
+// Background Worker: Process pending unfollow notifications every minute
+setInterval(async () => {
+  try {
+    const { rows: pending } = await query(`
+      SELECT * FROM pending_follow_notifications 
+      WHERE status = 'pending' AND action_type = 'unfollow' AND scheduled_at <= NOW()
+    `);
+    
+    if (pending.length > 0) {
+      const db = readDB();
+      for (const p of pending) {
+        // Find actor name
+        const { rows: uRows } = await query(`SELECT name FROM users WHERE id = $1 LIMIT 1`, [p.actor_id]);
+        if (uRows.length > 0) {
+          createAndSendSocialNotification(db, {
+            userId: p.target_user_id,
+            type: 'unfollow',
+            title: 'Takipten Çıkma',
+            message: `${uRows[0].name} seni takip etmeyi sonlandırdı.`,
+            relatedUserId: p.actor_id
+          });
+        }
+        await query(`UPDATE pending_follow_notifications SET status = 'sent', "updatedAt" = CURRENT_TIMESTAMP WHERE id = $1`, [p.id]);
+      }
+    }
+  } catch(e) {
+    console.error('[PENDING_NOTIF_WORKER_ERROR]', e.message);
+  }
+}, 60000); // 1 minute
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend server running on port ${PORT}`);
