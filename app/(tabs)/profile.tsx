@@ -714,6 +714,13 @@ export default function ProfileScreen() {
                     <Ionicons name="close" size={24} color={Colors.text} />
                   </Pressable>
                 </View>
+                <Pressable style={[styles.menuItem, { alignItems: 'flex-start' }]} onPress={() => { closeMenu(); router.push(`/user/${currentUser?.id}?preview=true`); }}>
+                  <Text style={[styles.menuIcon, { fontSize: 22, width: 22, textAlign: 'center' }]}>👁️</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.menuItemText}>Profilim Nasıl Görünüyor?</Text>
+                    <Text style={{ fontSize: 13, color: Colors.textLight, marginTop: 4, lineHeight: 18 }}>Kendi profilinizi diğer kullanıcıların gördüğü şekilde görüntüleyin.</Text>
+                  </View>
+                </Pressable>
                 
                 <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/blocked-users'); }}>
                   <Ionicons name="ban-outline" size={22} color={Colors.text} style={styles.menuIcon} />

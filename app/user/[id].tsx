@@ -22,7 +22,7 @@ interface BlockStatus {
 const BLOCK_INIT: BlockStatus = { isBlockedByMe: false, hasBlockedMe: false, isEitherBlocked: false };
 
 export default function PublicProfileScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, preview } = useLocalSearchParams();
   const router  = useRouter();
   const userId  = id as string;
 
@@ -342,7 +342,8 @@ export default function PublicProfileScreen() {
     );
   }
 
-  const isOtherUser                              = !!(currentUser && currentUser.id !== profile.id);
+  const isPreview = preview === 'true';
+  const isOtherUser                              = !!(currentUser && currentUser.id !== profile.id) || isPreview;
   const { isBlockedByMe, hasBlockedMe }          = blockStatus;
 
   const headerUsername =
@@ -458,11 +459,16 @@ export default function PublicProfileScreen() {
               </Text>
             ) : null}
 
-            <Text style={{ marginTop: 4, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
-              {(profile.ratingCount && profile.ratingCount > 0)
-                ? `⭐ ${(profile.ratingAverage || 0).toFixed(1)} • ${profile.ratingCount} değerlendirme`
-                : 'Henüz değerlendirme yok'}
-            </Text>
+            {(() => {
+              if (profile.ratingCount && profile.ratingCount > 0) {
+                return (
+                  <Text style={{ marginTop: 4, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
+                    ⭐ {(profile.ratingAverage || 0).toFixed(1)} • {profile.ratingCount} değerlendirme
+                  </Text>
+                );
+              }
+              return null;
+            })()}
           </View>
         </View>
 
@@ -548,85 +554,11 @@ export default function PublicProfileScreen() {
           </View>
         )}
 
-        {(() => {
-          const about = profile.about_text || profile.about;
-          let interests = [];
-          try { interests = typeof profile.interests === 'string' ? JSON.parse(profile.interests) : (profile.interests || []); } catch(e){}
-          let languages = [];
-          try { languages = typeof profile.spoken_languages === 'string' ? JSON.parse(profile.spoken_languages) : (profile.spoken_languages || []); } catch(e){}
-          
-          if (!about && !interests.length && !languages.length && !profile.travel_style && !profile.smoking_preference && !profile.pet_preference) {
-            return null;
-          }
 
-          return (
-            <View style={[styles.section, { backgroundColor: Colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: Colors.border }]}>
-              <Text style={styles.sectionTitle}>Kullanıcı Bilgileri</Text>
-              
-              {about ? (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.text, marginBottom: 4 }}>Hakkımda</Text>
-                  <Text style={styles.bodyText}>{about}</Text>
-                </View>
-              ) : null}
-
-              {interests.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.text, marginBottom: 8 }}>İlgi Alanları</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {interests.map((interest: string, index: number) => (
-                      <View key={index} style={{ backgroundColor: '#F0F0F0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ fontSize: 12, color: Colors.text }}>{interest}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {languages.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.text, marginBottom: 8 }}>Konuştuğu Diller</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {languages.map((lang: string, index: number) => (
-                      <View key={index} style={{ backgroundColor: '#E3F2FD', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ fontSize: 12, color: '#1565C0' }}>{lang}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {profile.travel_style && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.text, marginBottom: 4 }}>Seyahat Tarzı</Text>
-                  <Text style={styles.bodyText}>{profile.travel_style}</Text>
-                </View>
-              )}
-
-              {(profile.smoking_preference || profile.pet_preference) && (
-                <View style={{ flexDirection: 'row', gap: 24, marginBottom: 8 }}>
-                  {profile.smoking_preference && (
-                    <View>
-                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.text, marginBottom: 4 }}>Sigara</Text>
-                      <Text style={styles.bodyText}>{profile.smoking_preference}</Text>
-                    </View>
-                  )}
-                  {profile.pet_preference && (
-                    <View>
-                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.text, marginBottom: 4 }}>Evcil Hayvan</Text>
-                      <Text style={styles.bodyText}>{profile.pet_preference}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          );
-        })()}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Değerlendirmeler</Text>
-          {profile.recentReviews?.length > 0 ? (
-            profile.recentReviews.map((r: any) => (
+        {profile.recentReviews?.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Değerlendirmeler</Text>
+            {profile.recentReviews.map((r: any) => (
               <Card key={r.id} style={styles.reviewCard}>
                 <View style={styles.reviewHeader}>
                   <View style={styles.reviewerRow}>
@@ -649,13 +581,11 @@ export default function PublicProfileScreen() {
                 </View>
                 {r.comment ? <Text style={styles.reviewComment}>{r.comment}</Text> : null}
               </Card>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>Henüz bir değerlendirme bulunmuyor.</Text>
-          )}
-        </View>
+            ))}
+          </View>
+        )}
 
-        <UserPosts userId={profile.id} currentUserId={currentUser?.id} profile={profile} currentUser={currentUser} />
+        <UserPosts userId={profile.id} currentUserId={currentUser?.id} profile={profile} currentUser={currentUser} preview={isPreview} />
       </ScrollView>
 
       <SocialListModal

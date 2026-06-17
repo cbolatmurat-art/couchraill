@@ -17,16 +17,17 @@ interface UserPostsProps {
   currentUserId?: string;
   profile?: any;
   currentUser?: any;
+  preview?: boolean;
 }
 
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
-export function UserPosts({ userId, currentUserId, profile, currentUser }: UserPostsProps) {
+export function UserPosts({ userId, currentUserId, profile, currentUser, preview }: UserPostsProps) {
   const { listings, refreshData } = useAppContext();
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'listings'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'listings' | 'about'>('posts');
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [postsError, setPostsError] = useState<string | null>(null);
 
@@ -360,7 +361,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
 
   const listingsFeed = (listings || []).filter((l: any) => String(l.hostId || l.ownerId || l.userId) === String(userId)).map((l: any) => ({...l, type: 'listing'}));
 
-  const isMyProfile = String(currentUserId) === String(userId);
+  const isMyProfile = !preview && String(currentUserId) === String(userId);
   const userTypeRaw = String(profile?.userType || currentUser?.userType || '').toLowerCase().trim();
   const isHostProfile = userTypeRaw === 'host' || userTypeRaw === 'ev sahibi';
   const showListingsTab = isMyProfile && isHostProfile;
@@ -458,6 +459,78 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
     ));
   };
 
+  const renderAboutContent = () => {
+    let interests = [];
+    try { interests = typeof profile?.interests === 'string' ? JSON.parse(profile.interests) : (profile?.interests || []); } catch(e){}
+    let languages = [];
+    try { languages = typeof profile?.spoken_languages === 'string' ? JSON.parse(profile.spoken_languages) : (profile?.spoken_languages || []); } catch(e){}
+    
+    const ts = profile?.travel_style;
+    const sp = profile?.smoking_preference;
+    const pp = profile?.pet_preference;
+
+    if (!interests.length && !languages.length && !ts && !sp && !pp) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="person-outline" size={48} color={Colors.textLight} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Henüz bilgi eklenmemiş</Text>
+          <Text style={styles.emptyText}>Kullanıcı profiliyle ilgili detay paylaşmamış.</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ backgroundColor: '#FFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border }}>
+        {interests.length > 0 && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: 'bold', color: Colors.text, marginBottom: 12 }}>İlgi Alanları</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {interests.map((interest: string, index: number) => (
+                <View key={index} style={{ backgroundColor: '#F0F4F8', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E1E8F0' }}>
+                  <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{interest}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {languages.length > 0 && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: 'bold', color: Colors.text, marginBottom: 12 }}>Konuştuğu Diller</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {languages.map((lang: string, index: number) => (
+                <View key={index} style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#BAE6FD' }}>
+                  <Text style={{ fontSize: 13, color: '#0369A1', fontWeight: '500' }}>{lang}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {ts && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: 'bold', color: Colors.text, marginBottom: 8 }}>Seyahat Tarzı</Text>
+            <Text style={{ fontSize: 14, color: Colors.text, lineHeight: 20 }}>{ts}</Text>
+          </View>
+        )}
+
+        {sp && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: 'bold', color: Colors.text, marginBottom: 8 }}>Sigara Kullanımı</Text>
+            <Text style={{ fontSize: 14, color: Colors.text, lineHeight: 20 }}>{sp}</Text>
+          </View>
+        )}
+
+        {pp && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: 'bold', color: Colors.text, marginBottom: 8 }}>Evcil Hayvan Tercihi</Text>
+            <Text style={{ fontSize: 14, color: Colors.text, lineHeight: 20 }}>{pp}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.tabContainer}>
@@ -483,11 +556,21 @@ export function UserPosts({ userId, currentUserId, profile, currentUser }: UserP
             <Text style={[styles.tabText, activeTab === 'listings' && styles.activeTabText]}>İlanlarım</Text>
           </TouchableOpacity>
         )}
+
+        {!isMyProfile && (
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'about' && styles.activeTabButton]}
+            onPress={() => setActiveTab('about')}
+          >
+            <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>Hakkında</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {activeTab === 'posts' && renderPostsContent()}
       {activeTab === 'events' && renderEventsContent()}
       {activeTab === 'listings' && renderListingsContent()}
+      {activeTab === 'about' && renderAboutContent()}
 
       {/* Comments Modal */}
       <Modal visible={commentsModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCommentsModalVisible(false)}>
