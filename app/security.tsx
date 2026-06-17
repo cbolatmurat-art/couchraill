@@ -119,6 +119,44 @@ export default function SecurityScreen() {
       return;
     }
 
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[!@#$%^&*()\-_+=\?.,:;\/\\]/.test(newPassword);
+    
+    if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecial) {
+      setPasswordError('Yeni şifreniz en az 1 büyük harf, 1 küçük harf, 1 rakam ve 1 özel karakter içermelidir.');
+      return;
+    }
+
+    const sequentialAsc = ['0123','1234','2345','3456','4567','5678','6789','7890'];
+    const sequentialDesc = ['9876','8765','7654','6543','5432','4321','3210','2109'];
+    let hasSequential = false;
+    for (const seq of sequentialAsc) {
+      if (newPassword.includes(seq)) hasSequential = true;
+    }
+    for (const seq of sequentialDesc) {
+      if (newPassword.includes(seq)) hasSequential = true;
+    }
+    if (hasSequential) {
+      setPasswordError('Ardışık sayı kullanılamaz.');
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    const maxYear = currentYear + 1;
+    let hasYear = false;
+    for (let y = 1900; y <= maxYear; y++) {
+      if (newPassword.includes(y.toString())) {
+          hasYear = true;
+          break;
+      }
+    }
+    if (hasYear) {
+      setPasswordError('Yıl kullanılamaz.');
+      return;
+    }
+
     setIsChangingPassword(true);
     try {
       const result = await updateProfile({ password: newPassword }, currentPassword);

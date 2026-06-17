@@ -977,6 +977,43 @@ app.put('/api/users/profile', async (req, res) => {
       if (!isMatch) {
         return res.status(400).json({ success: false, error: 'Mevcut şifreniz yanlış.', message: 'Mevcut şifreniz yanlış.' });
       }
+
+      const rawNewPassword = updates.password;
+
+      const hasUppercase = /[A-Z]/.test(rawNewPassword);
+      const hasLowercase = /[a-z]/.test(rawNewPassword);
+      const hasDigit = /[0-9]/.test(rawNewPassword);
+      const hasSpecial = /[!@#$%^&*()\-_+=\?.,:;\/\\]/.test(rawNewPassword);
+      
+      if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecial) {
+        return res.status(400).json({ success: false, error: 'Yeni şifreniz en az 1 büyük harf, 1 küçük harf, 1 rakam ve 1 özel karakter içermelidir.', message: 'Yeni şifreniz en az 1 büyük harf, 1 küçük harf, 1 rakam ve 1 özel karakter içermelidir.' });
+      }
+
+      const sequentialAsc = ['0123','1234','2345','3456','4567','5678','6789','7890'];
+      const sequentialDesc = ['9876','8765','7654','6543','5432','4321','3210','2109'];
+      let hasSequential = false;
+      for (const seq of sequentialAsc) {
+        if (rawNewPassword.includes(seq)) hasSequential = true;
+      }
+      for (const seq of sequentialDesc) {
+        if (rawNewPassword.includes(seq)) hasSequential = true;
+      }
+      if (hasSequential) {
+        return res.status(400).json({ success: false, error: 'Ardışık sayı kullanılamaz.', message: 'Ardışık sayı kullanılamaz.' });
+      }
+
+      const currentYear = new Date().getFullYear();
+      const maxYear = currentYear + 1;
+      let hasYear = false;
+      for (let y = 1900; y <= maxYear; y++) {
+        if (rawNewPassword.includes(y.toString())) {
+            hasYear = true;
+            break;
+        }
+      }
+      if (hasYear) {
+        return res.status(400).json({ success: false, error: 'Yıl kullanılamaz.', message: 'Yıl kullanılamaz.' });
+      }
       
       const salt = await bcrypt.genSalt(10);
       updates.password = await bcrypt.hash(updates.password, salt);
