@@ -414,6 +414,29 @@ app.get('/api/debug/users-by-email', (req, res) => {
   res.json({ count: matches.length, users: matches });
 });
 
+const calculateProfileCompletion = (user) => {
+  let profileCompletion = 0;
+  if (user.profileImage || user.avatar) profileCompletion += 10;
+  if (user.username) profileCompletion += 10;
+  if (user.email) profileCompletion += 10;
+  if (user.birthDate) profileCompletion += 10;
+  if (user.city || user.livingCity) profileCompletion += 10;
+
+  let parsedInterests = [];
+  try { parsedInterests = typeof user.interests === 'string' ? JSON.parse(user.interests) : (user.interests || []); } catch(e){}
+  let parsedLangs = [];
+  try { parsedLangs = typeof user.spoken_languages === 'string' ? JSON.parse(user.spoken_languages) : (user.spoken_languages || []); } catch(e){}
+
+  if (Array.isArray(parsedInterests) && parsedInterests.length >= 1) profileCompletion += 10;
+  if (Array.isArray(parsedLangs) && parsedLangs.length >= 1) profileCompletion += 10;
+
+  if (user.travel_style) profileCompletion += 10;
+  if (user.smoking_preference) profileCompletion += 10;
+  if (user.pet_preference) profileCompletion += 10;
+
+  return Math.min(100, profileCompletion);
+};
+
 // ---- AUTH & USERS ----
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -652,6 +675,12 @@ app.post('/api/auth/login', async (req, res) => {
         }
       }
 
+      const currentCompletion = calculateProfileCompletion(activeUser);
+      if (activeUser.profile_completion !== currentCompletion) {
+        activeUser.profile_completion = currentCompletion;
+        await query(`UPDATE users SET profile_completion = $1 WHERE id = $2`, [currentCompletion, activeUser.id]);
+      }
+
       return res.json({ success: true, user: activeUser, sessionId });
     }
 
@@ -708,6 +737,12 @@ app.get('/api/auth/me', async (req, res) => {
     
     if (!user || isDeleted) {
       return res.status(401).json({ error: 'Oturum geçersiz. Lütfen tekrar giriş yapın.', deleted: true });
+    }
+
+    const currentCompletion = calculateProfileCompletion(user);
+    if (user.profile_completion !== currentCompletion) {
+      user.profile_completion = currentCompletion;
+      await query(`UPDATE users SET profile_completion = $1 WHERE id = $2`, [currentCompletion, userId]);
     }
 
     let activeSessionId = sessionId;
@@ -1060,29 +1095,7 @@ app.put('/api/users/profile', async (req, res) => {
     }
 
     const finalUser = { ...user, ...updates };
-    let profileCompletion = 0;
-    if (finalUser.profileImage || finalUser.avatar) profileCompletion += 10;
-    if (finalUser.birthDate) profileCompletion += 10;
-    if (finalUser.gender) profileCompletion += 5;
-    if (finalUser.city || finalUser.livingCity) profileCompletion += 10;
-    
-    // interests and spoken_languages could be stringified JSON or arrays
-    let parsedInterests = [];
-    try { parsedInterests = typeof finalUser.interests === 'string' ? JSON.parse(finalUser.interests) : (finalUser.interests || []); } catch(e){}
-    let parsedLangs = [];
-    try { parsedLangs = typeof finalUser.spoken_languages === 'string' ? JSON.parse(finalUser.spoken_languages) : (finalUser.spoken_languages || []); } catch(e){}
-    
-    if (Array.isArray(parsedInterests) && parsedInterests.length >= 3) profileCompletion += 10;
-    if (Array.isArray(parsedLangs) && parsedLangs.length >= 1) profileCompletion += 10;
-    
-    if (finalUser.travel_style) profileCompletion += 5;
-    if (finalUser.smoking_preference) profileCompletion += 5;
-    if (finalUser.pet_preference) profileCompletion += 5;
-    if (finalUser.phoneVerified) profileCompletion += 10;
-    if (finalUser.emailVerified) profileCompletion += 10;
-    if (finalUser.identityVerified || finalUser.verified || finalUser.identityVerificationStatus === 'verified') profileCompletion += 10;
-
-    updates.profile_completion = profileCompletion;
+    updates.profile_completion = calculateProfileCompletion(finalUser);
 
     const setKeys = [];
     const setValues = [];
