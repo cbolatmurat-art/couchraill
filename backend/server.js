@@ -1059,6 +1059,31 @@ app.put('/api/users/profile', async (req, res) => {
       updates.genderChangedOnce = true;
     }
 
+    const finalUser = { ...user, ...updates };
+    let profileCompletion = 0;
+    if (finalUser.profileImage || finalUser.avatar) profileCompletion += 10;
+    if (finalUser.birthDate) profileCompletion += 10;
+    if (finalUser.gender) profileCompletion += 5;
+    if (finalUser.city || finalUser.livingCity) profileCompletion += 10;
+    
+    // interests and spoken_languages could be stringified JSON or arrays
+    let parsedInterests = [];
+    try { parsedInterests = typeof finalUser.interests === 'string' ? JSON.parse(finalUser.interests) : (finalUser.interests || []); } catch(e){}
+    let parsedLangs = [];
+    try { parsedLangs = typeof finalUser.spoken_languages === 'string' ? JSON.parse(finalUser.spoken_languages) : (finalUser.spoken_languages || []); } catch(e){}
+    
+    if (Array.isArray(parsedInterests) && parsedInterests.length >= 3) profileCompletion += 10;
+    if (Array.isArray(parsedLangs) && parsedLangs.length >= 1) profileCompletion += 10;
+    
+    if (finalUser.travel_style) profileCompletion += 5;
+    if (finalUser.smoking_preference) profileCompletion += 5;
+    if (finalUser.pet_preference) profileCompletion += 5;
+    if (finalUser.phoneVerified) profileCompletion += 10;
+    if (finalUser.emailVerified) profileCompletion += 10;
+    if (finalUser.identityVerified || finalUser.verified || finalUser.identityVerificationStatus === 'verified') profileCompletion += 10;
+
+    updates.profile_completion = profileCompletion;
+
     const setKeys = [];
     const setValues = [];
     let paramIndex = 1;
@@ -1080,13 +1105,24 @@ app.put('/api/users/profile', async (req, res) => {
       username: 'username',
       gender: 'gender',
       genderChangedOnce: '"genderChangedOnce"',
-      birthDate: '"birthDate"'
+      birthDate: '"birthDate"',
+      about_text: 'about_text',
+      interests: 'interests',
+      spoken_languages: 'spoken_languages',
+      travel_style: 'travel_style',
+      smoking_preference: 'smoking_preference',
+      pet_preference: 'pet_preference',
+      profile_completion: 'profile_completion'
     };
 
     for (const [key, value] of Object.entries(updates)) {
       if (pgKeyMap[key]) {
+        let val = value;
+        if (key === 'interests' || key === 'spoken_languages') {
+          val = typeof val === 'string' ? val : JSON.stringify(val || []);
+        }
         setKeys.push(`${pgKeyMap[key]} = $${paramIndex}`);
-        setValues.push(value);
+        setValues.push(val);
         paramIndex++;
       }
     }

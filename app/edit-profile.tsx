@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, Image, Modal, TextInput, Animated } from 'react-native';
-import { useRouter, Stack, Redirect } from 'expo-router';
+import { useRouter, Stack, Redirect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const INTERESTS = ['Kamp', 'Oyun', 'Spor', 'Müzik', 'Sinema', 'Kitap', 'Fotoğrafçılık', 'Doğa Yürüyüşü', 'Yemek', 'Teknoloji', 'Seyahat', 'Gönüllülük'];
+const LANGUAGES = ['Türkçe', 'İngilizce', 'Almanca', 'Fransızca', 'İspanyolca', 'Arapça', 'Rusça'];
+const TRAVEL_STYLES = ['Sırt çantalı', 'Kampçı', 'Otostop', 'Şehir gezgini', 'Dijital göçebe', 'Sakin gezgin'];
+const SMOKING_PREFS = ['Kullanmıyorum', 'Ara sıra', 'Kullanıyorum', 'Belirtmek istemiyorum'];
+const PET_PREFS = ['Severim', 'Alerjim var', 'Evcil hayvanım var', 'Belirtmek istemiyorum'];
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Input } from '../components/Input';
@@ -41,7 +47,10 @@ const AnimatedFocusWrapper = ({ children, isFocused }: { children: React.ReactNo
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { tab } = useLocalSearchParams();
   const { currentUser, updateProfile, authLoading, logout } = useAppContext();
+
+  const [activeTab, setActiveTab] = useState<'personal' | 'interests'>('personal');
 
   const [name, setName] = useState(currentUser?.name || '');
   const [username, setUsername] = useState(currentUser?.username || '');
@@ -69,6 +78,12 @@ export default function EditProfileScreen() {
   const [genderType, setGenderType] = useState(initialGender);
   const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
 
+  const [interests, setInterests] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [travelStyle, setTravelStyle] = useState('');
+  const [smokingPref, setSmokingPref] = useState('');
+  const [petPref, setPetPref] = useState('');
+
   // Keep state in sync with currentUser if it loads asynchronously
   React.useEffect(() => {
     if (currentUser) {
@@ -82,8 +97,51 @@ export default function EditProfileScreen() {
       
       const g = currentUser.gender || '';
       setGenderType(g);
+
+      let parsedInterests = [];
+      try { parsedInterests = typeof currentUser.interests === 'string' ? JSON.parse(currentUser.interests) : (currentUser.interests || []); } catch(e){}
+      setInterests(Array.isArray(parsedInterests) ? parsedInterests : []);
+      
+      let parsedLangs = [];
+      try { parsedLangs = typeof currentUser.spoken_languages === 'string' ? JSON.parse(currentUser.spoken_languages) : (currentUser.spoken_languages || []); } catch(e){}
+      setLanguages(Array.isArray(parsedLangs) ? parsedLangs : []);
+
+      setTravelStyle(currentUser.travel_style || '');
+      setSmokingPref(currentUser.smoking_preference || '');
+      setPetPref(currentUser.pet_preference || '');
     }
   }, [currentUser]);
+
+  React.useEffect(() => {
+    if (tab === 'interests') {
+      setActiveTab('interests');
+    }
+  }, [tab]);
+
+  const toggleSelection = (item: string, list: string[], setList: (val: string[]) => void) => {
+    if (list.includes(item)) {
+      setList(list.filter(i => i !== item));
+    } else {
+      setList([...list, item]);
+    }
+  };
+
+  const renderChips = (options: string[], selected: string[], onSelect: (val: string) => void, multi: boolean) => (
+    <View style={styles.chipContainer}>
+      {options.map(opt => {
+        const isSelected = multi ? selected.includes(opt) : selected[0] === opt;
+        return (
+          <Pressable
+            key={opt}
+            style={[styles.chip, isSelected && styles.chipSelected]}
+            onPress={() => onSelect(opt)}
+          >
+            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{opt}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -478,7 +536,12 @@ export default function EditProfileScreen() {
         city,
         profileImage,
         gender: genderType,
-        birthDate
+        birthDate,
+        interests,
+        spoken_languages: languages,
+        travel_style: travelStyle,
+        smoking_preference: smokingPref,
+        pet_preference: petPref
       };
 
       const result = await updateProfile(updates);
@@ -583,6 +646,7 @@ export default function EditProfileScreen() {
       ) : null}
       <Stack.Screen 
         options={{
+          title: 'Profili Düzenle',
           headerLeft: () => (
             <Pressable 
               onPress={() => {
@@ -637,20 +701,35 @@ export default function EditProfileScreen() {
             <Text style={styles.avatarHint}>Fotoğrafı değiştirmek için dokunun</Text>
           </View>
 
-          <View style={styles.formContainer}>
-            {errorMsg ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{errorMsg}</Text>
-              </View>
-            ) : null}
+          <View style={styles.tabsContainer}>
+            <Pressable 
+              style={[styles.tabButton, activeTab === 'personal' && styles.activeTabButton]} 
+              onPress={() => setActiveTab('personal')}
+            >
+              <Text style={[styles.tabText, activeTab === 'personal' && styles.activeTabText]}>Kişisel Bilgiler</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.tabButton, activeTab === 'interests' && styles.activeTabButton]} 
+              onPress={() => setActiveTab('interests')}
+            >
+              <Text style={[styles.tabText, activeTab === 'interests' && styles.activeTabText]}>İlgi Alanlarım</Text>
+            </Pressable>
+          </View>
 
-            {successMsg ? (
-              <View style={styles.successBox}>
-                <Text style={styles.successText}>{successMsg}</Text>
-              </View>
-            ) : null}
+          {errorMsg ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
 
-            <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
+          {successMsg ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>{successMsg}</Text>
+            </View>
+          ) : null}
+
+          {activeTab === 'personal' ? (
+            <View style={styles.formContainer}>
             
             <AnimatedFocusWrapper isFocused={focusedField === 'name'}>
               <Input
@@ -851,6 +930,26 @@ export default function EditProfileScreen() {
                 </Modal>
               </View>
             </AnimatedFocusWrapper>
+            </View>
+          ) : (
+            <View style={styles.formContainer}>
+              <Text style={styles.sectionTitle}>İlgi Alanları (En az 3)</Text>
+              {renderChips(INTERESTS, interests, (val) => toggleSelection(val, interests, setInterests), true)}
+
+              <Text style={styles.sectionTitle}>Konuştuğum Diller (En az 1)</Text>
+              {renderChips(LANGUAGES, languages, (val) => toggleSelection(val, languages, setLanguages), true)}
+
+              <Text style={styles.sectionTitle}>Seyahat Tarzı</Text>
+              {renderChips(TRAVEL_STYLES, [travelStyle], (val) => setTravelStyle(travelStyle === val ? '' : val), false)}
+
+              <Text style={styles.sectionTitle}>Yaşam Tercihleri</Text>
+              <Text style={styles.subTitle}>Sigara Kullanımı</Text>
+              {renderChips(SMOKING_PREFS, [smokingPref], (val) => setSmokingPref(smokingPref === val ? '' : val), false)}
+              
+              <Text style={[styles.subTitle, { marginTop: 12 }]}>Evcil Hayvan</Text>
+              {renderChips(PET_PREFS, [petPref], (val) => setPetPref(petPref === val ? '' : val), false)}
+            </View>
+          )}
 
             <View style={styles.buttonWrapper}>
               <Pressable 
@@ -877,8 +976,6 @@ export default function EditProfileScreen() {
                 <Text style={styles.cancelBtnText}>İptal</Text>
               </Pressable>
             </View>
-            
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1086,6 +1183,41 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  tabsContainer: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  activeTabButton: {
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  activeTabText: {
+    color: Colors.primary,
+  },
+  subTitle: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
+  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F0F0F0', borderWidth: 1, borderColor: '#E0E0E0' },
+  chipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: 13, color: Colors.text },
+  chipTextSelected: { color: 'white', fontWeight: 'bold' },
   toastContainer: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 50 : 20,

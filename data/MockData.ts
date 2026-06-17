@@ -23,6 +23,13 @@ export interface User {
   termsAccepted?: boolean;
   termsAcceptedAt?: string;
   birthDate?: string;
+  about_text?: string;
+  interests?: string[] | string;
+  spoken_languages?: string[] | string;
+  travel_style?: string;
+  smoking_preference?: string;
+  pet_preference?: string;
+  profile_completion?: number;
 }
 
 export interface Review {

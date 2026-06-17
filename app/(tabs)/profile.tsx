@@ -661,30 +661,31 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {showCompleteProfile && (
-        <Pressable 
-          style={{
-            backgroundColor: '#FFF8E1',
-            borderRadius: 16,
-            padding: 16,
-            marginBottom: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderWidth: 1,
-            borderColor: '#FFE082'
-          }}
-          onPress={() => router.push('/edit-profile')}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FF8F00', marginBottom: 4 }}>Profilini Tamamla</Text>
-            <Text style={{ fontSize: 13, color: '#F57C00', lineHeight: 18 }}>
-              Eksik bilgilerin var: {missingFields.join(', ')}
-            </Text>
+      <Pressable 
+        style={{
+          backgroundColor: Colors.surface,
+          borderRadius: 16,
+          padding: 16,
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: Colors.border
+        }}
+        onPress={() => router.push('/edit-profile?tab=interests')}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <View>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.text }}>Profilini Tamamla</Text>
+            <Text style={{ fontSize: 13, color: Colors.textLight, marginTop: 2 }}>Profilini güçlendir, güvenilirliğini artır.</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#FF8F00" />
-        </Pressable>
-      )}
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+          <View style={{ flex: 1, height: 6, backgroundColor: Colors.border, borderRadius: 3, marginRight: 12, overflow: 'hidden' }}>
+            <View style={{ height: '100%', width: `${currentUser.profile_completion || 0}%`, backgroundColor: Colors.primary }} />
+          </View>
+          <Text style={{ fontSize: 12, fontWeight: 'bold', color: Colors.primary }}>%{currentUser.profile_completion || 0} Tamamlandı</Text>
+        </View>
+      </Pressable>
 
       <UserPosts userId={currentUser.id} currentUserId={currentUser.id} currentUser={currentUser} profile={currentUser} />
 
