@@ -161,7 +161,7 @@ export default function EditProfileScreen() {
     }
 
     if (cleanUsername === currentUser?.username?.trim().toLowerCase()) {
-      setUsernameStatus('available');
+      setUsernameStatus('idle');
       return;
     }
 
@@ -816,7 +816,7 @@ export default function EditProfileScreen() {
                   <TextInput
                     style={[
                       styles.phoneInput,
-                      { paddingRight: isPhoneVerified ? 165 : 140 }
+                      { paddingRight: isPhoneVerified ? 40 : 140 }
                     ]}
                     placeholder="5xxxxxxxxx"
                     placeholderTextColor={Colors.textLight}
@@ -829,10 +829,7 @@ export default function EditProfileScreen() {
                   />
                   <View style={{ position: 'absolute', right: 8, justifyContent: 'center' }}>
                     {isPhoneVerified ? (
-                      <View style={[styles.emailBadgeVerified, { paddingVertical: 6, paddingHorizontal: 10 }]}>
-                        <Ionicons name="checkmark" size={16} color={Colors.success} />
-                        <Text style={styles.emailBadgeTextVerified}>Telefon doğrulandı</Text>
-                      </View>
+                      <Ionicons name="checkmark" size={20} color={Colors.success} style={{ marginRight: 4 }} />
                     ) : (
                       <View style={[styles.phoneBadgeUnverifiedStatus, { paddingVertical: 6, paddingHorizontal: 10 }]}>
                         <Ionicons name="close" size={16} color={Colors.danger} />
@@ -933,10 +930,10 @@ export default function EditProfileScreen() {
             </View>
           ) : (
             <View style={styles.formContainer}>
-              <Text style={styles.sectionTitle}>İlgi Alanları (En az 3)</Text>
+              <Text style={styles.sectionTitle}>İlgi Alanları</Text>
               {renderChips(INTERESTS, interests, (val) => toggleSelection(val, interests, setInterests), true)}
 
-              <Text style={styles.sectionTitle}>Konuştuğum Diller (En az 1)</Text>
+              <Text style={styles.sectionTitle}>Konuştuğum Diller</Text>
               {renderChips(LANGUAGES, languages, (val) => toggleSelection(val, languages, setLanguages), true)}
 
               <Text style={styles.sectionTitle}>Seyahat Tarzı</Text>

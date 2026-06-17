@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, SectionList, Pressable, TouchableOpacity, Modal, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, Modal, Pressable, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { useAppContext } from '../context/AppContext';
-import { Ionicons } from '@expo/vector-icons';
 import { AppNotification } from '../data/MockData';
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { 
-    currentUser, 
-    notifications, 
-    markNotificationAsRead, 
+  const {
+    currentUser,
+    notifications,
+    markNotificationAsRead,
     clearNotifications,
     acceptFriendRequest,
     rejectFriendRequest,
@@ -21,8 +21,8 @@ export default function NotificationsScreen() {
     refreshData
   } = useAppContext();
   const [clearModalVisible, setClearModalVisible] = useState(false);
-  const [processedRequests, setProcessedRequests] = useState<{[requestId: string]: 'accepted' | 'rejected'}>({});
-  const [pokedUsers, setPokedUsers] = useState<{[userId: string]: boolean}>({});
+  const [processedRequests, setProcessedRequests] = useState<{ [requestId: string]: 'accepted' | 'rejected' }>({});
+  const [pokedUsers, setPokedUsers] = useState<{ [userId: string]: boolean }>({});
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -68,8 +68,8 @@ export default function NotificationsScreen() {
     if (!item.read) {
       await markNotificationAsRead(item.id);
     }
-    
-    switch(item.type) {
+
+    switch (item.type) {
       case 'request_created':
         router.push('/(tabs)/matches');
         break;
@@ -118,13 +118,13 @@ export default function NotificationsScreen() {
   };
 
   const getIconForType = (type: string) => {
-    switch(type) {
+    switch (type) {
       case 'request_created': return 'person-add';
       case 'request_accepted': return 'checkmark-circle';
       case 'request_rejected': return 'close-circle';
       case 'message_received': return 'chatbubble';
-      case 'listing_removed': 
-      case 'post_removed': 
+      case 'listing_removed':
+      case 'post_removed':
       case 'event_removed': return 'trash';
       case 'profile_verified':
       case 'identity_approved':
@@ -145,13 +145,13 @@ export default function NotificationsScreen() {
   };
 
   const getColorForType = (type: string) => {
-    switch(type) {
+    switch (type) {
       case 'request_created': return Colors.primary;
       case 'request_accepted': return Colors.success;
       case 'request_rejected': return Colors.danger;
       case 'message_received': return '#3498db';
-      case 'listing_removed': 
-      case 'post_removed': 
+      case 'listing_removed':
+      case 'post_removed':
       case 'event_removed': return Colors.danger;
       case 'profile_verified':
       case 'identity_approved':
@@ -182,7 +182,7 @@ export default function NotificationsScreen() {
     const hasPokedBack = item.relatedUserId ? pokedUsers[item.relatedUserId] : false;
 
     return (
-      <Pressable 
+      <Pressable
         style={[styles.notificationItem, !item.read && styles.unreadItem]}
         onPress={() => handleNotificationPress(item)}
       >
@@ -195,7 +195,7 @@ export default function NotificationsScreen() {
             <Text style={styles.time}>{dateString}</Text>
           </View>
           <Text style={[styles.message, !item.read && styles.unreadText]}>{item.message}</Text>
-          
+
           {showFriendActions && (
             <View style={styles.actionRow}>
               {processedStatus === 'accepted' ? (
@@ -204,14 +204,14 @@ export default function NotificationsScreen() {
                 <Text style={styles.statusTextRejected}>✗ İstek reddedildi</Text>
               ) : (
                 <>
-                  <TouchableOpacity 
-                    style={styles.acceptButton} 
+                  <TouchableOpacity
+                    style={styles.acceptButton}
                     onPress={() => handleAccept(item.relatedId!)}
                   >
                     <Text style={styles.buttonText}>Kabul Et</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.rejectButton} 
+                  <TouchableOpacity
+                    style={styles.rejectButton}
                     onPress={() => handleReject(item.relatedId!)}
                   >
                     <Text style={styles.buttonTextReject}>Reddet</Text>
@@ -226,8 +226,8 @@ export default function NotificationsScreen() {
               {hasPokedBack ? (
                 <Text style={styles.statusText}>✓ Geri dürttünüz</Text>
               ) : (
-                <TouchableOpacity 
-                  style={styles.acceptButton} 
+                <TouchableOpacity
+                  style={styles.acceptButton}
                   onPress={() => handlePokeBack(item.relatedUserId!)}
                 >
                   <Text style={styles.buttonText}>Geri Dürt</Text>
@@ -271,7 +271,7 @@ export default function NotificationsScreen() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Bildirimler</Text>
         </View>
-        
+
         {notifications.length > 0 && (
           <TouchableOpacity onPress={() => setClearModalVisible(true)} style={styles.clearAllButton}>
             <Ionicons name="trash-outline" size={24} color={Colors.danger} />
@@ -314,14 +314,14 @@ export default function NotificationsScreen() {
             <Text style={styles.modalTitle}>Bildirimleri temizle?</Text>
             <Text style={styles.modalMessage}>Tüm bildirimler listenizden kaldırılacak.</Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setClearModalVisible(false)}
               >
                 <Text style={styles.cancelButtonText}>Vazgeç</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]} 
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
                 onPress={handleClearConfirm}
               >
                 <Text style={styles.confirmButtonText}>Temizle</Text>

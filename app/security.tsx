@@ -72,6 +72,36 @@ export default function SecurityScreen() {
     });
   };
 
+  const [isLogoutAllModalVisible, setIsLogoutAllModalVisible] = useState(false);
+  const logoutAllSlideAnim = useRef(new Animated.Value(600)).current;
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+
+  const handleOpenLogoutAllModal = () => {
+    setIsLogoutAllModalVisible(true);
+    Animated.timing(logoutAllSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleCloseLogoutAllModal = () => {
+    Animated.timing(logoutAllSlideAnim, {
+      toValue: 600,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsLogoutAllModalVisible(false);
+    });
+  };
+
+  const executeLogoutAllDevices = async () => {
+    setIsLoggingOutAll(true);
+    await AsyncStorage.removeItem('misafirimol_session');
+    handleCloseLogoutAllModal();
+    router.replace('/(auth)/login');
+  };
+
   const handleChangePassword = async () => {
     setPasswordError('');
     setPasswordSuccess('');
@@ -94,10 +124,21 @@ export default function SecurityScreen() {
       const result = await updateProfile({ password: newPassword }, currentPassword);
       if (result.success) {
         setPasswordSuccess('Şifreniz başarıyla güncellendi.');
+        
+        try {
+          await fetch(`${API_BASE_URL}/auth/logout-all-devices`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: currentUser?.id })
+          });
+        } catch(e) {}
+        
         setTimeout(() => {
           handleClosePasswordModal();
-          AlertHelper.alert('Başarılı', 'Şifreniz başarıyla değiştirildi.');
-        }, 1200);
+          setTimeout(() => {
+            handleOpenLogoutAllModal();
+          }, 300);
+        }, 600);
       } else {
         setPasswordError(result.error || 'Şifre değiştirilemedi.');
       }
@@ -828,6 +869,62 @@ export default function SecurityScreen() {
                   </>
                 )}
               </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Logout All Devices Modal */}
+      <Modal
+        visible={isLogoutAllModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleCloseLogoutAllModal}
+      >
+        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            pointerEvents="box-none"
+          >
+            <Animated.View style={[
+              styles.bottomSheetContent, 
+              { 
+                transform: [{ translateY: logoutAllSlideAnim }],
+                paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+                flexShrink: 1,
+                backgroundColor: '#FFF',
+                borderTopWidth: 1,
+                borderTopColor: '#E9ECEF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 12,
+                elevation: 10,
+              }
+            ]}>
+              <View style={styles.bottomSheetHandle} />
+              
+              <View style={{ alignItems: 'center', padding: 24, paddingTop: 12 }}>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                  <Ionicons name="checkmark-circle" size={40} color={Colors.success} />
+                </View>
+                
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.text, marginBottom: 12, textAlign: 'center' }}>Şifreniz Değiştirildi</Text>
+                
+                <Text style={{ fontSize: 15, color: Colors.textLight, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
+                  Diğer cihazlarda aktif oturumunuz varsa kapatılır.
+                </Text>
+                
+                <View style={{ width: '100%', flexDirection: 'column', gap: 12 }}>
+                  <Button 
+                    title="Tamam" 
+                    onPress={executeLogoutAllDevices} 
+                    style={{ width: '100%' }}
+                  />
+                </View>
+              </View>
             </Animated.View>
           </KeyboardAvoidingView>
         </View>

@@ -714,43 +714,69 @@ export default function ProfileScreen() {
                     <Ionicons name="close" size={24} color={Colors.text} />
                   </Pressable>
                 </View>
-                <Pressable style={[styles.menuItem, { alignItems: 'flex-start' }]} onPress={() => { closeMenu(); router.push(`/user/${currentUser?.id}?preview=true`); }}>
-                  <Text style={[styles.menuIcon, { fontSize: 22, width: 22, textAlign: 'center' }]}>👁️</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.menuItemText}>Profilim Nasıl Görünüyor?</Text>
-                    <Text style={{ fontSize: 13, color: Colors.textLight, marginTop: 4, lineHeight: 18 }}>Kendi profilinizi diğer kullanıcıların gördüğü şekilde görüntüleyin.</Text>
-                  </View>
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push(`/user/${currentUser?.id}?preview=true`); }}
+                >
+                  <Ionicons name="person-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Profilimi Görüntüle</Text>
+                  <Text style={styles.menuArrow}>»</Text>
                 </Pressable>
-                
-                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/blocked-users'); }}>
-                  <Ionicons name="ban-outline" size={22} color={Colors.text} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Engellenenler</Text>
-                </Pressable>
-                
-                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/security'); }}>
-                  <Ionicons name="shield-checkmark-outline" size={22} color={Colors.text} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Güvenlik Merkezi</Text>
-                </Pressable>
-                
-                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/privacy'); }}>
-                  <Ionicons name="document-text-outline" size={22} color={Colors.text} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Gizlilik</Text>
-                </Pressable>
-
-                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); router.push('/about'); }}>
-                  <Ionicons name="information-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Hakkında</Text>
-                </Pressable>
-                
-                <Pressable style={styles.menuItem} onPress={() => { closeMenu(); setTimeout(openIssueModal, 300); }}>
-                  <Ionicons name="alert-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Sorun Bildir</Text>
-                </Pressable>
-                
-                <View style={styles.menuDivider} />
                 
                 <Pressable 
-                  style={styles.menuItem} 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push('/blocked-users'); }}
+                >
+                  <Ionicons name="ban-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Engellenenler</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push('/security'); }}
+                >
+                  <Ionicons name="shield-checkmark-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Güvenlik Merkezi</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push('/privacy'); }}
+                >
+                  <Ionicons name="document-text-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Gizlilik</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
+
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push('/about'); }}
+                >
+                  <Ionicons name="information-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Hakkında</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); setTimeout(openIssueModal, 300); }}
+                >
+                  <Ionicons name="alert-circle-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Sorun Bildir</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, { borderBottomWidth: 0 }, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
                   onPress={() => { closeMenu(); handleLogout(); }}
                   disabled={isLoggingOut}
                 >
@@ -1069,6 +1095,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  menuArrow: {
+    marginLeft: 'auto',
+    fontSize: 18,
+    color: '#9CA3AF',
+    fontWeight: '400',
   },
   menuIcon: {
     marginRight: 16,

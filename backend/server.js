@@ -881,6 +881,19 @@ app.post('/api/auth/devices/logout-all', async (req, res) => {
   }
 });
 
+app.post('/api/auth/logout-all-devices', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'User ID gerekli.' });
+    
+    await query('UPDATE device_sessions SET "isActive" = false WHERE "userId" = $1', [userId]);
+    res.json({ success: true });
+  } catch(error) {
+    console.error('[LOGOUT_ALL_DEVICES_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Tüm cihazlardan çıkış yapılamadı.' });
+  }
+});
+
 // Check if a userId has been deleted by admin (used during offline session restore)
 app.post('/api/auth/deleted-check', async (req, res) => {
   try {

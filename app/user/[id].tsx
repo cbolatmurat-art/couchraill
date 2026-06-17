@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  Pressable, Alert, DeviceEventEmitter, TouchableOpacity, Modal, Platform
+  Pressable, Alert, DeviceEventEmitter, TouchableOpacity, Modal, Platform, Animated, TouchableWithoutFeedback
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Colors } from '../../constants/Colors';
@@ -39,6 +39,27 @@ export default function PublicProfileScreen() {
   const [blockStatus,  setBlockStatus]  = useState<BlockStatus>(BLOCK_INIT);
   const [blockLoading, setBlockLoading] = useState(false);
   const [menuVisible,  setMenuVisible]  = useState(false);
+  const slideAnim = React.useRef(new Animated.Value(300)).current;
+
+  useEffect(() => {
+    if (menuVisible) {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      slideAnim.setValue(300);
+    }
+  }, [menuVisible, slideAnim]);
+
+  const closeMenu = () => {
+    Animated.timing(slideAnim, {
+      toValue: 300,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setMenuVisible(false));
+  };
   
   // Custom confirm dialog state (replaces Alert.alert which is broken on web)
   const [confirmVisible, setConfirmVisible] = useState(false);
@@ -344,6 +365,7 @@ export default function PublicProfileScreen() {
 
   const isPreview = preview === 'true';
   const isOtherUser                              = !!(currentUser && currentUser.id !== profile.id) || isPreview;
+  const showActions                              = !!(currentUser && currentUser.id !== profile.id) && !isPreview;
   const { isBlockedByMe, hasBlockedMe }          = blockStatus;
 
   const headerUsername =
@@ -369,7 +391,7 @@ export default function PublicProfileScreen() {
           headerStyle: { backgroundColor: Colors.background },
           headerShadowVisible: false,
           headerBackTitleVisible: false,
-          headerRight: () => isOtherUser ? (
+          headerRight: () => showActions ? (
             <TouchableOpacity
               onPress={() => setMenuVisible(true)}
               style={styles.menuBtn}
@@ -382,26 +404,28 @@ export default function PublicProfileScreen() {
       />
 
       {/* ── Options Bottom Sheet ── */}
-      <Modal visible={menuVisible} transparent animationType="slide" onRequestClose={() => setMenuVisible(false)}>
-        <Pressable style={styles.overlay} onPress={() => setMenuVisible(false)}>
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <TouchableOpacity style={styles.sheetRow} onPress={openBlockConfirm} disabled={blockLoading}>
-              <Ionicons
-                name={isBlockedByMe ? 'lock-open-outline' : 'ban-outline'}
-                size={20}
-                color={isBlockedByMe ? Colors.primary : Colors.danger}
-                style={{ marginRight: 14 }}
-              />
-              <Text style={[styles.sheetRowText, { color: isBlockedByMe ? Colors.primary : Colors.danger }]}>
-                {blockLoading ? 'İşleniyor...' : isBlockedByMe ? 'Engeli Kaldır' : 'Kullanıcıyı Engelle'}
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.sheetDivider} />
-            <TouchableOpacity style={styles.sheetCancel} onPress={() => setMenuVisible(false)}>
-              <Text style={styles.sheetCancelText}>Vazgeç</Text>
-            </TouchableOpacity>
-          </View>
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={closeMenu}>
+        <Pressable style={[styles.overlay, { justifyContent: 'flex-end' }]} onPress={closeMenu}>
+          <TouchableWithoutFeedback>
+            <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+              <View style={styles.sheetHandle} />
+              <TouchableOpacity style={styles.sheetRow} onPress={openBlockConfirm} disabled={blockLoading}>
+                <Ionicons
+                  name={isBlockedByMe ? 'lock-open-outline' : 'ban-outline'}
+                  size={20}
+                  color={isBlockedByMe ? Colors.primary : Colors.danger}
+                  style={{ marginRight: 14 }}
+                />
+                <Text style={[styles.sheetRowText, { color: isBlockedByMe ? Colors.primary : Colors.danger }]}>
+                  {blockLoading ? 'İşleniyor...' : isBlockedByMe ? 'Engeli Kaldır' : 'Kullanıcıyı Engelle'}
+                </Text>
+              </TouchableOpacity>
+              <View style={styles.sheetDivider} />
+              <TouchableOpacity style={styles.sheetCancel} onPress={closeMenu}>
+                <Text style={styles.sheetCancelText}>Vazgeç</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableWithoutFeedback>
         </Pressable>
       </Modal>
 
@@ -435,6 +459,14 @@ export default function PublicProfileScreen() {
       </Modal>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {isPreview && (
+          <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <Text style={{ color: '#475569', fontSize: 13, fontWeight: '500', lineHeight: 18 }}>
+              👁️ Profiliniz diğer kullanıcılara bu şekilde görünmektedir.
+            </Text>
+          </View>
+        )}
+
         {/* ── Profile Header ── */}
         <View style={styles.profileHeader}>
           {profile.profileImage ? (
@@ -491,7 +523,7 @@ export default function PublicProfileScreen() {
         </View>
 
         {/* Action Buttons */}
-        {isOtherUser && (
+        {showActions && (
           <View style={styles.actions}>
             {isBlockedByMe ? (
               /* I blocked them */
@@ -605,7 +637,7 @@ const styles = StyleSheet.create({
   menuBtn:   { paddingHorizontal: 12, paddingVertical: 6 },
 
   // Bottom sheet
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 34 : 20,
