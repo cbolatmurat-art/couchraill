@@ -93,6 +93,8 @@ export default function NotificationsScreen() {
         router.push('/(tabs)/profile');
         break;
       case 'new_follower':
+      case 'follow':
+      case 'unfollow':
       case 'poke':
       case 'friend_request':
       case 'friend_request_accepted':
@@ -128,7 +130,9 @@ export default function NotificationsScreen() {
       case 'email_verified':
       case 'phone_verified': return 'shield-checkmark';
       case 'identity_rejected': return 'shield-half';
-      case 'new_follower': return 'person-add-outline';
+      case 'new_follower':
+      case 'follow': return 'person-add-outline';
+      case 'unfollow': return 'person-remove-outline';
       case 'poke': return 'hand-right-outline';
       case 'friend_request': return 'people-outline';
       case 'friend_request_accepted': return 'people-circle-outline';
@@ -152,7 +156,9 @@ export default function NotificationsScreen() {
       case 'email_verified':
       case 'phone_verified': return Colors.success;
       case 'identity_rejected': return Colors.danger;
-      case 'new_follower': return '#9C27B0';
+      case 'new_follower':
+      case 'follow': return '#9C27B0';
+      case 'unfollow': return '#757575';
       case 'poke': return '#FF9800';
       case 'friend_request': return '#2196F3';
       case 'friend_request_accepted': return '#4CAF50';

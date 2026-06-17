@@ -4388,13 +4388,26 @@ app.post('/api/social/follow/:userId', async (req, res) => {
 
     // Send real-time notification
     const db = readDB();
-    createAndSendSocialNotification(db, {
-      userId: targetId,
-      type: 'new_follower',
-      title: 'Yeni Takipçi',
-      message: `${currentUser.name} seni takip etmeye başladı.`,
-      relatedUserId: cId
-    });
+    
+    // Check spam (24 hours) for 'follow'
+    let canSendFollowNotif = true;
+    try {
+      const { rows: recentFollowNotifs } = await query(`
+        SELECT 1 FROM notifications
+        WHERE "userId" = $1 AND "relatedId" = $2 AND type = 'follow' AND "createdAt" >= NOW() - INTERVAL '24 hours'
+      `, [targetId, cId]);
+      if (recentFollowNotifs.length > 0) canSendFollowNotif = false;
+    } catch(e) {} // Fallback to sending if query fails
+
+    if (canSendFollowNotif) {
+      createAndSendSocialNotification(db, {
+        userId: targetId,
+        type: 'follow',
+        title: 'Yeni Takipçi',
+        message: `${currentUser.name} seni takip etmeye başladı.`,
+        relatedUserId: cId
+      });
+    }
 
     res.json({ success: true, message: 'Kullanıcı takip edildi.' });
   } catch (error) {
@@ -4416,8 +4429,12 @@ app.delete('/api/social/follow/:userId', async (req, res) => {
     if (uRows.length > 0) targetId = uRows[0].id;
 
     let cId = currentUserId;
-    const { rows: cRows } = await query(`SELECT id FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
+    const { rows: cRows } = await query(`SELECT id, name FROM users WHERE id = $1 OR username = $1 OR email = $1 LIMIT 1`, [currentUserId]);
     if (cRows.length > 0) cId = cRows[0].id;
+    
+    if (uRows.length === 0 || cRows.length === 0) return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı.' });
+    
+    const currentUser = cRows[0];
 
     const { rowCount } = await query(`DELETE FROM follows WHERE "followerUserId" = $1 AND "followingUserId" = $2`, [cId, targetId]);
     
@@ -4430,6 +4447,27 @@ app.delete('/api/social/follow/:userId', async (req, res) => {
     if (receiverSocketId) io.to(receiverSocketId).emit('social_stats_updated', { userId: targetId });
     const senderSocketId = activeUsers.get(cId);
     if (senderSocketId) io.to(senderSocketId).emit('social_stats_updated', { userId: cId });
+
+    // Send unfollow notification
+    const db = readDB();
+    let canSendUnfollowNotif = true;
+    try {
+      const { rows: recentUnfollowNotifs } = await query(`
+        SELECT 1 FROM notifications
+        WHERE "userId" = $1 AND "relatedId" = $2 AND type = 'unfollow' AND "createdAt" >= NOW() - INTERVAL '24 hours'
+      `, [targetId, cId]);
+      if (recentUnfollowNotifs.length > 0) canSendUnfollowNotif = false;
+    } catch(e) {}
+
+    if (canSendUnfollowNotif) {
+      createAndSendSocialNotification(db, {
+        userId: targetId,
+        type: 'unfollow',
+        title: 'Takipten Çıkma',
+        message: `${currentUser.name} seni takip etmeyi sonlandırdı.`,
+        relatedUserId: cId
+      });
+    }
 
     res.json({ success: true, message: 'Takipten çıkıldı.' });
   } catch (error) {
