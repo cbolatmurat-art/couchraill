@@ -4040,7 +4040,13 @@ app.get('/api/users/:id/public', async (req, res) => {
       recentReviews,
       activeListings,
       joinedDate: user.joinedDate || user.createdAt || null,
-      gender: user.gender || null
+      gender: user.gender || null,
+      about_text: user.about_text || null,
+      interests: user.interests || null,
+      spoken_languages: user.spoken_languages || null,
+      travel_style: user.travel_style || null,
+      smoking_preference: user.smoking_preference || null,
+      pet_preference: user.pet_preference || null
     };
 
     res.json({ success: true, profile: publicProfile });
