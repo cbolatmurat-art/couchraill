@@ -5297,8 +5297,8 @@ app.post('/api/events/:eventId/join', async (req, res) => {
     const { rows: existing } = await query(`SELECT * FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, userId]);
     if (existing.length > 0) return res.json({ success: true, message: 'Zaten katıldınız.' });
 
-    const newIntId = \`eint_\${Date.now()}_\${Math.random().toString(36).substr(2, 5)}\`;
-    await query(\`INSERT INTO event_interactions (id, "eventId", "userId", type, "createdAt") VALUES ($1, $2, $3, 'join', $4)\`, [newIntId, eventId, userId, new Date().toISOString()]);
+    const newIntId = `eint_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    await query(`INSERT INTO event_interactions (id, "eventId", "userId", type, "createdAt") VALUES ($1, $2, $3, 'join', $4)`, [newIntId, eventId, userId, new Date().toISOString()]);
 
     res.json({ success: true });
   } catch (error) {
@@ -5313,7 +5313,7 @@ app.delete('/api/events/:eventId/join', async (req, res) => {
   if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
   
   try {
-    await query(\`DELETE FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'\`, [eventId, userId]);
+    await query(`DELETE FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, userId]);
     res.json({ success: true });
   } catch (error) {
     console.error('[DELETE_EVENT_JOIN_ERROR]', error.message);
@@ -5325,13 +5325,13 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
   const { eventId } = req.params;
   
   try {
-    const { rows } = await query(\`
+    const { rows } = await query(`
       SELECT u.id, u.name, u.username, u."profileImage"
       FROM event_interactions ei
       JOIN users u ON ei."userId" = u.id
       WHERE ei."eventId" = $1 AND ei.type = 'join'
       ORDER BY ei."createdAt" ASC
-    \`, [eventId]);
+    `, [eventId]);
     
     res.json({ success: true, participants: rows });
   } catch (error) {
