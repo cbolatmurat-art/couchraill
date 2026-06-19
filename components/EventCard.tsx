@@ -60,7 +60,7 @@ export const EventCard = React.memo(({
     }).start();
 
     try {
-      const response = await fetch(`${API_BASE_URL}/events/${item.id}/participants`);
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/participants?userId=${currentUser?.id || currentUser?._id}`);
       const data = await response.json();
       if (data.success && data.participants) {
         setParticipantsList(data.participants);
@@ -93,18 +93,6 @@ export const EventCard = React.memo(({
 
     if (previousJoined) {
       setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== (currentUser.id || currentUser._id)));
-    } else {
-      setParticipantsList(prev => {
-        if (!prev.find(p => (p.id || p._id) === (currentUser.id || currentUser._id))) {
-          return [...prev, {
-            id: currentUser.id || currentUser._id,
-            name: currentUser.name || currentUser.username,
-            username: currentUser.username,
-            profileImage: currentUser.profileImage,
-          }];
-        }
-        return prev;
-      });
     }
 
     try {
@@ -327,7 +315,7 @@ export const EventCard = React.memo(({
             <FlatList
               data={participantsList}
               keyExtractor={(p, idx) => p.id || p._id || String(idx)}
-              ListEmptyComponent={<Text style={styles.emptyText}>Henüz kimse katılmadı.</Text>}
+              ListEmptyComponent={<Text style={styles.emptyText}>Diğer katılımcı yok</Text>}
               renderItem={({ item: p }) => (
                 <TouchableOpacity 
                   style={styles.contactRow} 

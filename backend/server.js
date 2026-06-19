@@ -1396,7 +1396,7 @@ app.get('/api/events', async (req, res) => {
       LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
-      LEFT JOIN (SELECT "eventId", COUNT(*) as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
+      LEFT JOIN (SELECT "eventId", COUNT(DISTINCT "userId") as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
@@ -1437,7 +1437,7 @@ app.get('/api/events/feed', async (req, res) => {
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
       LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
-      LEFT JOIN (SELECT "eventId", COUNT(*) as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
+      LEFT JOIN (SELECT "eventId", COUNT(DISTINCT "userId") as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
       AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
@@ -5267,17 +5267,35 @@ app.delete('/api/events/:eventId/join', async (req, res) => {
 
 app.get('/api/events/:eventId/participants', async (req, res) => {
   const { eventId } = req.params;
+  const { userId } = req.query;
   
   try {
     const { rows } = await query(`
-      SELECT u.id, u.name, u.username, u."profileImage"
+      SELECT DISTINCT u.id, u.name, u.username, u."profileImage", ei."createdAt"
       FROM event_interactions ei
       JOIN users u ON ei."userId" = u.id
       WHERE ei."eventId" = $1 AND ei.type = 'join'
       ORDER BY ei."createdAt" ASC
     `, [eventId]);
     
-    res.json({ success: true, participants: rows });
+    // Filter out current user and remove duplicates
+    let filteredRows = [];
+    const seen = new Set();
+    
+    for (const r of rows) {
+      if (userId && r.id === userId) continue;
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        filteredRows.push({
+          id: r.id,
+          name: r.name,
+          username: r.username,
+          profileImage: r.profileImage
+        });
+      }
+    }
+    
+    res.json({ success: true, participants: filteredRows });
   } catch (error) {
     console.error('[GET_EVENT_PARTICIPANTS_ERROR]', error.message);
     res.status(500).json({ success: false, error: 'Katılımcılar yüklenemedi.' });
@@ -5324,7 +5342,7 @@ app.get('/api/events/user/:userId', async (req, res) => {
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
       LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $2
-      LEFT JOIN (SELECT "eventId", COUNT(*) as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
+      LEFT JOIN (SELECT "eventId", COUNT(DISTINCT "userId") as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $2 AND mei.type = 'join'
       WHERE p."userId" = $1 AND p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
