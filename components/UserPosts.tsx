@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform, Alert, DeviceEventEmitter } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform, Alert, DeviceEventEmitter, Animated, Dimensions } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { API_BASE_URL } from '../constants/config';
@@ -34,6 +34,27 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   // Comments Modal State
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  const openCommentsModal = () => {
+    setCommentsModalVisible(true);
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeCommentsModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setCommentsModalVisible(false);
+    });
+  };
 
   // Post Menu State
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
@@ -181,7 +202,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   const openComments = async (postId: string) => {
     console.log("PROFILE_POST_COMMENT_CLICKED", postId);
     setSelectedPostId(postId);
-    setCommentsModalVisible(true);
+    openCommentsModal();
     setLoadingComments(true);
     try {
       const res = await fetch(`${API_BASE_URL}/posts/${postId}/comments`);
@@ -573,14 +594,14 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       {activeTab === 'about' && renderAboutContent()}
 
       {/* Comments Modal */}
-      <Modal visible={commentsModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCommentsModalVisible(false)}>
+      <Modal visible={commentsModalVisible} animationType="fade" transparent={true} onRequestClose={closeCommentsModal}>
         <View style={styles.modalOverlayFixed}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setCommentsModalVisible(false)} />
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeCommentsModal} />
           <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
-            <View style={styles.modalContent}>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
-              <TouchableOpacity onPress={() => setCommentsModalVisible(false)} style={styles.modalCloseBtn}>
+              <TouchableOpacity onPress={closeCommentsModal} style={styles.modalCloseBtn}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
@@ -620,7 +641,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
                 )}
               </TouchableOpacity>
             </View>
-            </View>
+            </Animated.View>
           </KeyboardAvoidingView>
         </View>
       </Modal>

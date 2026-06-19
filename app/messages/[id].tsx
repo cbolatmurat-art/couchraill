@@ -10,6 +10,7 @@ import { useAppContext } from '../../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Message } from '../../data/MockData';
+import { EventCard } from '../../components/EventCard';
 
 export default function ChatScreen() {
   const { id, initialMessage } = useLocalSearchParams<{ id: string, initialMessage?: string }>();
@@ -45,6 +46,7 @@ export default function ChatScreen() {
   const [viewOnceTimer, setViewOnceTimer] = useState<number>(15);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isTimerPausedRef = useRef<boolean>(false);
+  const [sharedEventToShow, setSharedEventToShow] = useState<any>(null);
 
   useEffect(() => {
     return () => {
@@ -459,6 +461,40 @@ export default function ChatScreen() {
                     </Text>
                   </TouchableOpacity>
                   );
+                })() : item.messageType === 'eventShare' ? (() => {
+                  let parsedEvent = null;
+                  try {
+                    parsedEvent = item.mediaUrl ? JSON.parse(item.mediaUrl) : null;
+                  } catch(e) {}
+                  return (
+                    <View>
+                      <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther, { fontStyle: 'italic', marginBottom: 8 }]}>
+                        {item.text}
+                      </Text>
+                      {parsedEvent ? (
+                        <TouchableOpacity 
+                          style={{ backgroundColor: isMine ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 12, marginTop: 4 }}
+                          activeOpacity={0.8}
+                          onPress={() => setSharedEventToShow(parsedEvent)}
+                        >
+                          <Text style={{ fontWeight: 'bold', color: isMine ? '#FFF' : '#333', marginBottom: 4 }}>{parsedEvent.title || 'Etkinlik'}</Text>
+                          <Text style={{ color: isMine ? '#EEE' : '#666', fontSize: 12, marginTop: 2 }}>
+                            <Ionicons name="time-outline" size={12} /> {parsedEvent.time || '-'}
+                          </Text>
+                          <Text style={{ color: isMine ? '#EEE' : '#666', fontSize: 12, marginTop: 2 }}>
+                            <Ionicons name="location-outline" size={12} /> {parsedEvent.city ? `${parsedEvent.city} / ${parsedEvent.district || ''}` : '-'}
+                          </Text>
+                          <Text style={{ color: isMine ? '#FFF' : Colors.primary, fontSize: 12, marginTop: 8, fontWeight: '600' }}>
+                            Etkinliği İncele <Ionicons name="chevron-forward" size={12} />
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.1)', padding: 12, borderRadius: 8 }}>
+                          <Text style={{ color: isMine ? '#FFF' : '#333' }}>Bu etkinlik artık mevcut değil.</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
                 })() : (
                   <Text style={[styles.messageText, isMine ? styles.messageTextMine : styles.messageTextOther]}>
                     {item.text}
@@ -670,6 +706,37 @@ export default function ChatScreen() {
             </Text>
           </TouchableOpacity>
         </SafeAreaView>
+      </Modal>
+
+      {/* Shared Event Detail Modal */}
+      <Modal
+        visible={!!sharedEventToShow}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSharedEventToShow(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#F9F9F9', borderRadius: 24, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 16, backgroundColor: '#FFF' }}>
+              <TouchableOpacity onPress={() => setSharedEventToShow(null)}>
+                <Ionicons name="close-circle" size={28} color="#999" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ paddingBottom: 20 }}>
+              {sharedEventToShow && (
+                <EventCard 
+                  item={sharedEventToShow} 
+                  currentUserId={currentUser.id} 
+                  onProfilePress={(id) => {
+                    setSharedEventToShow(null);
+                    router.push(`/user/${id}`);
+                  }}
+                  onDeleteConfirm={() => {}}
+                />
+              )}
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

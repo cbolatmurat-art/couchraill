@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert } from 'react-native';
 import { Colors } from '../constants/Colors';
-import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAppContext } from '../context/AppContext';
+import { API_BASE_URL } from '../constants/config';
 
 interface EventCardProps {
   item: any;
@@ -25,97 +26,230 @@ export const EventCard = React.memo(({
   onReportConfirm
 }: EventCardProps) => {
   const router = useRouter();
+  const { currentUser, conversations, sendMessage } = useAppContext();
   
-  // Use backend names if available, else standard names
   const owner = item.author || item.owner || {};
   const ownerId = item.authorId || item.ownerId || item.userId || (owner && owner.id) || item._id || item.uid;
-  const ownerName = owner.fullName || owner.name || item.ownerName || 'Bilinmiyor';
-  const ownerUsername = owner.username || item.ownerUsername;
-  const ownerAvatar = owner.profileImage || owner.avatar || item.ownerAvatar;
 
   const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
 
-  const handleJoinPress = () => {
-    if (ownerId) {
-      router.push({
-        pathname: `/chat/[id]`,
-        params: { 
-          id: ownerId, 
-          initialMessage: `Merhaba, ${item.title} etkinliğine katılmak istiyorum.`
-        }
-      });
+  const [isJoined, setIsJoined] = useState(item.isJoined || false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [participantsModalVisible, setParticipantsModalVisible] = useState(false);
+  
+  const slideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  // Do not use demo data. If there's no actual data, default to 0.
+  const initialCount = item.participantCount || item.participants?.length || 0;
+  const [participantCount, setParticipantCount] = useState(initialCount);
+
+  const initialParticipants = Array.isArray(item.participants) ? item.participants : [];
+  const [participantsList, setParticipantsList] = useState<any[]>(initialParticipants);
+
+  React.useEffect(() => {
+    setIsJoined(item.isJoined || false);
+    setParticipantCount(item.participantCount || item.participants?.length || 0);
+  }, [item.isJoined, item.participantCount, item.participants]);
+
+  const openParticipantsModal = async () => {
+    setParticipantsModalVisible(true);
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/participants`);
+      const data = await response.json();
+      if (data.success && data.participants) {
+        setParticipantsList(data.participants);
+      }
+    } catch (error) {
+      console.warn("Could not fetch participants:", error);
     }
   };
+
+  const closeParticipantsModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setParticipantsModalVisible(false);
+    });
+  };
+
+  const handleJoinToggle = async () => {
+    if (!currentUser) {
+      Alert.alert('Hata', 'Katılmak için giriş yapmalısınız.');
+      return;
+    }
+    const previousJoined = isJoined;
+    const previousCount = participantCount;
+
+    setIsJoined(!previousJoined);
+    setParticipantCount(prev => previousJoined ? Math.max(0, prev - 1) : prev + 1);
+
+    if (previousJoined) {
+      setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== (currentUser.id || currentUser._id)));
+    } else {
+      setParticipantsList(prev => {
+        if (!prev.find(p => (p.id || p._id) === (currentUser.id || currentUser._id))) {
+          return [...prev, {
+            id: currentUser.id || currentUser._id,
+            name: currentUser.name || currentUser.username,
+            username: currentUser.username,
+            profileImage: currentUser.profileImage,
+          }];
+        }
+        return prev;
+      });
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/join`, {
+        method: previousJoined ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id || currentUser._id })
+      });
+      const data = await response.json();
+      if (!data.success && data.message !== 'Zaten katıldınız.') {
+        throw new Error(data.error || 'Katılım işlemi başarısız');
+      }
+    } catch (error) {
+      setIsJoined(previousJoined);
+      setParticipantCount(previousCount);
+      Alert.alert('Hata', 'İşlem gerçekleştirilemedi, lütfen tekrar deneyin.');
+    }
+  };
+
+  const handleShareToUser = async (conversationId: string) => {
+    if (!currentUser) return;
+    const senderName = currentUser.name || currentUser.username || 'Bir kullanıcı';
+    const messageText = `${senderName} seninle bir Etkinliğe Katılmak istiyor`;
+    
+    // Pass the full event item stringified in mediaUrl so the chat screen can render it
+    await sendMessage(conversationId, messageText, undefined, 'eventShare', JSON.stringify(item));
+    setShareModalVisible(false);
+  };
+
+  const recentContacts = conversations
+    .filter(c => currentUser && c.participantIds.includes(currentUser.id))
+    .map(c => {
+      const otherId = c.participantIds.find(id => id !== currentUser?.id) || '';
+      return {
+        conversationId: c.id,
+        userId: otherId,
+        name: c.participantNames[otherId] || 'Kullanıcı',
+        avatar: c.participantProfiles?.[otherId] || null
+      };
+    })
+    .filter(c => c.userId);
 
   const locationText = [item.city, item.district, item.neighborhood]
     .filter(Boolean)
     .join(' / ');
 
+  const parseDate = (dateVal: string | Date) => {
+    if (!dateVal) return { day: '-', month: '', weekday: '' };
+    try {
+      const d = new Date(dateVal);
+      if (!isNaN(d.getTime())) {
+        return {
+          day: d.getDate().toString(),
+          month: d.toLocaleDateString('tr-TR', { month: 'short' }).toUpperCase(),
+          weekday: d.toLocaleDateString('tr-TR', { weekday: 'long' }).toUpperCase(),
+        };
+      }
+    } catch (e) {}
+
+    const parts = String(dateVal).split(' ');
+    return {
+      day: parts[0] || '-',
+      month: parts[1] ? parts[1].toUpperCase() : '',
+      weekday: parts[2] ? parts[2].toUpperCase() : '',
+    };
+  };
+
+  const { day, month, weekday } = parseDate(item.date);
+
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <TouchableOpacity onPress={() => onProfilePress(ownerId)} style={styles.ownerInfo}>
-          {ownerAvatar ? (
-            <Image source={{ uri: ownerAvatar }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{ownerName?.charAt(0)?.toUpperCase() || '?'}</Text>
+      <View style={styles.topSection}>
+        <View style={styles.dateBox}>
+          <Text style={styles.dateDay}>{day}</Text>
+          <Text style={styles.dateMonth}>{month}</Text>
+          {weekday ? <Text style={styles.dateWeekday}>{weekday}</Text> : null}
+        </View>
+        
+        <View style={styles.infoBox}>
+          <View style={styles.infoHeader}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>ETKİNLİK</Text>
             </View>
-          )}
-          <View style={styles.ownerText}>
-            <View style={styles.nameRow}>
-              <Text style={styles.ownerName} numberOfLines={1}>{ownerName}</Text>
-            </View>
-            {ownerUsername && <Text style={styles.ownerUsername}>@{ownerUsername}</Text>}
+            {setOpenMenuId && (
+              <View style={{ position: 'relative', zIndex: 100 }}>
+                <TouchableOpacity 
+                  style={styles.menuIcon}
+                  onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+                >
+                  <Ionicons name="ellipsis-vertical" size={20} color="#757575" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.descriptionText} numberOfLines={2}>{item.description}</Text>
+
+          <View style={styles.detailsRow}>
+            <View style={styles.detailItem}>
+              <Ionicons name="time-outline" size={16} color="#757575" />
+              <Text style={styles.detailText}>{item.time || '-'}</Text>
+            </View>
+            <View style={styles.detailSeparator} />
+            <View style={styles.detailItem}>
+              <Ionicons name="location-outline" size={16} color="#757575" />
+              <Text style={styles.detailText}>{locationText || '-'}</Text>
+            </View>
+            {participantCount > 0 && (
+              <>
+                <View style={styles.detailSeparator} />
+                <TouchableOpacity 
+                  style={styles.detailItem}
+                  activeOpacity={0.6}
+                  onPress={openParticipantsModal}
+                >
+                  <Ionicons name="people-outline" size={16} color="#757575" />
+                  <Text style={styles.detailText}>
+                    <Text style={{ color: '#6B46C1', textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text> kişi katılacak
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.bottomSection}>
+        <TouchableOpacity style={styles.sendButton} onPress={() => setShareModalVisible(true)}>
+          <Ionicons name="paper-plane-outline" size={18} color="#6B46C1" />
+          <Text style={styles.sendButtonText}>Gönder</Text>
         </TouchableOpacity>
 
-        {setOpenMenuId && (
-          <View style={{ position: 'relative', zIndex: 100 }}>
-            <TouchableOpacity 
-              style={{ padding: 4 }}
-              onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-            >
-              <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textLight} />
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.spacer} />
+
+        <TouchableOpacity 
+          style={[styles.joinButton, isJoined && styles.joinedButton]} 
+          onPress={handleJoinToggle}
+        >
+          <Text style={styles.joinButtonText}>{isJoined ? 'Katıldın' : 'Katılacağım'}</Text>
+          <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />
+        </TouchableOpacity>
       </View>
-
-      <View style={styles.cardBody}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        
-        <View style={styles.detailsRow}>
-          <View style={styles.detailItem}>
-            <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
-            <Text style={styles.detailText}>{item.date}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="time-outline" size={16} color={Colors.primary} />
-            <Text style={styles.detailText}>{item.time}</Text>
-          </View>
-          {locationText ? (
-            <View style={styles.detailItem}>
-              <Ionicons name="location-outline" size={16} color={Colors.primary} />
-              <Text style={styles.detailText}>{locationText}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        <Text style={styles.descriptionText}>{item.description}</Text>
-      </View>
-
-      {!isOwner && (
-        <View style={styles.actionBar}>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.primaryBtn]} 
-            onPress={handleJoinPress}
-          >
-            <Ionicons name="checkmark-circle-outline" size={20} color="#FFF" style={{ marginRight: 6 }} />
-            <Text style={styles.primaryBtnText}>Katıl</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
@@ -131,33 +265,268 @@ export const EventCard = React.memo(({
           )}
         </View>
       )}
+
+      {/* Share Modal */}
+      <Modal
+        visible={shareModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShareModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.dismissOverlay} onPress={() => setShareModalVisible(false)} />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Etkinliği Gönder</Text>
+              <TouchableOpacity onPress={() => setShareModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={recentContacts}
+              keyExtractor={(c) => c.conversationId}
+              ListEmptyComponent={<Text style={styles.emptyText}>Henüz kimseyle sohbetiniz yok.</Text>}
+              renderItem={({ item: contact }) => (
+                <View style={styles.contactRow}>
+                  <View style={styles.contactInfo}>
+                    {contact.avatar ? (
+                      <Image source={{ uri: contact.avatar }} style={styles.contactAvatar} />
+                    ) : (
+                      <View style={styles.contactAvatarPlaceholder}>
+                        <Text style={styles.contactAvatarText}>{contact.name.charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.contactName}>{contact.name}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.sendActionBtn} onPress={() => handleShareToUser(contact.conversationId)}>
+                    <Text style={styles.sendActionBtnText}>Gönder</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Participants Modal */}
+      <Modal
+        visible={participantsModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeParticipantsModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.dismissOverlay} onPress={closeParticipantsModal} />
+          <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Katılanlar</Text>
+              <TouchableOpacity onPress={closeParticipantsModal}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={participantsList}
+              keyExtractor={(p, idx) => p.id || p._id || String(idx)}
+              ListEmptyComponent={<Text style={styles.emptyText}>Henüz kimse katılmadı.</Text>}
+              renderItem={({ item: p }) => (
+                <TouchableOpacity 
+                  style={styles.contactRow} 
+                  onPress={() => {
+                    closeParticipantsModal();
+                    if (onProfilePress && (p.id || p._id)) {
+                      onProfilePress(p.id || p._id);
+                    }
+                  }}
+                >
+                  <View style={styles.contactInfo}>
+                    {p.profileImage ? (
+                      <Image source={{ uri: p.profileImage }} style={styles.contactAvatar} />
+                    ) : (
+                      <View style={styles.contactAvatarPlaceholder}>
+                        <Text style={styles.contactAvatarText}>{(p.name || p.username || '?').charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View>
+                      <Text style={styles.contactName}>{p.name || 'İsimsiz Kullanıcı'}</Text>
+                      {p.username && <Text style={{ color: '#666', fontSize: 13 }}>@{p.username}</Text>}
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#CCC" />
+                </TouchableOpacity>
+              )}
+            />
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFF', borderRadius: 16, marginBottom: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#F0F2F5' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  ownerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  avatar: { width: 44, height: 44, borderRadius: 22, marginRight: 12 },
-  avatarPlaceholder: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  ownerText: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center' },
-  ownerName: { ...Typography.subtitle, fontWeight: '700' },
-  ownerUsername: { fontSize: 13, color: Colors.textLight, marginTop: 2 },
-  cardBody: { marginBottom: 12 },
-  eventImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 12 },
-  cardTitle: { ...Typography.header, fontSize: 18, marginBottom: 12, color: Colors.text },
-  detailsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
-  detailItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF4E5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  detailText: { fontSize: 13, color: '#E65100', marginLeft: 6, fontWeight: '600' },
-  descriptionText: { ...Typography.body, color: Colors.text, lineHeight: 22 },
-  actionBar: { flexDirection: 'row', marginTop: 8 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12 },
-  primaryBtn: { backgroundColor: Colors.primary },
-  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    marginBottom: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  topSection: {
+    flexDirection: 'row',
+  },
+  dateBox: {
+    width: 76,
+    height: 100,
+    backgroundColor: '#F9F5FF',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    paddingVertical: 12,
+  },
+  dateDay: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#6B46C1',
+    lineHeight: 36,
+  },
+  dateMonth: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B46C1',
+    marginTop: 2,
+  },
+  dateWeekday: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#9E9E9E',
+    marginTop: 8,
+    textTransform: 'uppercase',
+  },
+  infoBox: {
+    flex: 1,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  badge: {
+    borderWidth: 1,
+    borderColor: '#6B46C1',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B46C1',
+    letterSpacing: 0.5,
+  },
+  menuIcon: {
+    padding: 4,
+    marginRight: -8,
+    marginTop: -4,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 6,
+    lineHeight: 24,
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#757575',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 8,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailText: {
+    fontSize: 13,
+    color: '#757575',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  detailSeparator: {
+    width: 1,
+    height: 12,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginVertical: 16,
+  },
+  bottomSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E6E0F8',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  sendButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B46C1',
+    marginLeft: 6,
+  },
+  spacer: {
+    flex: 1,
+  },
+  joinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#7B61FF',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  joinedButton: {
+    backgroundColor: '#5E35B1',
+  },
+  joinButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
   dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
   dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
-  dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text }
+  dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  dismissOverlay: { ...StyleSheet.absoluteFillObject },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, minHeight: '40%', maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
+  contactRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  contactInfo: { flexDirection: 'row', alignItems: 'center' },
+  contactAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+  contactAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  contactAvatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  contactName: { fontSize: 16, fontWeight: '600', color: '#333' },
+  sendActionBtn: { backgroundColor: '#F9F5FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
+  sendActionBtnText: { color: '#6B46C1', fontWeight: '600', fontSize: 14 },
+  emptyText: { textAlign: 'center', color: '#999', marginTop: 20 }
 });

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, KeyboardAvoidingView, Platform, TextInput, Image, Keyboard, Alert, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, KeyboardAvoidingView, Platform, TextInput, Image, Keyboard, Alert, DeviceEventEmitter, Dimensions, LayoutAnimation, UIManager } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,17 +13,40 @@ import { useAppContext } from '../../context/AppContext';
 import { API_BASE_URL } from '../../constants/config';
 import { ListingCard } from '../../components/ListingCard';
 import { EventCard } from '../../components/EventCard';
+import { PostCard } from '../../components/PostCard';
 import { ReportModal } from '../../components/ReportModal';
 import { normalizeCity } from '../../utils/normalizeCity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TURKISH_CITIES } from '../../constants/cities';
+
+const MapPatternBackground = () => {
+  const windowWidth = Dimensions.get('window').width;
+  const windowHeight = Dimensions.get('window').height;
+  const cols = Math.ceil(windowWidth / 100);
+  const rows = Math.ceil(windowHeight / 100) + 2;
+  const totalItems = cols * rows;
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', opacity: 0.05, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }} pointerEvents="none">
+      {Array.from({ length: totalItems }).map((_, i) => (
+        <Ionicons key={i} name="map" size={80} color={Colors.primary} style={{ margin: 10, transform: [{ rotate: i % 2 === 0 ? '15deg' : '-15deg' }] }} />
+      ))}
+    </View>
+  );
+};
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { currentUser } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'matches' | 'events'>('matches');
+  const [activeTab, setActiveTab] = useState<'map' | 'matches' | 'events'>('map');
   
+  const [mapCityQuery, setMapCityQuery] = useState('');
+  const [selectedMapCity, setSelectedMapCity] = useState('');
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const [activeMapContentTab, setActiveMapContentTab] = useState<'listings' | 'posts' | 'events'>('listings');
+
   const [feed, setFeed] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,11 +81,35 @@ export default function DiscoverScreen() {
   const fetchFeed = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/feed?userId=${currentUser.id}`);
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setFeed(data.items || []);
-      }
+      const [feedRes, postsRes, eventsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/feed?userId=${currentUser.id}`),
+        fetch(`${API_BASE_URL}/posts/feed?userId=${currentUser.id}`),
+        fetch(`${API_BASE_URL}/events/feed?userId=${currentUser.id}`)
+      ]);
+      
+      const safeParse = async (res: Response) => {
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          console.warn('Matches Feed Parse Error:', text.slice(0, 100));
+          return { success: false, items: [] };
+        }
+      };
+
+      const feedData = await safeParse(feedRes);
+      const postsData = await safeParse(postsRes);
+      const eventsData = await safeParse(eventsRes);
+      
+      let combined: any[] = [];
+      if (feedData.success && feedData.items) combined.push(...feedData.items);
+      if (postsData.success && postsData.items) combined.push(...postsData.items);
+      if (eventsData.success && eventsData.items) combined.push(...eventsData.items);
+      
+      // Sort combined array by createdAt (newest first)
+      combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      
+      setFeed(combined);
     } catch (err) {
       // ignore
     } finally {
@@ -448,6 +499,52 @@ export default function DiscoverScreen() {
     return sameCity && isListing && isHost;
   });
 
+  const mapFeed = feed.filter(item => {
+    if (!selectedMapCity) return false;
+    const normalizedQuery = normalizeCity(selectedMapCity);
+    
+    let itemCity = '';
+    let matchesContent = false;
+
+    if (item.type === 'event') {
+      if (activeMapContentTab !== 'events') return false;
+      itemCity = item.city || '';
+    } else if (item.type === 'post') {
+      if (activeMapContentTab !== 'posts') return false;
+      itemCity = item.location || item.city || '';
+      if (!itemCity && item.content && normalizeCity(item.content).includes(normalizedQuery)) {
+        matchesContent = true;
+      }
+    } else if (item.type === 'listing' || item.isListing) {
+      if (activeMapContentTab !== 'listings') return false;
+      itemCity = item.city || item.location || item.ownerCity || (item.owner && item.owner.city) || '';
+    } else {
+      return false;
+    }
+    
+    if (matchesContent) return true;
+    if (!itemCity) return false;
+    return normalizeCity(itemCity) === normalizedQuery;
+  });
+
+  const normalizedMapQuery = normalizeCity(mapCityQuery);
+  const citySuggestions = (mapCityQuery.trim() && showCitySuggestions)
+    ? TURKISH_CITIES.filter(c => normalizeCity(c).includes(normalizedMapQuery))
+    : [];
+
+  const handleSelectMapCity = (city: string) => {
+    Keyboard.dismiss();
+    LayoutAnimation.configureNext({
+      duration: 300,
+      create: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+      update: { type: LayoutAnimation.Types.easeOut },
+      delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+    });
+    setMapCityQuery(city);
+    setSelectedMapCity(city);
+    setShowCitySuggestions(false);
+  };
+
   const renderSearchItem = ({ item }: { item: any }) => {
     const rawUsername = item.username || item.userName || item.handle || item.slug;
     const rawFullName = item.name || item.fullName;
@@ -527,6 +624,13 @@ export default function DiscoverScreen() {
         <>
           <View style={styles.tabContainer}>
         <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'map' && styles.activeTabButton]}
+          onPress={() => setActiveTab('map')}
+        >
+          <Text numberOfLines={1} style={[styles.tabText, activeTab === 'map' && styles.activeTabText]}>Harita</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
           style={[styles.tabButton, activeTab === 'matches' && styles.activeTabButton]}
           onPress={() => setActiveTab('matches')}
         >
@@ -578,7 +682,7 @@ export default function DiscoverScreen() {
           }
           showsVerticalScrollIndicator={false}
         />
-      ) : (
+      ) : activeTab === 'events' ? (
         <FlatList
           data={eventsFeed}
           keyExtractor={item => item.id}
@@ -605,7 +709,176 @@ export default function DiscoverScreen() {
             </View>
           }
         />
-      )}
+      ) : activeTab === 'map' ? (
+        <View style={{ flex: 1, backgroundColor: '#E8EAF6' }}>
+          <MapPatternBackground />
+          {!selectedMapCity ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              
+              <View style={{ width: '100%', backgroundColor: '#FFF', padding: 20, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 5, zIndex: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 16, textAlign: 'center' }}>Hangi şehri keşfetmek istersin?</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', borderRadius: 12, paddingHorizontal: 16, height: 50, marginBottom: 16 }}>
+                  <Ionicons name="location-outline" size={22} color={Colors.textLight} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 16, color: Colors.text, fontFamily: 'Outfit-Regular' }}
+                    placeholder="Şehir adı girin (Örn: İzmir)"
+                    placeholderTextColor={Colors.textLight}
+                    value={mapCityQuery}
+                    onChangeText={text => { setMapCityQuery(text); setShowCitySuggestions(true); }}
+                    onSubmitEditing={() => handleSelectMapCity(mapCityQuery)}
+                    returnKeyType="search"
+                  />
+                  {mapCityQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => { setMapCityQuery(''); handleSelectMapCity(''); }}>
+                      <Ionicons name="close-circle" size={22} color={Colors.textLight} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {showCitySuggestions && mapCityQuery.trim().length > 0 && (
+                  <View style={{ maxHeight: 200, backgroundColor: '#F9FAFB', borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
+                    {citySuggestions.length > 0 ? (
+                      <FlatList
+                        data={citySuggestions}
+                        keyExtractor={item => item}
+                        keyboardShouldPersistTaps="handled"
+                        renderItem={({ item }) => (
+                          <TouchableOpacity 
+                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: Colors.border }}
+                            onPress={() => handleSelectMapCity(item)}
+                          >
+                            <Text style={{ fontSize: 15, color: Colors.text }}>{item}</Text>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    ) : (
+                      <View style={{ padding: 14 }}>
+                        <Text style={{ fontSize: 15, color: Colors.textLight, textAlign: 'center' }}>Şehir bulunamadı.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                <TouchableOpacity 
+                  style={{ backgroundColor: Colors.primary, borderRadius: 12, height: 50, justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => handleSelectMapCity(mapCityQuery)}
+                >
+                  <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>Şehri Keşfet</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={{ padding: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: Colors.border, zIndex: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, elevation: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', borderRadius: 24, paddingHorizontal: 16, height: 48 }}>
+                  <Ionicons name="location-outline" size={20} color={Colors.textLight} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 15, color: Colors.text, fontFamily: 'Outfit-Regular' }}
+                    placeholder="Şehir adı girin"
+                    placeholderTextColor={Colors.textLight}
+                    value={mapCityQuery}
+                    onChangeText={text => { setMapCityQuery(text); setShowCitySuggestions(true); }}
+                    onSubmitEditing={() => handleSelectMapCity(mapCityQuery)}
+                    returnKeyType="search"
+                  />
+                  {mapCityQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => { setMapCityQuery(''); handleSelectMapCity(''); }}>
+                      <Ionicons name="close-circle" size={20} color={Colors.textLight} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {showCitySuggestions && mapCityQuery.trim().length > 0 && (
+                  <View style={{ maxHeight: 200, backgroundColor: '#F9FAFB', borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
+                    {citySuggestions.length > 0 ? (
+                      <FlatList
+                        data={citySuggestions}
+                        keyExtractor={item => item}
+                        keyboardShouldPersistTaps="handled"
+                        renderItem={({ item }) => (
+                          <TouchableOpacity 
+                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: Colors.border }}
+                            onPress={() => handleSelectMapCity(item)}
+                          >
+                            <Text style={{ fontSize: 15, color: Colors.text }}>{item}</Text>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    ) : (
+                      <View style={{ padding: 14 }}>
+                        <Text style={{ fontSize: 15, color: Colors.textLight, textAlign: 'center' }}>Şehir bulunamadı.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                <TouchableOpacity 
+                  style={{ marginTop: 12, backgroundColor: Colors.primary, borderRadius: 24, height: 44, justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => handleSelectMapCity(mapCityQuery)}
+                >
+                  <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 15 }}>Farklı Bir Şehir Ara</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16 }}>
+                <TouchableOpacity 
+                  style={{ flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeMapContentTab === 'listings' ? Colors.primary : 'transparent' }}
+                  onPress={() => setActiveMapContentTab('listings')}
+                >
+                  <Text style={{ fontWeight: activeMapContentTab === 'listings' ? 'bold' : 'normal', color: activeMapContentTab === 'listings' ? Colors.primary : Colors.textLight }}>İlanlar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{ flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeMapContentTab === 'posts' ? Colors.primary : 'transparent' }}
+                  onPress={() => setActiveMapContentTab('posts')}
+                >
+                  <Text style={{ fontWeight: activeMapContentTab === 'posts' ? 'bold' : 'normal', color: activeMapContentTab === 'posts' ? Colors.primary : Colors.textLight }}>Gönderiler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{ flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeMapContentTab === 'events' ? Colors.primary : 'transparent' }}
+                  onPress={() => setActiveMapContentTab('events')}
+                >
+                  <Text style={{ fontWeight: activeMapContentTab === 'events' ? 'bold' : 'normal', color: activeMapContentTab === 'events' ? Colors.primary : Colors.textLight }}>Etkinlikler</Text>
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                data={mapFeed}
+                keyExtractor={item => item.id}
+                contentContainerStyle={mapFeed.length === 0 ? styles.listEmpty : styles.listContent}
+                renderItem={({ item }) => {
+                  let cardContent;
+                  if (item.type === 'event') {
+                    cardContent = <EventCard item={item} currentUserId={currentUser?.id} openMenuId={openMenuPostId} setOpenMenuId={setOpenMenuPostId} onProfilePress={handleNavigateToProfile} onDeleteConfirm={confirmDeleteItem} onReportConfirm={handleReportConfirm} />;
+                  } else if (item.type === 'listing' || item.isListing) {
+                    cardContent = <ListingCard item={item} currentUserId={currentUser?.id} openMenuId={openMenuPostId} setOpenMenuId={setOpenMenuPostId} onProfilePress={handleNavigateToProfile} onDeleteConfirm={confirmDeleteItem} onReportConfirm={handleReportConfirm} />;
+                  } else {
+                    cardContent = <PostCard item={item} currentUserId={currentUser?.id} openMenuId={openMenuPostId} setOpenMenuId={setOpenMenuPostId} onProfilePress={handleNavigateToProfile} onCommentPress={openComments} onLikeToggle={handleLikeToggle} onDeleteConfirm={confirmDeleteItem} onReportConfirm={handleReportConfirm} />;
+                  }
+                  
+                  return (
+                    <View style={{ opacity: 0.95 }}>
+                      {cardContent}
+                    </View>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Ionicons name={
+                      activeMapContentTab === 'listings' ? "home-outline" : 
+                      activeMapContentTab === 'posts' ? "document-text-outline" : "calendar-outline"
+                    } size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+                    <Text style={styles.emptyTitle}>
+                      {activeMapContentTab === 'listings' && 'Bu şehirde henüz ilan yok.'}
+                      {activeMapContentTab === 'posts' && 'Bu şehirde henüz gönderi yok.'}
+                      {activeMapContentTab === 'events' && 'Bu şehirde henüz etkinlik yok.'}
+                    </Text>
+                  </View>
+                }
+              />
+            </>
+          )}
+        </View>
+      ) : null}
         </>
       ) : (
         <View style={styles.searchResultsContainer}>
