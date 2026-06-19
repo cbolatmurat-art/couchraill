@@ -244,6 +244,13 @@ export const EventCard = React.memo(({
       <View style={styles.divider} />
 
       <View style={styles.bottomSection}>
+        <TouchableOpacity style={styles.sendButton} onPress={() => setShareModalVisible(true)}>
+          <Ionicons name="paper-plane-outline" size={18} color="#6B46C1" />
+          <Text style={styles.sendButtonText}>Gönder</Text>
+        </TouchableOpacity>
+
+        <View style={styles.spacer} />
+
         <TouchableOpacity 
           style={[styles.joinButton, isJoined && styles.joinedButton]} 
           onPress={isJoined ? undefined : handleJoin}
@@ -252,22 +259,6 @@ export const EventCard = React.memo(({
           <Text style={styles.joinButtonText}>{isJoined ? 'Katılacaksın' : 'Katılacağım'}</Text>
           {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
         </TouchableOpacity>
-
-        <View style={styles.spacer} />
-
-        <View style={styles.actionIconsRow}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name={item.likedByCurrentUser ? "heart" : "heart-outline"} size={26} color={item.likedByCurrentUser ? "#E53935" : "#333"} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="chatbubble-outline" size={24} color="#333" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.iconButton} onPress={() => setShareModalVisible(true)}>
-            <Ionicons name="paper-plane-outline" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
       </View>
 
       {openMenuId === item.id && (
@@ -502,13 +493,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  actionIconsRow: {
+  sendButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    borderWidth: 1,
+    borderColor: '#E6E0F8',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  iconButton: {
-    padding: 2,
+  sendButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B46C1',
+    marginLeft: 6,
   },
   spacer: {
     flex: 1,
