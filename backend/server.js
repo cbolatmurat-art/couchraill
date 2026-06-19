@@ -5304,26 +5304,7 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
     console.error('[GET_EVENT_PARTICIPANTS_ERROR]', error.message);
     res.status(500).json({ success: false, error: 'Katılımcılar yüklenemedi.' });
   }
-});
 
-app.get('/api/debug-events', async (req, res) => {
-  try {
-    const { rows } = await query('SELECT * FROM event_interactions');
-    res.json({ success: true, count: rows.length, rows });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/debug-cleanup', async (req, res) => {
-  try {
-    await query(`DELETE FROM event_interactions WHERE id NOT IN (SELECT MIN(id) FROM event_interactions GROUP BY "eventId", "userId", type)`);
-    await query(`ALTER TABLE event_interactions ADD CONSTRAINT unique_event_user_type UNIQUE ("eventId", "userId", type)`);
-    res.json({ success: true });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
 
 app.get('/api/events/user/:userId', async (req, res) => {
   const { userId } = req.params;
