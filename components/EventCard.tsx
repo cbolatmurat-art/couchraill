@@ -246,7 +246,7 @@ export const EventCard = React.memo(({
       <View style={styles.bottomSection}>
         <TouchableOpacity style={styles.sendButton} onPress={() => setShareModalVisible(true)}>
           <Ionicons name="paper-plane-outline" size={18} color="#6B46C1" />
-          <Text style={styles.sendButtonText}>Gönder</Text>
+          <Text style={styles.sendButtonText}>Davet Et</Text>
         </TouchableOpacity>
 
         <View style={styles.spacer} />
