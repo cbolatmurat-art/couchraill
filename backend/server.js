@@ -5304,7 +5304,7 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
     console.error('[GET_EVENT_PARTICIPANTS_ERROR]', error.message);
     res.status(500).json({ success: false, error: 'Katılımcılar yüklenemedi.' });
   }
-
+});
 
 app.get('/api/events/user/:userId', async (req, res) => {
   const { userId } = req.params;
