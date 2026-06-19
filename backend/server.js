@@ -5246,6 +5246,10 @@ app.post('/api/events/:eventId/join', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
+    if (error.code === '23505') {
+      // Unique constraint violation, means already joined
+      return res.json({ success: true, message: 'Zaten katıldınız.' });
+    }
     console.error('[POST_EVENT_JOIN_ERROR]', error.message);
     res.status(500).json({ success: false, error: 'Katılım başarısız.' });
   }

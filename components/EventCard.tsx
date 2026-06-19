@@ -80,24 +80,20 @@ export const EventCard = React.memo(({
     });
   };
 
-  const handleJoinToggle = async () => {
+  const handleJoin = async () => {
     if (!currentUser) {
       Alert.alert('Hata', 'Katılmak için giriş yapmalısınız.');
       return;
     }
-    const previousJoined = isJoined;
+    if (isJoined) return;
+
     const previousCount = participantCount;
-
-    setIsJoined(!previousJoined);
-    setParticipantCount(prev => previousJoined ? Math.max(0, prev - 1) : prev + 1);
-
-    if (previousJoined) {
-      setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== (currentUser.id || currentUser._id)));
-    }
+    setIsJoined(true);
+    setParticipantCount(prev => prev + 1);
 
     try {
       const response = await fetch(`${API_BASE_URL}/events/${item.id}/join`, {
-        method: previousJoined ? 'DELETE' : 'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id || currentUser._id })
       });
@@ -106,7 +102,32 @@ export const EventCard = React.memo(({
         throw new Error(data.error || 'Katılım işlemi başarısız');
       }
     } catch (error) {
-      setIsJoined(previousJoined);
+      setIsJoined(false);
+      setParticipantCount(previousCount);
+      Alert.alert('Hata', 'İşlem gerçekleştirilemedi, lütfen tekrar deneyin.');
+    }
+  };
+
+  const handleCancelJoin = async () => {
+    if (!currentUser) return;
+    
+    const previousCount = participantCount;
+    setIsJoined(false);
+    setParticipantCount(prev => Math.max(0, prev - 1));
+    setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== (currentUser.id || currentUser._id)));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/join`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id || currentUser._id })
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'İptal işlemi başarısız');
+      }
+    } catch (error) {
+      setIsJoined(true);
       setParticipantCount(previousCount);
       Alert.alert('Hata', 'İşlem gerçekleştirilemedi, lütfen tekrar deneyin.');
     }
@@ -232,15 +253,21 @@ export const EventCard = React.memo(({
 
         <TouchableOpacity 
           style={[styles.joinButton, isJoined && styles.joinedButton]} 
-          onPress={handleJoinToggle}
+          onPress={isJoined ? undefined : handleJoin}
+          activeOpacity={isJoined ? 1 : 0.6}
         >
-          <Text style={styles.joinButtonText}>{isJoined ? 'Katıldın' : 'Katılacağım'}</Text>
-          <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />
+          <Text style={styles.joinButtonText}>{isJoined ? 'Katılacaksın' : 'Katılacağım'}</Text>
+          {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
         </TouchableOpacity>
       </View>
 
       {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
+          {isJoined && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { handleCancelJoin(); if (setOpenMenuId) setOpenMenuId(null); }}>
+              <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Katılmaktan Vazgeç</Text>
+            </TouchableOpacity>
+          )}
           {isOwner && (
             <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>

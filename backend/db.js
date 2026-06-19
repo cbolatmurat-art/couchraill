@@ -311,6 +311,27 @@ const initDB = async () => {
       )
     `);
 
+    // Clean up duplicates gracefully
+    try {
+      await client.query(`
+        DELETE FROM event_interactions
+        WHERE id NOT IN (
+          SELECT MIN(id)
+          FROM event_interactions
+          GROUP BY "eventId", "userId", type
+        )
+      `);
+    } catch (err) {
+      // Ignore error if not supported by pg-mem
+    }
+
+    // Add unique constraint gracefully
+    try {
+      await client.query('ALTER TABLE event_interactions ADD CONSTRAINT unique_event_user_type UNIQUE ("eventId", "userId", type);');
+    } catch (err) {
+      // Ignore error if constraint already exists or not supported by pg-mem
+    }
+
     // Reports
     await client.query(`
       CREATE TABLE IF NOT EXISTS reports (
