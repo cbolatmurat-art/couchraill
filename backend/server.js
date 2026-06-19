@@ -5111,13 +5111,13 @@ app.get('/api/events/feed', async (req, res) => {
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       WHERE p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
-    `, [resolvedCurrentUserId]);
+    `, [resolvedCurrentUserId || null]);
 
     const normalizedEvents = events.map(e => normalizeEvent(e, resolvedCurrentUserId));
     res.json({ success: true, items: normalizedEvents, events: normalizedEvents });
   } catch (error) {
-    console.error('[GET_EVENTS_FEED_ERROR]', error.message);
-    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', items: [], events: [] });
+    console.error('[GET_EVENTS_FEED_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', items: [], events: [], details: error.message });
   }
 });
 
@@ -5149,13 +5149,13 @@ app.get('/api/events', async (req, res) => {
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       WHERE p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
-    `, [resolvedCurrentUserId]);
+    `, [resolvedCurrentUserId || null]);
 
     const normalizedEvents = events.map(e => normalizeEvent(e, resolvedCurrentUserId));
     res.json({ success: true, items: normalizedEvents, events: normalizedEvents });
   } catch (error) {
-    console.error('[GET_EVENTS_ERROR]', error.message);
-    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', items: [], events: [] });
+    console.error('[GET_EVENTS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', items: [], events: [], details: error.message });
   }
 });
 
@@ -5389,8 +5389,8 @@ app.get('/api/events/user/:userId', async (req, res) => {
     const normalizedEvents = events.map(e => normalizeEvent(e, resolvedCurrentUserId));
     res.json({ success: true, events: normalizedEvents });
   } catch (error) {
-    console.error('[GET_USER_EVENTS_ERROR]', error.message);
-    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', events: [] });
+    console.error('[GET_USER_EVENTS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', events: [], details: error.message });
   }
 });
 
