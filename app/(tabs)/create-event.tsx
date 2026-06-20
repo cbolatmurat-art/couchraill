@@ -48,6 +48,7 @@ export default function CreateEventScreen() {
   const [toast, setToast] = useState<{visible: boolean, message: string, type: 'success'|'error'}>({visible: false, message: '', type: 'success'});
   const [toastAnim] = useState(new Animated.Value(-100));
   const [sheetAnim] = useState(new Animated.Value(400));
+  const [coOrgSheetAnim] = useState(new Animated.Value(800));
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ visible: true, message, type });
@@ -170,6 +171,11 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
   const openCoOrganizerModal = async () => {
     setMenuVisible(false);
     setShowCoOrganizerModal(true);
+    Animated.timing(coOrgSheetAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
     try {
       const res = await fetch(`${API_BASE_URL}/social/friends/${currentUser?.id || currentUser?._id}`);
       const data = await res.json();
@@ -179,6 +185,16 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
     } catch (e) {
       console.warn('Failed to load friends:', e);
     }
+  };
+
+  const closeCoOrganizerModal = () => {
+    Animated.timing(coOrgSheetAnim, {
+      toValue: 800,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowCoOrganizerModal(false);
+    });
   };
 
   const closeFullPicker = () => {
@@ -573,13 +589,13 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
       </KeyboardAvoidingView>
 
       {/* Co-Organizer Selection Modal */}
-      <Modal visible={showCoOrganizerModal} animationType="slide" transparent={true} onRequestClose={() => setShowCoOrganizerModal(false)}>
+      <Modal visible={showCoOrganizerModal} animationType="fade" transparent={true} onRequestClose={closeCoOrganizerModal}>
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.dismissOverlay} onPress={() => setShowCoOrganizerModal(false)} />
-          <View style={[styles.modalContent, { height: '80%' }]}>
+          <TouchableOpacity style={styles.dismissOverlay} onPress={closeCoOrganizerModal} />
+          <Animated.View style={[styles.modalContent, { height: '80%', transform: [{ translateY: coOrgSheetAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Organizatör Ekle</Text>
-              <TouchableOpacity onPress={() => setShowCoOrganizerModal(false)}>
+              <TouchableOpacity onPress={closeCoOrganizerModal}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
@@ -624,7 +640,13 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                 );
               }}
             />
-          </View>
+            <TouchableOpacity 
+              style={[styles.createButton, { marginTop: 16, marginBottom: insets.bottom || 16 }]} 
+              onPress={closeCoOrganizerModal}
+            >
+              <Text style={styles.createButtonText}>Seçilenleri Ekle</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </Modal>
 
