@@ -108,6 +108,25 @@ export const EventCard = React.memo(({
     }
   };
 
+  const handleRemoveParticipant = async (participantId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/participants/${participantId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser?.id || currentUser?._id })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== participantId));
+        setParticipantCount(prev => Math.max(0, prev - 1));
+      } else {
+        Alert.alert('Hata', data.error || 'Katılımcı çıkarılamadı.');
+      }
+    } catch (error) {
+      Alert.alert('Hata', 'Bir sorun oluştu.');
+    }
+  };
+
   const handleCancelJoin = async () => {
     if (!currentUser) return;
     
@@ -260,29 +279,7 @@ export const EventCard = React.memo(({
                   </Text>
                 </TouchableOpacity>
               </>
-            ) : null}
           </View>
-
-          {owner && ownerId && (
-            <View style={styles.organizerContainer}>
-              <Text style={styles.organizerLabel}>Organizatör</Text>
-              <TouchableOpacity 
-                style={styles.organizerProfileRow}
-                onPress={() => onProfilePress ? onProfilePress(ownerId) : router.push(`/user/${ownerId}`)}
-                activeOpacity={0.7}
-              >
-                {owner.profileImage ? (
-                  <Image source={{ uri: owner.profileImage }} style={styles.organizerAvatar} />
-                ) : (
-                  <View style={styles.organizerAvatarPlaceholder}>
-                    <Ionicons name="person" size={12} color="#FFF" />
-                  </View>
-                )}
-                <Text style={styles.organizerName} numberOfLines={1}>{owner.fullName || owner.name || 'İsimsiz'}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
         </View>
       </View>
 
@@ -412,12 +409,31 @@ export const EventCard = React.memo(({
                         <Text style={styles.contactAvatarText}>{(p.name || p.username || '?').charAt(0).toUpperCase()}</Text>
                       </View>
                     )}
-                    <View>
-                      <Text style={styles.contactName}>{p.name || 'İsimsiz Kullanıcı'}</Text>
-                      {p.username && <Text style={{ color: '#666', fontSize: 13 }}>@{p.username}</Text>}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contactName} numberOfLines={1}>{p.name || 'İsimsiz Kullanıcı'}</Text>
+                      {p.username && <Text style={{ color: '#666', fontSize: 13 }} numberOfLines={1}>@{p.username}</Text>}
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#CCC" />
+                  
+                  {p.isOrganizer ? (
+                    <View style={styles.organizerBadge}>
+                      <Text style={styles.organizerBadgeText}>Organizatör</Text>
+                    </View>
+                  ) : isOwner && String(p.id || p._id) !== String(currentUser?.id || currentUser?._id) ? (
+                    <TouchableOpacity 
+                      style={styles.removeParticipantBtn} 
+                      onPress={() => {
+                        Alert.alert('Emin misiniz?', 'Kullanıcıyı etkinlikten çıkarmak istediğinize emin misiniz?', [
+                          { text: 'İptal', style: 'cancel' },
+                          { text: 'Çıkar', style: 'destructive', onPress: () => handleRemoveParticipant(p.id || p._id) }
+                        ]);
+                      }}
+                    >
+                      <Text style={styles.removeParticipantText}>Çıkar</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={20} color="#CCC" />
+                  )}
                 </TouchableOpacity>
               )}
             />
@@ -616,11 +632,15 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
   contactRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  contactInfo: { flexDirection: 'row', alignItems: 'center' },
+  contactInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 },
   contactAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
   contactAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   contactAvatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   contactName: { fontSize: 16, fontWeight: '600', color: '#333' },
+  organizerBadge: { backgroundColor: '#F0E6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  organizerBadgeText: { color: '#6B46C1', fontSize: 12, fontWeight: '600' },
+  removeParticipantBtn: { backgroundColor: '#FFEBEE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  removeParticipantText: { color: '#FF3B30', fontSize: 12, fontWeight: '600' },
   sendActionBtn: { backgroundColor: '#F9F5FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
   sendActionBtnText: { color: '#6B46C1', fontWeight: '600', fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#999', marginTop: 20 }

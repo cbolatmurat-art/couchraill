@@ -5306,6 +5306,17 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
   const { userId } = req.query;
   
   try {
+    const { rows: eventRows } = await query(`SELECT "userId", "authorId" FROM posts WHERE id = $1`, [eventId]);
+    let organizerId = null;
+    let organizer = null;
+    if (eventRows.length > 0) {
+      organizerId = eventRows[0].authorId || eventRows[0].userId;
+      const { rows: orgRows } = await query(`SELECT id, name, username, "profileImage" FROM users WHERE id = $1`, [organizerId]);
+      if (orgRows.length > 0) {
+        organizer = orgRows[0];
+      }
+    }
+
     const { rows } = await query(`
       SELECT DISTINCT u.id, u.name, u.username, u."profileImage", ei."createdAt"
       FROM event_interactions ei
@@ -5314,12 +5325,22 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
       ORDER BY ei."createdAt" ASC
     `, [eventId]);
     
-    // Filter out current user and remove duplicates
     let filteredRows = [];
     const seen = new Set();
     
+    if (organizer) {
+      seen.add(organizer.id);
+      filteredRows.push({
+        id: organizer.id,
+        name: organizer.name,
+        username: organizer.username,
+        profileImage: organizer.profileImage,
+        isOrganizer: true
+      });
+    }
+
     for (const r of rows) {
-      if (userId && r.id === userId) continue;
+      if (userId && r.id === userId && r.id !== organizerId) continue;
       if (!seen.has(r.id)) {
         seen.add(r.id);
         filteredRows.push({
@@ -5335,6 +5356,29 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
   } catch (error) {
     console.error('[GET_EVENT_PARTICIPANTS_ERROR]', error.message);
     res.status(500).json({ success: false, error: 'Katılımcılar yüklenemedi.' });
+  }
+});
+
+app.delete('/api/events/:eventId/participants/:participantId', async (req, res) => {
+  const { eventId, participantId } = req.params;
+  const { userId } = req.body; // should be the organizer
+  
+  if (!userId || !participantId) return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
+  
+  try {
+    const { rows: eventRows } = await query(`SELECT "userId", "authorId" FROM posts WHERE id = $1`, [eventId]);
+    if (eventRows.length === 0) return res.status(404).json({ success: false, error: 'Etkinlik bulunamadı.' });
+    
+    const organizerId = eventRows[0].authorId || eventRows[0].userId;
+    if (String(organizerId) !== String(userId)) {
+      return res.status(403).json({ success: false, error: 'Bunu yapmaya yetkiniz yok.' });
+    }
+    
+    await query(`DELETE FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, participantId]);
+    res.json({ success: true, message: 'Kullanıcı etkinlikten çıkarıldı.' });
+  } catch (error) {
+    console.error('[DELETE_EVENT_PARTICIPANT_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Kullanıcı çıkarılamadı.' });
   }
 });
 
