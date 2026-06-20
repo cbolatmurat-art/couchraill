@@ -5329,15 +5329,27 @@ app.post('/api/events/:eventId/waitlist', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Zaten etkinliğe katıldınız.' });
     }
 
+    // Güvenli tablo oluşturma kontrolü (migration)
+    await query(`
+      CREATE TABLE IF NOT EXISTS event_waitlists (
+        id VARCHAR(255) PRIMARY KEY,
+        "eventId" VARCHAR(255) NOT NULL,
+        "userId" VARCHAR(255) NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "notifiedAt" TIMESTAMP NULL,
+        UNIQUE("eventId", "userId")
+      )
+    `);
+
     const id = `wl_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     await query(`INSERT INTO event_waitlists (id, "eventId", "userId") VALUES ($1, $2, $3)`, [id, eventId, userId]);
     res.json({ success: true, message: 'Bekleme listesine eklendiniz.' });
   } catch (error) {
     if (error.code === '23505') {
-      return res.json({ success: true, message: 'Zaten bekleme listesindesiniz.' });
+      return res.json({ success: true, message: 'Zaten bildirim isteği oluşturuldu.' });
     }
     console.error('[POST_WAITLIST_ERROR]', error.message);
-    res.status(500).json({ success: false, error: error.message || 'Bekleme listesine eklenemedi.' });
+    res.status(500).json({ success: false, error: 'Bildirim isteği oluşturulamadı. Lütfen tekrar deneyin.' });
   }
 });
 
