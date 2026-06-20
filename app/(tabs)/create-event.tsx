@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, Modal, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -21,12 +21,27 @@ export default function CreateEventScreen() {
   const [city, setCity] = useState(currentUser?.city || currentUser?.livingCity || '');
   const [district, setDistrict] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [startDT, setStartDT] = useState({ day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' });
+  const [endDT, setEndDT] = useState({ day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' });
+  const [fullPickerConfig, setFullPickerConfig] = useState<{
+    visible: boolean;
+    isEnd: boolean;
+    tempDT: typeof startDT;
+  }>({
+    visible: false,
+    isEnd: false,
+    tempDT: { day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' }
+  });
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showEndDate, setShowEndDate] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [showParticipantLimit, setShowParticipantLimit] = useState(false);
+  const [participantLimit, setParticipantLimit] = useState('');
+  const [menuVisible, setMenuVisible] = useState(false);
   const [toast, setToast] = useState<{visible: boolean, message: string, type: 'success'|'error'}>({visible: false, message: '', type: 'success'});
   const [toastAnim] = useState(new Animated.Value(-100));
+  const [sheetAnim] = useState(new Animated.Value(400));
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ visible: true, message, type });
@@ -48,24 +63,99 @@ export default function CreateEventScreen() {
     }, 2000);
   };
 
-  const handleDateChange = (text: string) => {
-    let cleaned = text.replace(/[^0-9]/g, '');
-    if (cleaned.length > 8) cleaned = cleaned.slice(0, 8);
-    let formatted = cleaned;
-    if (cleaned.length >= 5) formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
-    else if (cleaned.length >= 3) formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-    setDate(formatted);
+  const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const months = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => (currentYear + i).toString());
+  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+const ITEM_HEIGHT = 40;
+const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) => {
+  const scrollViewRef = useRef<ScrollView>(null);
+  
+  useEffect(() => {
+    const idx = data.indexOf(selectedValue);
+    if (idx > 0 && scrollViewRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: false });
+      }, 50);
+    }
+  }, []);
+
+  const handleScroll = (event: any) => {
+    const y = event.nativeEvent.contentOffset.y;
+    const index = Math.min(Math.max(0, Math.round(y / ITEM_HEIGHT)), data.length - 1);
+    if (data[index] && data[index] !== selectedValue) {
+      onValueChange(data[index]);
+    }
   };
 
-  const handleTimeChange = (text: string) => {
-    let cleaned = text.replace(/[^0-9]/g, '');
-    if (cleaned.length > 4) cleaned = cleaned.slice(0, 4);
-    let formatted = cleaned;
-    if (cleaned.length >= 3) formatted = `${cleaned.slice(0, 2)}:${cleaned.slice(2)}`;
-    setTime(formatted);
+  return (
+    <View style={{ height: ITEM_HEIGHT * 5, width, overflow: 'hidden' }}>
+      <View style={{ position: 'absolute', top: ITEM_HEIGHT * 2, height: ITEM_HEIGHT, width: '100%', backgroundColor: 'rgba(255, 122, 0, 0.1)', borderRadius: 8 }} />
+      <ScrollView
+        ref={scrollViewRef}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={ITEM_HEIGHT}
+        decelerationRate="fast"
+        onMomentumScrollEnd={handleScroll}
+        onScrollEndDrag={handleScroll}
+        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
+      >
+        {data.map((item: string, index: number) => {
+          const isSelected = item === selectedValue;
+          return (
+            <View key={index} style={{ height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: isSelected ? 18 : 15, color: isSelected ? '#000' : '#999', fontWeight: isSelected ? 'bold' : 'normal' }}>{item}</Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
+
+
+
+  const openFullPicker = (isEnd: boolean) => {
+    const currentDT = isEnd ? endDT : startDT;
+    setFullPickerConfig({
+      visible: true,
+      isEnd,
+      tempDT: {
+        day: currentDT.day === 'GG' ? days[0] : currentDT.day,
+        month: currentDT.month === 'AA' ? months[0] : currentDT.month,
+        year: currentDT.year === 'YYYY' ? years[0] : currentDT.year,
+        hour: currentDT.hour === 'SS' ? hours[12] : currentDT.hour,
+        minute: currentDT.minute === 'DD' ? minutes[0] : currentDT.minute,
+      }
+    });
+    Animated.timing(sheetAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
+  const closeFullPicker = () => {
+    Animated.timing(sheetAnim, {
+      toValue: 400,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setFullPickerConfig(prev => ({ ...prev, visible: false }));
+    });
+  };
 
+  const confirmFullPicker = () => {
+    if (fullPickerConfig.isEnd) {
+      setEndDT(fullPickerConfig.tempDT);
+    } else {
+      setStartDT(fullPickerConfig.tempDT);
+    }
+    closeFullPicker();
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -102,7 +192,7 @@ export default function CreateEventScreen() {
           />
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Şehir</Text>
+            <Text style={styles.inputLabel}>Konum</Text>
             <CityPicker 
               selectedCity={city}
               onSelectCity={setCity}
@@ -125,26 +215,28 @@ export default function CreateEventScreen() {
             onChangeText={setNeighborhood}
           />
 
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Tarih"
-                placeholder="GG/AA/YYYY"
-                value={date}
-                onChangeText={handleDateChange}
-                keyboardType="numeric"
-                maxLength={10}
-              />
+          <View style={[styles.row, { zIndex: 100 }]}>
+            <View style={[styles.halfWidth, { zIndex: 101 }]}>
+              <Text style={styles.inputLabel}>Başlangıç Tarihi & Saati</Text>
+              <TouchableOpacity style={styles.datePickerBtn} onPress={() => openFullPicker(false)}>
+                <Text style={[styles.datePickerBtnText, startDT.day === 'GG' && {color: '#999'}]}>
+                  {startDT.day}/{startDT.month}/{startDT.year} {startDT.hour}:{startDT.minute}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color={Colors.text} />
+              </TouchableOpacity>
             </View>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Saat"
-                placeholder="SS:DD"
-                value={time}
-                onChangeText={handleTimeChange}
-                keyboardType="numeric"
-                maxLength={5}
-              />
+            <View style={[styles.halfWidth, { zIndex: 100 }]}>
+              {showEndDate && (
+                <>
+                  <Text style={styles.inputLabel}>Bitiş Tarihi & Saati</Text>
+                  <TouchableOpacity style={styles.datePickerBtn} onPress={() => openFullPicker(true)}>
+                    <Text style={[styles.datePickerBtnText, endDT.day === 'GG' && {color: '#999'}]}>
+                      {endDT.day}/{endDT.month}/{endDT.year} {endDT.hour}:{endDT.minute}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={18} color={Colors.text} />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 
@@ -156,16 +248,56 @@ export default function CreateEventScreen() {
             multiline
             numberOfLines={4}
           />
-          
-          <Pressable
-            onPress={async () => {
+
+          {isPaid && (
+            <View style={styles.paidBadgeContainer}>
+              <View style={styles.paidBadge}>
+                <View style={styles.paidBadgeDot} />
+                <Text style={styles.paidBadgeText}>Ücretli</Text>
+                <TouchableOpacity onPress={() => setIsPaid(false)} style={styles.paidBadgeClose}>
+                  <Ionicons name="close-circle" size={20} color="#FF9500" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {showParticipantLimit && (
+            <View style={styles.inputGroup}>
+              <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: 8}}>
+                <Text style={[styles.inputLabel, {marginBottom:0}]}>Katılımcı Limiti</Text>
+                <TouchableOpacity onPress={() => { setShowParticipantLimit(false); setParticipantLimit(''); }}>
+                  <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+              <Input
+                placeholder="Örn: 10"
+                value={participantLimit}
+                onChangeText={(text) => {
+                  const cleaned = text.replace(/[^0-9]/g, '');
+                  setParticipantLimit(cleaned);
+                }}
+                keyboardType="numeric"
+              />
+            </View>
+          )}
+
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={async () => {
               console.log("CREATE EVENT PRESSED");
+              const datePayload = (startDT.day !== 'GG' && startDT.month !== 'AA' && startDT.year !== 'YYYY') 
+                ? `${startDT.day}/${startDT.month}/${startDT.year}` 
+                : '';
+              const timePayload = (startDT.hour !== 'SS' && startDT.minute !== 'DD') 
+                ? `${startDT.hour}:${startDT.minute}` 
+                : '';
+
               const isTitleEmpty = !title?.trim();
               const isCityEmpty = !city?.trim();
               const isDistrictEmpty = !district?.trim();
               const isNeighborhoodEmpty = !neighborhood?.trim();
-              const isDateEmpty = !date?.trim();
-              const isTimeEmpty = !time?.trim();
+              const isDateEmpty = !datePayload.trim();
+              const isTimeEmpty = !timePayload.trim();
               const isDescriptionEmpty = !description?.trim();
 
               if (isTitleEmpty || isCityEmpty || isDistrictEmpty || isNeighborhoodEmpty || isDateEmpty || isTimeEmpty || isDescriptionEmpty) {
@@ -182,8 +314,10 @@ export default function CreateEventScreen() {
                   city: city.trim(),
                   district: district.trim(),
                   neighborhood: neighborhood.trim(),
-                  date: date.trim(),
-                  time: time.trim(),
+                  date: datePayload.trim(),
+                  time: timePayload.trim(),
+                  priceType: isPaid ? 'paid' : 'free',
+                  participantLimit: showParticipantLimit && participantLimit ? parseInt(participantLimit) : null,
                   description: description.trim(),
                   userId: currentUser?.id || currentUser?._id,
                   ownerId: currentUser?.id || currentUser?._id,
@@ -222,8 +356,13 @@ export default function CreateEventScreen() {
                   setTitle('');
                   setDistrict('');
                   setNeighborhood('');
-                  setDate('');
-                  setTime('');
+                  setStartDT({ day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' });
+                  setEndDT({ day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' });
+                  setShowEndDate(false);
+                  setIsPaid(false);
+                  setShowParticipantLimit(false);
+                  setParticipantLimit('');
+                  setMenuVisible(false);
                   setDescription('');
 
                   try {
@@ -268,19 +407,72 @@ export default function CreateEventScreen() {
                 setLoading(false);
               }
             }}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.createButton,
-              loading && styles.createButtonDisabled,
-              pressed && { opacity: 0.8 }
-            ]}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Text style={styles.createButtonText}>Oluştur</Text>
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.createButton,
+                loading && styles.createButtonDisabled,
+                pressed && { opacity: 0.8 }
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.createButtonText}>Oluştur</Text>
+              )}
+            </Pressable>
+
+            {(!showEndDate || !isPaid || !showParticipantLimit) && (
+              <View style={{ position: 'relative', zIndex: 99 }}>
+                <Pressable
+                  onPress={() => setMenuVisible(!menuVisible)}
+                  style={({ pressed }) => [
+                    styles.addEndDateButton,
+                    pressed && { opacity: 0.8 }
+                  ]}
+                >
+                  <Ionicons name="add" size={24} color="#FFF" />
+                </Pressable>
+
+                {menuVisible && (
+                  <View style={styles.dropdownMenu}>
+                    {!showEndDate && (
+                      <TouchableOpacity 
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setShowEndDate(true);
+                          setMenuVisible(false);
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>Bitiş Tarihi & Saati Ekle</Text>
+                      </TouchableOpacity>
+                    )}
+                    {!isPaid && (
+                      <TouchableOpacity 
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setIsPaid(true);
+                          setMenuVisible(false);
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>Ücretli Olarak İşaretle</Text>
+                      </TouchableOpacity>
+                    )}
+                    {!showParticipantLimit && (
+                      <TouchableOpacity 
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setShowParticipantLimit(true);
+                          setMenuVisible(false);
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>Katılımcı Limiti Ekle</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
             )}
-          </Pressable>
+          </View>
           
           <View style={{ height: Math.max(insets.bottom + 20, 60) }} />
         </ScrollView>
@@ -301,6 +493,31 @@ export default function CreateEventScreen() {
           <Text style={styles.toastText}>{toast.message}</Text>
         </Animated.View>
       )}
+
+      <Modal visible={fullPickerConfig.visible} transparent animationType="fade" onRequestClose={closeFullPicker}>
+        <View style={styles.bottomSheetOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeFullPicker} />
+          <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: sheetAnim }] }]}>
+            <View style={styles.bottomSheetHeader}>
+              <TouchableOpacity onPress={closeFullPicker}><Text style={styles.cancelBtn}>İptal</Text></TouchableOpacity>
+              <Text style={styles.bottomSheetTitle}>{fullPickerConfig.isEnd ? 'Bitiş Tarihi & Saati Seç' : 'Başlangıç Tarihi & Saati Seç'}</Text>
+              <TouchableOpacity onPress={confirmFullPicker}><Text style={styles.confirmBtn}>Tamam</Text></TouchableOpacity>
+            </View>
+            <View style={styles.pickerColumnsContainer}>
+              <WheelColumn data={days} selectedValue={fullPickerConfig.tempDT.day} onValueChange={(v: string) => setFullPickerConfig(prev => ({...prev, tempDT: {...prev.tempDT, day: v}}))} width={50} />
+              <Text style={styles.pickerSeparator}>/</Text>
+              <WheelColumn data={months} selectedValue={fullPickerConfig.tempDT.month} onValueChange={(v: string) => setFullPickerConfig(prev => ({...prev, tempDT: {...prev.tempDT, month: v}}))} width={50} />
+              <Text style={styles.pickerSeparator}>/</Text>
+              <WheelColumn data={years} selectedValue={fullPickerConfig.tempDT.year} width={65} onValueChange={(v: string) => setFullPickerConfig(prev => ({...prev, tempDT: {...prev.tempDT, year: v}}))} />
+              <View style={{ width: 10 }} />
+              <WheelColumn data={hours} selectedValue={fullPickerConfig.tempDT.hour} onValueChange={(v: string) => setFullPickerConfig(prev => ({...prev, tempDT: {...prev.tempDT, hour: v}}))} width={50} />
+              <Text style={styles.pickerSeparator}>:</Text>
+              <WheelColumn data={minutes} selectedValue={fullPickerConfig.tempDT.minute} onValueChange={(v: string) => setFullPickerConfig(prev => ({...prev, tempDT: {...prev.tempDT, minute: v}}))} width={50} />
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -320,19 +537,64 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   closeBtn: { padding: 4 },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 12,
+  },
   createButton: {
     backgroundColor: '#FF7A00', // Turuncu
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
     zIndex: 10,
+    flex: 1,
+  },
+  addEndDateButton: {
+    backgroundColor: '#FF7A00', // Turuncu
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    bottom: 64,
+    right: 0,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingVertical: 4,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
   },
   createButtonDisabled: {
     backgroundColor: Colors.border,
@@ -341,6 +603,62 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  datePickerBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFF',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  datePickerBtnText: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContainer: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  bottomSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  cancelBtn: { color: '#999', fontSize: 16, fontWeight: '600' },
+  confirmBtn: { color: '#FF7A00', fontSize: 16, fontWeight: 'bold' },
+  bottomSheetTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  pickerColumnsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  pickerSeparator: {
+    fontSize: 20,
+    color: '#999',
+    fontWeight: '300',
+    marginHorizontal: 2,
   },
   content: { flex: 1, padding: 16 },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -379,5 +697,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
+  },
+  paidBadgeContainer: {
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    marginTop: -8,
+  },
+  paidBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 149, 0, 0.3)',
+  },
+  paidBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF9500',
+    marginRight: 6,
+  },
+  paidBadgeText: {
+    color: '#FF9500',
+    fontWeight: '600',
+    fontSize: 14,
+    marginRight: 8,
+  },
+  paidBadgeClose: {
+    marginLeft: 4,
   }
 });

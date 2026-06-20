@@ -194,9 +194,9 @@ export const EventCard = React.memo(({
         
         <View style={styles.infoBox}>
           <View style={styles.infoHeader}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>ETKİNLİK</Text>
-            </View>
+            <Text style={[styles.cardTitle, { marginBottom: 0, flex: 1, paddingRight: 8 }]} numberOfLines={2}>
+              {item.title}
+            </Text>
             {setOpenMenuId && (
               <View style={{ position: 'relative', zIndex: 100 }}>
                 <TouchableOpacity 
@@ -209,7 +209,6 @@ export const EventCard = React.memo(({
             )}
           </View>
 
-          <Text style={styles.cardTitle}>{item.title}</Text>
           <Text style={styles.descriptionText} numberOfLines={2}>{item.description}</Text>
 
           <View style={styles.detailsRow}>
@@ -222,7 +221,28 @@ export const EventCard = React.memo(({
               <Ionicons name="location-outline" size={16} color="#757575" />
               <Text style={styles.detailText}>{locationText || '-'}</Text>
             </View>
-            {participantCount > 0 && (
+            <View style={styles.detailSeparator} />
+            <View style={styles.detailItem}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.priceType === 'paid' ? '#FF9500' : '#34C759', marginLeft: 2 }} />
+              <Text style={[styles.detailText, { fontWeight: '600', color: item.priceType === 'paid' ? '#FF9500' : '#34C759' }]}>
+                {item.priceType === 'paid' ? 'Ücretli' : 'Ücretsiz'}
+              </Text>
+            </View>
+            {item.participantLimit ? (
+              <>
+                <View style={styles.detailSeparator} />
+                <TouchableOpacity 
+                  style={styles.detailItem}
+                  activeOpacity={0.6}
+                  onPress={openParticipantsModal}
+                >
+                  <Ionicons name="people-outline" size={16} color="#757575" />
+                  <Text style={styles.detailText}>
+                    Kontenjan: <Text style={{ color: participantCount >= item.participantLimit ? '#FF3B30' : '#6B46C1', textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text>/{item.participantLimit}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : participantCount > 0 ? (
               <>
                 <View style={styles.detailSeparator} />
                 <TouchableOpacity 
@@ -236,7 +256,7 @@ export const EventCard = React.memo(({
                   </Text>
                 </TouchableOpacity>
               </>
-            )}
+            ) : null}
           </View>
         </View>
       </View>
@@ -252,11 +272,17 @@ export const EventCard = React.memo(({
         <View style={styles.spacer} />
 
         <TouchableOpacity 
-          style={[styles.joinButton, isJoined && styles.joinedButton]} 
-          onPress={isJoined ? undefined : handleJoin}
-          activeOpacity={isJoined ? 1 : 0.6}
+          style={[
+            styles.joinButton, 
+            isJoined && styles.joinedButton,
+            !isJoined && item.participantLimit && participantCount >= item.participantLimit && styles.disabledButton
+          ]} 
+          onPress={isJoined ? undefined : (item.participantLimit && participantCount >= item.participantLimit ? undefined : handleJoin)}
+          activeOpacity={isJoined || (item.participantLimit && participantCount >= item.participantLimit) ? 1 : 0.6}
         >
-          <Text style={styles.joinButtonText}>{isJoined ? 'Katılacaksın' : 'Katılacağım'}</Text>
+          <Text style={styles.joinButtonText}>
+            {isJoined ? 'Katılacaksın' : (!isJoined && item.participantLimit && participantCount >= item.participantLimit ? 'Kontenjan dolu' : 'Katılacağım')}
+          </Text>
           {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
         </TouchableOpacity>
       </View>
@@ -430,19 +456,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
   },
-  badge: {
-    borderWidth: 1,
-    borderColor: '#6B46C1',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#6B46C1',
-    letterSpacing: 0.5,
-  },
+
   menuIcon: {
     padding: 4,
     marginRight: -8,
@@ -521,6 +535,9 @@ const styles = StyleSheet.create({
   },
   joinedButton: {
     backgroundColor: '#5E35B1',
+  },
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
   },
   joinButtonText: {
     fontSize: 13,

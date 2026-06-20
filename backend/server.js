@@ -80,6 +80,7 @@ const normalizeEvent = (e, currentUserId) => ({
   likedByCurrentUser: e.likedByCurrentUser === true || e.isLikedByMe === true,
   commentsCount: parseInt(e.commentsCount || e.commentCount || 0),
   participantCount: parseInt(e.participantCount || 0),
+  participantLimit: e.participantLimit ? parseInt(e.participantLimit) : null,
   isJoined: e.isJoined === true || false
 });
 
@@ -5157,9 +5158,9 @@ app.post('/api/events', async (req, res) => {
       INSERT INTO posts (
         id, "userId", "authorId", type, title, city, district, neighborhood, 
         date, time, "eventDate", "eventTime", description, text,
-        "createdAt", "updatedAt", "isActive", "isTest", status
+        "createdAt", "updatedAt", "isActive", "isTest", status, "participantLimit"
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     `, [
       eventId,
       targetUserId,
@@ -5179,7 +5180,8 @@ app.post('/api/events', async (req, res) => {
       createdAt,
       true,
       false,
-      'active'
+      'active',
+      req.body.participantLimit ? parseInt(req.body.participantLimit) : null
     ]);
 
     const { rows: eventRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
@@ -5238,6 +5240,18 @@ app.post('/api/events/:eventId/join', async (req, res) => {
   if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
   
   try {
+    const { rows: postRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
+    if (postRows.length === 0) return res.status(404).json({ success: false, error: 'Etkinlik bulunamadı.' });
+    
+    const event = postRows[0];
+    
+    const { rows: participantsRows } = await query(`SELECT COUNT(DISTINCT "userId") as count FROM event_interactions WHERE "eventId" = $1 AND type = 'join'`, [eventId]);
+    const currentCount = parseInt(participantsRows[0].count);
+    
+    if (event.participantLimit && currentCount >= event.participantLimit) {
+      return res.status(400).json({ success: false, error: 'Kontenjan dolu.' });
+    }
+
     const { rows: existing } = await query(`SELECT * FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, userId]);
     if (existing.length > 0) return res.json({ success: true, message: 'Zaten katıldınız.' });
 

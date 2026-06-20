@@ -508,6 +508,7 @@ const initDB = async () => {
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventTime" VARCHAR(50)`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
       `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`,
