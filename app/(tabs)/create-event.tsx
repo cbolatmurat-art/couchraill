@@ -60,7 +60,22 @@ export default function CreateEventScreen() {
       }).start(() => {
         setToast(prev => ({ ...prev, visible: false }));
       });
-    }, 2000);
+    }, 3000);
+  };
+
+  const formatTitleCase = (text: string) => {
+    if (!text) return text;
+    
+    // Sadece düz boşluklardan bölelim, \n (yeni satır) karakterleri bozulmasın.
+    return text.split(' ').map(word => {
+      if (!word) return '';
+      // Eğer kelime içinde \n varsa, onu da koruyarak baş harf büyütme yapalım.
+      if (word.includes('\n')) {
+        const parts = word.split('\n');
+        return parts.map(p => p ? p.charAt(0).toLocaleUpperCase('tr-TR') + p.slice(1).toLocaleLowerCase('tr-TR') : '').join('\n');
+      }
+      return word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1).toLocaleLowerCase('tr-TR');
+    }).join(' ');
   };
 
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
@@ -120,15 +135,23 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
 
   const openFullPicker = (isEnd: boolean) => {
     const currentDT = isEnd ? endDT : startDT;
+    
+    const now = new Date();
+    const dDay = String(now.getDate()).padStart(2, '0');
+    const dMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const dYear = String(now.getFullYear());
+    const dHour = String(now.getHours()).padStart(2, '0');
+    const dMinute = String(now.getMinutes()).padStart(2, '0');
+
     setFullPickerConfig({
       visible: true,
       isEnd,
       tempDT: {
-        day: currentDT.day === 'GG' ? days[0] : currentDT.day,
-        month: currentDT.month === 'AA' ? months[0] : currentDT.month,
-        year: currentDT.year === 'YYYY' ? years[0] : currentDT.year,
-        hour: currentDT.hour === 'SS' ? hours[12] : currentDT.hour,
-        minute: currentDT.minute === 'DD' ? minutes[0] : currentDT.minute,
+        day: currentDT.day === 'GG' ? dDay : currentDT.day,
+        month: currentDT.month === 'AA' ? dMonth : currentDT.month,
+        year: currentDT.year === 'YYYY' ? dYear : currentDT.year,
+        hour: currentDT.hour === 'SS' ? dHour : currentDT.hour,
+        minute: currentDT.minute === 'DD' ? dMinute : currentDT.minute,
       }
     });
     Animated.timing(sheetAnim, {
@@ -187,7 +210,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
             label="Etkinlik Başlığı"
             placeholder="Örn: Hafta Sonu Kamp Macerası"
             value={title}
-            onChangeText={setTitle}
+            onChangeText={(text) => setTitle(formatTitleCase(text))}
             maxLength={100}
           />
 
@@ -205,14 +228,14 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
             label="İlçe"
             placeholder="Örn: Merkez, Kadıköy, Çankaya..."
             value={district}
-            onChangeText={setDistrict}
+            onChangeText={(text) => setDistrict(formatTitleCase(text))}
           />
 
           <Input
             label="Mahalle"
             placeholder="Örn: Yenice Mah., Caferağa Mah..."
             value={neighborhood}
-            onChangeText={setNeighborhood}
+            onChangeText={(text) => setNeighborhood(formatTitleCase(text))}
           />
 
           <View style={[styles.row, { zIndex: 100 }]}>
@@ -244,7 +267,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
             label="Açıklama"
             placeholder="Etkinlik hakkında detaylar (Nerede buluşacağız, ne yapacağız?)"
             value={description}
-            onChangeText={setDescription}
+            onChangeText={(text) => setDescription(formatTitleCase(text))}
             multiline
             numberOfLines={4}
           />
@@ -304,6 +327,25 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                 showToast("Lütfen tüm zorunlu alanları doldurun.", "error");
                 return;
               }
+
+              try {
+                const parts = datePayload.split('/');
+                const timeParts = timePayload.split(':');
+                if (parts.length === 3 && timeParts.length === 2) {
+                  const eventDateObj = new Date(
+                    parseInt(parts[2]),
+                    parseInt(parts[1]) - 1,
+                    parseInt(parts[0]),
+                    parseInt(timeParts[0]),
+                    parseInt(timeParts[1])
+                  );
+                  
+                  if (eventDateObj < new Date()) {
+                    showToast("Başlangıç tarihi ve saati geçmiş bir zaman olamaz.", "error");
+                    return;
+                  }
+                }
+              } catch(e) {}
 
               setLoading(true);
               try {
