@@ -31,8 +31,15 @@ const { migrateData } = require('./migrate');
 
 // Initialize PostgreSQL and Migrate existing data if needed
 initDB()
-  .then(() => {
+  .then(async () => {
     console.log(`[STARTUP] API Started. BuildID: ${process.env.RAILWAY_DEPLOYMENT_ID || BUILD_ID}`);
+    try {
+      const { query } = require('./db');
+      await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`);
+      console.log('[STARTUP] Verified participantLimit column exists in posts table.');
+    } catch (colErr) {
+      console.error('[STARTUP] Could not verify/add participantLimit column:', colErr.message);
+    }
     return migrateData();
   })
   .catch(console.error);
@@ -5151,6 +5158,13 @@ app.post('/api/events', async (req, res) => {
       if (year.length === 2) year = '20' + year; // 26 -> 2026
       safeDate = `${year}-${month}-${day}`;
     }
+  }
+
+  try {
+    const { query: pgQuery } = require('./db');
+    await pgQuery(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`);
+  } catch (e) {
+    console.error("Fallback ALTER TABLE participantLimit failed in post events:", e.message);
   }
 
   try {
