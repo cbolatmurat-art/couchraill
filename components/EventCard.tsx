@@ -332,7 +332,7 @@ export const EventCard = React.memo(({
           activeOpacity={isJoined || (item.participantLimit && participantCount >= item.participantLimit) ? 1 : 0.6}
         >
           <Text style={styles.joinButtonText}>
-            {isJoined ? 'Katılacaksın' : (!isJoined && item.participantLimit && participantCount >= item.participantLimit ? 'Kontenjan dolu' : 'Katılacağım')}
+            {isJoined ? 'Katılacaksın' : (!isJoined && item.participantLimit && participantCount >= item.participantLimit ? 'Kontenjan dolu' : 'Katıl')}
           </Text>
           {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
         </TouchableOpacity>
