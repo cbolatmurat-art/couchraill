@@ -5297,6 +5297,24 @@ app.post('/api/events/:eventId/join', async (req, res) => {
   }
 });
 
+app.post('/api/events/:eventId/waitlist', async (req, res) => {
+  const { eventId } = req.params;
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+
+  try {
+    const id = `wl_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    await query(`INSERT INTO event_waitlists (id, "eventId", "userId") VALUES ($1, $2, $3)`, [id, eventId, userId]);
+    res.json({ success: true, message: 'Bekleme listesine eklendiniz.' });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.json({ success: true, message: 'Zaten bekleme listesindesiniz.' });
+    }
+    console.error('[POST_WAITLIST_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Bekleme listesine eklenemedi.' });
+  }
+});
+
 app.delete('/api/events/:eventId/join', async (req, res) => {
   const { eventId } = req.params;
   const { userId } = req.body;
@@ -5304,6 +5322,47 @@ app.delete('/api/events/:eventId/join', async (req, res) => {
   
   try {
     await query(`DELETE FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, userId]);
+    
+    // Check waitlist
+    const { rows: postRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
+    if (postRows.length > 0) {
+      const event = postRows[0];
+      if (event.participantLimit) {
+        const { rows: pRows } = await query(`
+          SELECT COUNT(DISTINCT ei."userId") as count 
+          FROM event_interactions ei 
+          WHERE ei."eventId" = $1 AND ei.type = 'join' 
+            AND ei."userId" != $2
+            AND ($3::jsonb IS NULL OR jsonb_typeof($3::jsonb) != 'array' OR NOT ($3::jsonb @> jsonb_build_array(ei."userId"::text)))
+        `, [eventId, event.authorId || event.userId || '', event.coOrganizers ? JSON.stringify(event.coOrganizers) : null]);
+        
+        const count = parseInt(pRows[0].count || 0);
+        const availableSlots = event.participantLimit - count;
+        
+        if (availableSlots > 0) {
+          const { rows: waitlistRows } = await query(`
+            SELECT id, "userId" FROM event_waitlists 
+            WHERE "eventId" = $1 AND "notifiedAt" IS NULL 
+            ORDER BY "createdAt" ASC
+            LIMIT $2
+          `, [eventId, availableSlots]);
+          
+          const db = readDB();
+          for (const wl of waitlistRows) {
+            await query(`UPDATE event_waitlists SET "notifiedAt" = CURRENT_TIMESTAMP WHERE id = $1`, [wl.id]);
+            createAndSendSocialNotification(db, {
+              userId: wl.userId,
+              type: 'system',
+              title: 'Kontenjan Açıldı!',
+              message: 'Katılmak istediğiniz etkinlikte kontenjan açıldı. Kontrol edin.',
+              relatedId: eventId,
+              relatedType: 'event'
+            });
+          }
+        }
+      }
+    }
+    
     res.json({ success: true });
   } catch (error) {
     console.error('[DELETE_EVENT_JOIN_ERROR]', error.message);
@@ -5411,15 +5470,53 @@ app.delete('/api/events/:eventId/participants/:participantId', async (req, res) 
   if (!userId || !participantId) return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
   
   try {
-    const { rows: eventRows } = await query(`SELECT "userId", "authorId" FROM posts WHERE id = $1`, [eventId]);
+    const { rows: eventRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
     if (eventRows.length === 0) return res.status(404).json({ success: false, error: 'Etkinlik bulunamadı.' });
     
-    const organizerId = eventRows[0].authorId || eventRows[0].userId;
+    const event = eventRows[0];
+    const organizerId = event.authorId || event.userId;
     if (String(organizerId) !== String(userId)) {
       return res.status(403).json({ success: false, error: 'Bunu yapmaya yetkiniz yok.' });
     }
     
     await query(`DELETE FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, participantId]);
+
+    // Check waitlist
+    if (event.participantLimit) {
+      const { rows: pRows } = await query(`
+        SELECT COUNT(DISTINCT ei."userId") as count 
+        FROM event_interactions ei 
+        WHERE ei."eventId" = $1 AND ei.type = 'join' 
+          AND ei."userId" != $2
+          AND ($3::jsonb IS NULL OR jsonb_typeof($3::jsonb) != 'array' OR NOT ($3::jsonb @> jsonb_build_array(ei."userId"::text)))
+      `, [eventId, event.authorId || event.userId || '', event.coOrganizers ? JSON.stringify(event.coOrganizers) : null]);
+      
+      const count = parseInt(pRows[0].count || 0);
+      const availableSlots = event.participantLimit - count;
+      
+      if (availableSlots > 0) {
+        const { rows: waitlistRows } = await query(`
+          SELECT id, "userId" FROM event_waitlists 
+          WHERE "eventId" = $1 AND "notifiedAt" IS NULL 
+          ORDER BY "createdAt" ASC
+          LIMIT $2
+        `, [eventId, availableSlots]);
+        
+        const db = readDB();
+        for (const wl of waitlistRows) {
+          await query(`UPDATE event_waitlists SET "notifiedAt" = CURRENT_TIMESTAMP WHERE id = $1`, [wl.id]);
+          createAndSendSocialNotification(db, {
+            userId: wl.userId,
+            type: 'system',
+            title: 'Kontenjan Açıldı!',
+            message: 'Katılmak istediğiniz etkinlikte kontenjan açıldı. Kontrol edin.',
+            relatedId: eventId,
+            relatedType: 'event'
+          });
+        }
+      }
+    }
+
     res.json({ success: true, message: 'Kullanıcı etkinlikten çıkarıldı.' });
   } catch (error) {
     console.error('[DELETE_EVENT_PARTICIPANT_ERROR]', error.message);

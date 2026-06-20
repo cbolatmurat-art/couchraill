@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert, Platform } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -45,6 +45,8 @@ export const EventCard = React.memo(({
 
   const initialParticipants = Array.isArray(item.participants) ? item.participants : [];
   const [participantsList, setParticipantsList] = useState<any[]>(initialParticipants);
+  const [removeConfirmParticipantId, setRemoveConfirmParticipantId] = useState<string | null>(null);
+  const [notifyModalVisible, setNotifyModalVisible] = useState(false);
 
   React.useEffect(() => {
     setIsJoined(item.isJoined || false);
@@ -176,7 +178,26 @@ export const EventCard = React.memo(({
     } catch (error) {
       setIsJoined(true);
       setParticipantCount(previousCount);
-      Alert.alert('Hata', 'İşlem gerçekleştirilemedi, lütfen tekrar deneyin.');
+      Alert.alert('Hata', 'Bir sorun oluştu.');
+    }
+  };
+
+  const handleNotifyMe = async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id || currentUser._id })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setNotifyModalVisible(true);
+      } else {
+        Alert.alert('Bilgi', data.message || data.error || 'İşlem başarısız.');
+      }
+    } catch (error) {
+      Alert.alert('Hata', 'Bir sorun oluştu.');
     }
   };
 
@@ -244,6 +265,13 @@ export const EventCard = React.memo(({
             <Text style={[styles.cardTitle, { marginBottom: 0, flex: 1, paddingRight: 8 }]} numberOfLines={2}>
               {item.title}
             </Text>
+
+            {!isOwner && item.participantLimit && participantCount >= item.participantLimit && (
+              <View style={styles.fullBadge}>
+                <Text style={styles.fullBadgeText}>Kontenjan Dolu</Text>
+              </View>
+            )}
+
             {setOpenMenuId && (
               <View style={{ position: 'relative', zIndex: 100 }}>
                 <TouchableOpacity 
@@ -322,20 +350,31 @@ export const EventCard = React.memo(({
 
         <View style={styles.spacer} />
 
-        <TouchableOpacity 
-          style={[
-            styles.joinButton, 
-            isJoined && styles.joinedButton,
-            !isJoined && item.participantLimit && participantCount >= item.participantLimit && styles.disabledButton
-          ]} 
-          onPress={isJoined ? undefined : (item.participantLimit && participantCount >= item.participantLimit ? undefined : handleJoin)}
-          activeOpacity={isJoined || (item.participantLimit && participantCount >= item.participantLimit) ? 1 : 0.6}
-        >
-          <Text style={styles.joinButtonText}>
-            {isJoined ? 'Katılacaksın' : (!isJoined && item.participantLimit && participantCount >= item.participantLimit ? 'Kontenjan dolu' : 'Katıl')}
-          </Text>
-          {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
-        </TouchableOpacity>
+        {isOwner && item.participantLimit && participantCount >= item.participantLimit ? (
+          <View style={[styles.joinButton, { backgroundColor: '#F0F0F0' }]}>
+            <Text style={[styles.joinButtonText, { color: '#666' }]}>Kontenjan Doldu</Text>
+          </View>
+        ) : (
+          <TouchableOpacity 
+            style={[
+              styles.joinButton, 
+              isJoined && styles.joinedButton
+            ]} 
+            onPress={
+              isJoined 
+                ? undefined 
+                : (item.participantLimit && participantCount >= item.participantLimit 
+                    ? handleNotifyMe
+                    : handleJoin)
+            }
+            activeOpacity={isJoined ? 1 : 0.6}
+          >
+            <Text style={styles.joinButtonText}>
+              {isJoined ? 'Katılacaksın' : (!isJoined && item.participantLimit && participantCount >= item.participantLimit ? 'Bildirim Al' : 'Katıl')}
+            </Text>
+            {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
+          </TouchableOpacity>
+        )}
       </View>
 
       {openMenuId === item.id && (
@@ -469,11 +508,9 @@ export const EventCard = React.memo(({
                   ) : isOwner && String(p.id || p._id) !== String(currentUser?.id || currentUser?._id) ? (
                     <TouchableOpacity 
                       style={styles.removeParticipantBtn} 
-                      onPress={() => {
-                        Alert.alert('Emin misiniz?', 'Kullanıcıyı etkinlikten çıkarmak istediğinize emin misiniz?', [
-                          { text: 'İptal', style: 'cancel' },
-                          { text: 'Çıkar', style: 'destructive', onPress: () => handleRemoveParticipant(p.id || p._id) }
-                        ]);
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setRemoveConfirmParticipantId(p.id || p._id);
                       }}
                     >
                       <Text style={styles.removeParticipantText}>Çıkar</Text>
@@ -487,6 +524,44 @@ export const EventCard = React.memo(({
           </Animated.View>
         </View>
       </Modal>
+
+      <Modal visible={!!removeConfirmParticipantId} transparent animationType="fade" onRequestClose={() => setRemoveConfirmParticipantId(null)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmContainer}>
+            <Text style={styles.confirmTitle}>Katılımcıyı Çıkar</Text>
+            <Text style={styles.confirmDesc}>Bu kullanıcıyı etkinlikten çıkarmak istediğinize emin misiniz?</Text>
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity style={styles.confirmCancelBtn} onPress={() => setRemoveConfirmParticipantId(null)}>
+                <Text style={styles.confirmCancelText}>Vazgeç</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmActionBtn} onPress={() => {
+                if (removeConfirmParticipantId) {
+                  handleRemoveParticipant(removeConfirmParticipantId);
+                  setRemoveConfirmParticipantId(null);
+                }
+              }}>
+                <Text style={styles.confirmActionText}>Çıkar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={notifyModalVisible} transparent animationType="fade" onRequestClose={() => setNotifyModalVisible(false)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmContainer}>
+            <Ionicons name="notifications-outline" size={32} color="#6B46C1" style={{ marginBottom: 16 }} />
+            <Text style={styles.confirmTitle}>Bildirim Al</Text>
+            <Text style={styles.confirmDesc}>Etkinlikte kontenjan açıldığında bildirim gönderilecektir.</Text>
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity style={[styles.confirmActionBtn, { backgroundColor: '#6B46C1', width: '100%' }]} onPress={() => setNotifyModalVisible(false)}>
+                <Text style={styles.confirmActionText}>Tamam</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 });
@@ -690,5 +765,16 @@ const styles = StyleSheet.create({
   removeParticipantText: { color: '#FF3B30', fontSize: 12, fontWeight: '600' },
   sendActionBtn: { backgroundColor: '#F9F5FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
   sendActionBtnText: { color: '#6B46C1', fontWeight: '600', fontSize: 14 },
-  emptyText: { textAlign: 'center', color: '#999', marginTop: 20 }
+  emptyText: { textAlign: 'center', color: '#999', marginTop: 20 },
+  confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  confirmContainer: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, width: '85%', maxWidth: 340, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 10 },
+  confirmTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 12, textAlign: 'center' },
+  confirmDesc: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+  confirmBtnRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 12 },
+  confirmCancelBtn: { flex: 1, paddingVertical: 12, backgroundColor: '#F0F0F0', borderRadius: 12, alignItems: 'center' },
+  confirmCancelText: { color: '#666', fontSize: 15, fontWeight: '600' },
+  confirmActionBtn: { flex: 1, paddingVertical: 12, backgroundColor: '#FF3B30', borderRadius: 12, alignItems: 'center' },
+  confirmActionText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  fullBadge: { backgroundColor: '#FFF0F0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, alignSelf: 'center' },
+  fullBadgeText: { color: '#FF3B30', fontSize: 10, fontWeight: 'bold' }
 });
