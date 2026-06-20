@@ -5303,6 +5303,32 @@ app.post('/api/events/:eventId/waitlist', async (req, res) => {
   if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
 
   try {
+    const { rows: postRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
+    if (postRows.length === 0) return res.status(404).json({ success: false, error: 'Etkinlik bulunamadı.' });
+    
+    const event = postRows[0];
+    if (String(event.userId || event.authorId) === String(userId)) {
+      return res.status(400).json({ success: false, error: 'Etkinlik sahibi bekleme listesine eklenemez.' });
+    }
+
+    const { rows: pRows } = await query(`
+      SELECT COUNT(DISTINCT ei."userId") as count 
+      FROM event_interactions ei 
+      WHERE ei."eventId" = $1 AND ei.type = 'join' 
+        AND ei."userId" != $2
+        AND ($3::jsonb IS NULL OR jsonb_typeof($3::jsonb) != 'array' OR NOT ($3::jsonb @> jsonb_build_array(ei."userId"::text)))
+    `, [eventId, event.authorId || event.userId || '', event.coOrganizers ? JSON.stringify(event.coOrganizers) : null]);
+    
+    const count = parseInt(pRows[0].count || 0);
+    if (!event.participantLimit || count < event.participantLimit) {
+      return res.status(400).json({ success: false, error: 'Kontenjan dolu değil, doğrudan katılabilirsiniz.' });
+    }
+
+    const { rows: joinedRows } = await query(`SELECT id FROM event_interactions WHERE "eventId" = $1 AND "userId" = $2 AND type = 'join'`, [eventId, userId]);
+    if (joinedRows.length > 0) {
+      return res.status(400).json({ success: false, error: 'Zaten etkinliğe katıldınız.' });
+    }
+
     const id = `wl_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     await query(`INSERT INTO event_waitlists (id, "eventId", "userId") VALUES ($1, $2, $3)`, [id, eventId, userId]);
     res.json({ success: true, message: 'Bekleme listesine eklendiniz.' });
@@ -5311,7 +5337,7 @@ app.post('/api/events/:eventId/waitlist', async (req, res) => {
       return res.json({ success: true, message: 'Zaten bekleme listesindesiniz.' });
     }
     console.error('[POST_WAITLIST_ERROR]', error.message);
-    res.status(500).json({ success: false, error: 'Bekleme listesine eklenemedi.' });
+    res.status(500).json({ success: false, error: error.message || 'Bekleme listesine eklenemedi.' });
   }
 });
 
