@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, Modal, Animated, Image, TextInput, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
@@ -39,6 +39,12 @@ export default function CreateEventScreen() {
   const [showParticipantLimit, setShowParticipantLimit] = useState(false);
   const [participantLimit, setParticipantLimit] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
+  
+  const [showCoOrganizerModal, setShowCoOrganizerModal] = useState(false);
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCoOrganizers, setSelectedCoOrganizers] = useState<string[]>([]);
+
   const [toast, setToast] = useState<{visible: boolean, message: string, type: 'success'|'error'}>({visible: false, message: '', type: 'success'});
   const [toastAnim] = useState(new Animated.Value(-100));
   const [sheetAnim] = useState(new Animated.Value(400));
@@ -159,6 +165,20 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
       duration: 300,
       useNativeDriver: true,
     }).start();
+  };
+
+  const openCoOrganizerModal = async () => {
+    setMenuVisible(false);
+    setShowCoOrganizerModal(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/social/friends/${currentUser?.id || currentUser?._id}`);
+      const data = await res.json();
+      if (data.success && data.friends) {
+        setFriendsList(data.friends);
+      }
+    } catch (e) {
+      console.warn('Failed to load friends:', e);
+    }
   };
 
   const closeFullPicker = () => {
@@ -304,6 +324,31 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
             </View>
           )}
 
+          {selectedCoOrganizers.length > 0 && (
+            <View style={styles.inputGroup}>
+              <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: 8}}>
+                <Text style={[styles.inputLabel, {marginBottom:0}]}>Ek Organizatörler</Text>
+                <TouchableOpacity onPress={() => setSelectedCoOrganizers([])}>
+                  <Text style={{color: '#FF3B30', fontSize: 12, fontWeight: '600'}}>Temizle</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8}}>
+                {selectedCoOrganizers.map(id => {
+                  const friend = friendsList.find(f => f.id === id);
+                  if (!friend) return null;
+                  return (
+                    <View key={id} style={{backgroundColor: '#F0E6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: 'row', alignItems: 'center'}}>
+                      <Text style={{color: '#6B46C1', fontSize: 13, fontWeight: '600'}}>{friend.name || friend.username}</Text>
+                      <TouchableOpacity onPress={() => setSelectedCoOrganizers(prev => prev.filter(p => p !== id))} style={{marginLeft: 6}}>
+                        <Ionicons name="close-circle" size={16} color="#6B46C1" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <View style={styles.actionRow}>
             <Pressable
               onPress={async () => {
@@ -360,6 +405,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                   time: timePayload.trim(),
                   priceType: isPaid ? 'paid' : 'free',
                   participantLimit: showParticipantLimit && participantLimit ? parseInt(participantLimit) : null,
+                  coOrganizers: selectedCoOrganizers,
                   description: description.trim(),
                   userId: currentUser?.id || currentUser?._id,
                   ownerId: currentUser?.id || currentUser?._id,
@@ -510,6 +556,12 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                         <Text style={styles.dropdownItemText}>Katılımcı Limiti Ekle</Text>
                       </TouchableOpacity>
                     )}
+                    <TouchableOpacity 
+                      style={styles.dropdownItem}
+                      onPress={openCoOrganizerModal}
+                    >
+                      <Text style={styles.dropdownItemText}>Organizatör Ekle</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -519,6 +571,62 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
           <View style={{ height: Math.max(insets.bottom + 20, 60) }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Co-Organizer Selection Modal */}
+      <Modal visible={showCoOrganizerModal} animationType="slide" transparent={true} onRequestClose={() => setShowCoOrganizerModal(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.dismissOverlay} onPress={() => setShowCoOrganizerModal(false)} />
+          <View style={[styles.modalContent, { height: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Organizatör Ekle</Text>
+              <TouchableOpacity onPress={() => setShowCoOrganizerModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ backgroundColor: '#F0F0F0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="search" size={18} color="#999" />
+              <TextInput 
+                style={{ flex: 1, marginLeft: 8, fontSize: 16 }}
+                placeholder="Arkadaş ara..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+            <FlatList
+              data={friendsList.filter(f => (f.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (f.username || '').toLowerCase().includes(searchQuery.toLowerCase()))}
+              keyExtractor={item => item.id}
+              ListEmptyComponent={<Text style={styles.emptyText}>Arkadaş bulunamadı.</Text>}
+              renderItem={({ item: friend }) => {
+                const isSelected = selectedCoOrganizers.includes(friend.id);
+                return (
+                  <TouchableOpacity 
+                    style={styles.contactRow}
+                    onPress={() => {
+                      if (isSelected) {
+                        setSelectedCoOrganizers(prev => prev.filter(id => id !== friend.id));
+                      } else {
+                        setSelectedCoOrganizers(prev => [...prev, friend.id]);
+                      }
+                    }}
+                  >
+                    <View style={styles.contactInfo}>
+                      {friend.profileImage ? (
+                        <Image source={{ uri: friend.profileImage }} style={styles.contactAvatar} />
+                      ) : (
+                        <View style={styles.contactAvatarPlaceholder}>
+                          <Text style={styles.contactAvatarText}>{(friend.name || friend.username || '?').charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.contactName}>{friend.name || friend.username}</Text>
+                    </View>
+                    <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={24} color={isSelected ? Colors.primary : "#CCC"} />
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {toast.visible && (
         <Animated.View style={[

@@ -510,6 +510,7 @@ const initDB = async () => {
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`,
       `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`,
+      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "coOrganizers" JSONB DEFAULT '[]'`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
       `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`,

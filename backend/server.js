@@ -37,6 +37,7 @@ initDB()
       const { query } = require('./db');
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`);
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`);
+      await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "coOrganizers" JSONB DEFAULT '[]'`);
       console.log('[STARTUP] Verified DB columns exist in posts table.');
     } catch (colErr) {
       console.error('[STARTUP] Could not verify/add DB columns:', colErr.message);
@@ -90,6 +91,7 @@ const normalizeEvent = (e, currentUserId) => ({
   participantCount: parseInt(e.participantCount || 0),
   participantLimit: e.participantLimit ? parseInt(e.participantLimit) : null,
   priceType: e.priceType || 'free',
+  coOrganizers: (typeof e.coOrganizers === 'string' ? JSON.parse(e.coOrganizers || '[]') : e.coOrganizers) || [],
   isJoined: e.isJoined === true || false
 });
 
@@ -5175,9 +5177,9 @@ app.post('/api/events', async (req, res) => {
       INSERT INTO posts (
         id, "userId", "authorId", type, title, city, district, neighborhood, 
         date, time, "eventDate", "eventTime", description, text,
-        "createdAt", "updatedAt", "isActive", "isTest", status, "participantLimit", "priceType"
+        "createdAt", "updatedAt", "isActive", "isTest", status, "participantLimit", "priceType", "coOrganizers"
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
     `, [
       eventId,
       targetUserId,
@@ -5199,7 +5201,8 @@ app.post('/api/events', async (req, res) => {
       false,
       'active',
       req.body.participantLimit ? parseInt(req.body.participantLimit) : null,
-      req.body.priceType || 'free'
+      req.body.priceType || 'free',
+      req.body.coOrganizers ? JSON.stringify(req.body.coOrganizers) : '[]'
     ]);
 
     const { rows: eventRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
@@ -5306,14 +5309,31 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
   const { userId } = req.query;
   
   try {
-    const { rows: eventRows } = await query(`SELECT "userId", "authorId" FROM posts WHERE id = $1`, [eventId]);
+    const { rows: eventRows } = await query(`SELECT "userId", "authorId", "coOrganizers" FROM posts WHERE id = $1`, [eventId]);
     let organizerId = null;
     let organizer = null;
+    let coOrganizersData = [];
+
     if (eventRows.length > 0) {
       organizerId = eventRows[0].authorId || eventRows[0].userId;
       const { rows: orgRows } = await query(`SELECT id, name, username, "profileImage" FROM users WHERE id = $1`, [organizerId]);
       if (orgRows.length > 0) {
         organizer = orgRows[0];
+      }
+
+      let coOrganizerIds = [];
+      try {
+        coOrganizerIds = typeof eventRows[0].coOrganizers === 'string' ? JSON.parse(eventRows[0].coOrganizers) : (eventRows[0].coOrganizers || []);
+      } catch (e) {}
+
+      if (coOrganizerIds.length > 0) {
+        const placeholders = coOrganizerIds.map((_, i) => `$${i + 1}`).join(',');
+        const { rows: coOrgRows } = await query(`SELECT id, name, username, "profileImage" FROM users WHERE id IN (${placeholders})`, coOrganizerIds);
+        coOrganizersData = coOrgRows.map(row => ({
+          ...row,
+          isOrganizer: true,
+          isCoOrganizer: true
+        }));
       }
     }
 
@@ -5335,12 +5355,30 @@ app.get('/api/events/:eventId/participants', async (req, res) => {
         name: organizer.name,
         username: organizer.username,
         profileImage: organizer.profileImage,
-        isOrganizer: true
+        isOrganizer: true,
+        isMainOrganizer: true
       });
     }
 
+    for (const coOrg of coOrganizersData) {
+      if (!seen.has(coOrg.id)) {
+        seen.add(coOrg.id);
+        filteredRows.push({
+          id: coOrg.id,
+          name: coOrg.name,
+          username: coOrg.username,
+          profileImage: coOrg.profileImage,
+          isOrganizer: true,
+          isCoOrganizer: true
+        });
+      }
+    }
+
     for (const r of rows) {
-      if (userId && r.id === userId && r.id !== organizerId) continue;
+      if (userId && r.id === userId && r.id !== organizerId && !seen.has(userId)) {
+        // If it's the current user and we want to hide them, we skip ONLY if they aren't an organizer/co-organizer
+        continue;
+      }
       if (!seen.has(r.id)) {
         seen.add(r.id);
         filteredRows.push({

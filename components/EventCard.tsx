@@ -53,28 +53,18 @@ export const EventCard = React.memo(({
 
   const sortedParticipants = React.useMemo(() => {
     if (!participantsList || participantsList.length === 0) {
-      if (owner && ownerId) {
-        return [{ ...owner, id: ownerId, isOrganizer: true }];
-      }
+      if (owner && ownerId) return [{ ...owner, id: ownerId, isOrganizer: true, isMainOrganizer: true }];
       return [];
     }
     
-    const orgIndex = participantsList.findIndex(p => String(p.id || p._id) === String(ownerId) || p.isOrganizer);
-    let list = [...participantsList];
-    let org = null;
-    
-    if (orgIndex !== -1) {
-      org = list.splice(orgIndex, 1)[0];
-      org.isOrganizer = true;
-    } else if (owner && ownerId) {
-      org = { ...owner, id: ownerId, isOrganizer: true };
-    }
-    
-    if (org) {
-      list.unshift(org);
-    }
-    
-    return list;
+    // Sort all organizers to the top
+    return [...participantsList].sort((a, b) => {
+      if (a.isMainOrganizer && !b.isMainOrganizer) return -1;
+      if (!a.isMainOrganizer && b.isMainOrganizer) return 1;
+      if (a.isOrganizer && !b.isOrganizer) return -1;
+      if (!a.isOrganizer && b.isOrganizer) return 1;
+      return 0;
+    });
   }, [participantsList, owner, ownerId]);
 
   const openParticipantsModal = async () => {
@@ -452,7 +442,10 @@ export const EventCard = React.memo(({
                       </View>
                     )}
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.contactName} numberOfLines={1}>{p.name || 'İsimsiz Kullanıcı'}</Text>
+                      <Text style={styles.contactName} numberOfLines={1}>
+                        {p.name || 'İsimsiz Kullanıcı'}
+                        {p.isMainOrganizer ? ' (Ana Organizatör)' : ''}
+                      </Text>
                       {p.username && <Text style={{ color: '#666', fontSize: 13 }} numberOfLines={1}>@{p.username}</Text>}
                     </View>
                   </View>
