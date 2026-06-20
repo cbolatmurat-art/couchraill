@@ -348,8 +348,23 @@ export const EventCard = React.memo(({
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
             </TouchableOpacity>
           )}
+          {!isOwner && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => {
+              if (setOpenMenuId) setOpenMenuId(null);
+              if (onProfilePress && ownerId) {
+                onProfilePress(ownerId);
+              } else if (ownerId) {
+                router.push(`/user/${ownerId}`);
+              }
+            }}>
+              <Text style={styles.dropdownItemText}>Organizatör Profiline Git</Text>
+            </TouchableOpacity>
+          )}
           {!isOwner && onReportConfirm && (
-            <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm(item)}>
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => {
+              if (setOpenMenuId) setOpenMenuId(null);
+              onReportConfirm(item);
+            }}>
               <Text style={styles.dropdownItemText}>Şikayet Et</Text>
             </TouchableOpacity>
           )}
