@@ -357,7 +357,7 @@ export const EventCard = React.memo(({
                 router.push(`/user/${ownerId}`);
               }
             }}>
-              <Text style={styles.dropdownItemText}>Organizatör Profiline Git</Text>
+              <Text style={styles.dropdownItemText}>Profili Gör</Text>
             </TouchableOpacity>
           )}
           {!isOwner && onReportConfirm && (
