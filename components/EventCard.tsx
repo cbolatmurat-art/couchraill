@@ -221,13 +221,17 @@ export const EventCard = React.memo(({
               <Ionicons name="location-outline" size={16} color="#757575" />
               <Text style={styles.detailText}>{locationText || '-'}</Text>
             </View>
-            <View style={styles.detailSeparator} />
-            <View style={styles.detailItem}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.priceType === 'paid' ? '#FF9500' : '#34C759', marginLeft: 2 }} />
-              <Text style={[styles.detailText, { fontWeight: '600', color: item.priceType === 'paid' ? '#FF9500' : '#34C759' }]}>
-                {item.priceType === 'paid' ? 'Ücretli' : 'Ücretsiz'}
-              </Text>
-            </View>
+            {item.priceType === 'paid' && (
+              <>
+                <View style={styles.detailSeparator} />
+                <View style={styles.detailItem}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF9500', marginLeft: 2 }} />
+                  <Text style={[styles.detailText, { fontWeight: '600', color: '#FF9500' }]}>
+                    Ücretli
+                  </Text>
+                </View>
+              </>
+            )}
             {item.participantLimit ? (
               <>
                 <View style={styles.detailSeparator} />

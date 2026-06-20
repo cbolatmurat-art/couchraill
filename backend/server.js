@@ -36,9 +36,10 @@ initDB()
     try {
       const { query } = require('./db');
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`);
-      console.log('[STARTUP] Verified participantLimit column exists in posts table.');
+      await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`);
+      console.log('[STARTUP] Verified DB columns exist in posts table.');
     } catch (colErr) {
-      console.error('[STARTUP] Could not verify/add participantLimit column:', colErr.message);
+      console.error('[STARTUP] Could not verify/add DB columns:', colErr.message);
     }
     return migrateData();
   })
@@ -88,6 +89,7 @@ const normalizeEvent = (e, currentUserId) => ({
   commentsCount: parseInt(e.commentsCount || e.commentCount || 0),
   participantCount: parseInt(e.participantCount || 0),
   participantLimit: e.participantLimit ? parseInt(e.participantLimit) : null,
+  priceType: e.priceType || 'free',
   isJoined: e.isJoined === true || false
 });
 
@@ -5163,8 +5165,9 @@ app.post('/api/events', async (req, res) => {
   try {
     const { query: pgQuery } = require('./db');
     await pgQuery(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`);
+    await pgQuery(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`);
   } catch (e) {
-    console.error("Fallback ALTER TABLE participantLimit failed in post events:", e.message);
+    console.error("Fallback ALTER TABLE failed in post events:", e.message);
   }
 
   try {
@@ -5172,9 +5175,9 @@ app.post('/api/events', async (req, res) => {
       INSERT INTO posts (
         id, "userId", "authorId", type, title, city, district, neighborhood, 
         date, time, "eventDate", "eventTime", description, text,
-        "createdAt", "updatedAt", "isActive", "isTest", status, "participantLimit"
+        "createdAt", "updatedAt", "isActive", "isTest", status, "participantLimit", "priceType"
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
     `, [
       eventId,
       targetUserId,
@@ -5195,7 +5198,8 @@ app.post('/api/events', async (req, res) => {
       true,
       false,
       'active',
-      req.body.participantLimit ? parseInt(req.body.participantLimit) : null
+      req.body.participantLimit ? parseInt(req.body.participantLimit) : null,
+      req.body.priceType || 'free'
     ]);
 
     const { rows: eventRows } = await query(`SELECT * FROM posts WHERE id = $1`, [eventId]);
