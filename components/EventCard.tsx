@@ -262,6 +262,27 @@ export const EventCard = React.memo(({
               </>
             ) : null}
           </View>
+
+          {owner && ownerId && (
+            <View style={styles.organizerContainer}>
+              <Text style={styles.organizerLabel}>Organizatör</Text>
+              <TouchableOpacity 
+                style={styles.organizerProfileRow}
+                onPress={() => onProfilePress ? onProfilePress(ownerId) : router.push(`/user/${ownerId}`)}
+                activeOpacity={0.7}
+              >
+                {owner.profileImage ? (
+                  <Image source={{ uri: owner.profileImage }} style={styles.organizerAvatar} />
+                ) : (
+                  <View style={styles.organizerAvatarPlaceholder}>
+                    <Ionicons name="person" size={12} color="#FFF" />
+                  </View>
+                )}
+                <Text style={styles.organizerName} numberOfLines={1}>{owner.fullName || owner.name || 'İsimsiz'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
         </View>
       </View>
 
@@ -500,6 +521,44 @@ const styles = StyleSheet.create({
     height: 12,
     backgroundColor: '#E0E0E0',
     marginHorizontal: 8,
+  },
+  organizerContainer: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  organizerLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  organizerProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  organizerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  organizerAvatarPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#7B61FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  organizerName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
   },
   divider: {
     height: 1,
