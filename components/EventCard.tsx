@@ -279,6 +279,7 @@ export const EventCard = React.memo(({
                   </Text>
                 </TouchableOpacity>
               </>
+            ) : null}
           </View>
         </View>
       </View>
