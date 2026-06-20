@@ -177,10 +177,13 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
       useNativeDriver: true,
     }).start();
     try {
-      const res = await fetch(`${API_BASE_URL}/social/friends/${currentUser?.id || currentUser?._id}`);
+      const currentId = currentUser?.id || currentUser?._id;
+      const res = await fetch(`${API_BASE_URL}/social/friends/${currentId}?currentUserId=${currentId}`);
       const data = await res.json();
-      if (data.success && data.friends) {
-        setFriendsList(data.friends);
+      if (data.success && (data.users || data.friends)) {
+        setFriendsList(data.users || data.friends);
+      } else {
+        console.warn('No friends returned:', data);
       }
     } catch (e) {
       console.warn('Failed to load friends:', e);
@@ -633,7 +636,12 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                           <Text style={styles.contactAvatarText}>{(friend.name || friend.username || '?').charAt(0).toUpperCase()}</Text>
                         </View>
                       )}
-                      <Text style={styles.contactName}>{friend.name || friend.username}</Text>
+                      <View style={{ flex: 1, justifyContent: 'center' }}>
+                        <Text style={styles.contactName}>{friend.name || friend.username}</Text>
+                        {friend.username && friend.name ? (
+                          <Text style={{ color: '#666', fontSize: 13, marginTop: 2 }}>@{friend.username}</Text>
+                        ) : null}
+                      </View>
                     </View>
                     <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={24} color={isSelected ? Colors.primary : "#CCC"} />
                   </TouchableOpacity>
@@ -641,7 +649,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
               }}
             />
             <TouchableOpacity 
-              style={[styles.createButton, { marginTop: 16, marginBottom: insets.bottom || 16 }]} 
+              style={[styles.modalCreateButton, { marginTop: 16, marginBottom: insets.bottom || 16 }]} 
               onPress={closeCoOrganizerModal}
             >
               <Text style={styles.createButtonText}>Seçilenleri Ekle</Text>
@@ -900,5 +908,91 @@ const styles = StyleSheet.create({
   },
   paidBadgeClose: {
     marginLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  dismissOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  contactInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 8,
+  },
+  contactAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  contactAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  contactAvatarText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  contactName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#999',
+    marginTop: 20,
+  },
+  modalCreateButton: {
+    backgroundColor: '#FF7A00',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   }
 });
