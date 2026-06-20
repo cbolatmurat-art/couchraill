@@ -51,6 +51,32 @@ export const EventCard = React.memo(({
     setParticipantCount(item.participantCount || item.participants?.length || 0);
   }, [item.isJoined, item.participantCount, item.participants]);
 
+  const sortedParticipants = React.useMemo(() => {
+    if (!participantsList || participantsList.length === 0) {
+      if (owner && ownerId) {
+        return [{ ...owner, id: ownerId, isOrganizer: true }];
+      }
+      return [];
+    }
+    
+    const orgIndex = participantsList.findIndex(p => String(p.id || p._id) === String(ownerId) || p.isOrganizer);
+    let list = [...participantsList];
+    let org = null;
+    
+    if (orgIndex !== -1) {
+      org = list.splice(orgIndex, 1)[0];
+      org.isOrganizer = true;
+    } else if (owner && ownerId) {
+      org = { ...owner, id: ownerId, isOrganizer: true };
+    }
+    
+    if (org) {
+      list.unshift(org);
+    }
+    
+    return list;
+  }, [participantsList, owner, ownerId]);
+
   const openParticipantsModal = async () => {
     setParticipantsModalVisible(true);
     Animated.timing(slideAnim, {
@@ -389,7 +415,7 @@ export const EventCard = React.memo(({
               </TouchableOpacity>
             </View>
             <FlatList
-              data={participantsList}
+              data={sortedParticipants}
               keyExtractor={(p, idx) => p.id || p._id || String(idx)}
               ListEmptyComponent={<Text style={styles.emptyText}>Diğer katılımcı yok</Text>}
               renderItem={({ item: p }) => (
