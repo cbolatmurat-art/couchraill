@@ -103,9 +103,15 @@ export const EventCard = React.memo(({
     }
     if (isJoined) return;
 
+    const currentUserIdStr = String(currentUser.id || currentUser._id);
+    const isCoOrg = Array.isArray(item.coOrganizers) && item.coOrganizers.includes(currentUserIdStr);
+    const shouldCount = !isOwner && !isCoOrg;
+
     const previousCount = participantCount;
     setIsJoined(true);
-    setParticipantCount(prev => prev + 1);
+    if (shouldCount) {
+      setParticipantCount(prev => prev + 1);
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/events/${item.id}/join`, {
@@ -146,9 +152,15 @@ export const EventCard = React.memo(({
   const handleCancelJoin = async () => {
     if (!currentUser) return;
     
+    const currentUserIdStr = String(currentUser.id || currentUser._id);
+    const isCoOrg = Array.isArray(item.coOrganizers) && item.coOrganizers.includes(currentUserIdStr);
+    const shouldCount = !isOwner && !isCoOrg;
+
     const previousCount = participantCount;
     setIsJoined(false);
-    setParticipantCount(prev => Math.max(0, prev - 1));
+    if (shouldCount) {
+      setParticipantCount(prev => Math.max(0, prev - 1));
+    }
     setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== (currentUser.id || currentUser._id)));
 
     try {

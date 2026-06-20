@@ -1408,7 +1408,7 @@ app.get('/api/events', async (req, res) => {
       LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
-      LEFT JOIN (SELECT "eventId", COUNT(DISTINCT "userId") as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
+      LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
@@ -1449,7 +1449,7 @@ app.get('/api/events/feed', async (req, res) => {
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
       LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
-      LEFT JOIN (SELECT "eventId", COUNT(DISTINCT "userId") as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
+      LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
       AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
@@ -5266,7 +5266,14 @@ app.post('/api/events/:eventId/join', async (req, res) => {
     
     const event = postRows[0];
     
-    const { rows: participantsRows } = await query(`SELECT COUNT(DISTINCT "userId") as count FROM event_interactions WHERE "eventId" = $1 AND type = 'join'`, [eventId]);
+    const { rows: participantsRows } = await query(`
+      SELECT COUNT(DISTINCT ei."userId") as count 
+      FROM event_interactions ei 
+      JOIN posts p ON p.id = ei."eventId" 
+      WHERE ei."eventId" = $1 AND ei.type = 'join' 
+        AND ei."userId" != p."userId" 
+        AND (p."coOrganizers" IS NULL OR jsonb_typeof(p."coOrganizers") != 'array' OR NOT (p."coOrganizers" @> jsonb_build_array(ei."userId"::text)))
+    `, [eventId]);
     const currentCount = parseInt(participantsRows[0].count);
     
     if (event.participantLimit && currentCount >= event.participantLimit) {
@@ -5460,7 +5467,7 @@ app.get('/api/events/user/:userId', async (req, res) => {
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
       LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $2
-      LEFT JOIN (SELECT "eventId", COUNT(DISTINCT "userId") as participant_count FROM event_interactions WHERE type = 'join' GROUP BY "eventId") ei ON ei."eventId" = p.id
+      LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $2 AND mei.type = 'join'
       WHERE p."userId" = $1 AND p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
