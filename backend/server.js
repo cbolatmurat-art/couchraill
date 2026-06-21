@@ -100,16 +100,6 @@ app.get("/", (req, res) => {
   res.status(200).send("Couchraill backend is running");
 });
 
-app.get('/api/test-cleanup', async (req, res) => {
-  try {
-    const { query } = require('./db');
-    const { rows } = await query(`DELETE FROM posts WHERE title = 'Test Full Event' RETURNING id`);
-    res.json({ success: true, deleted: rows });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.get("/api/health", (req, res) => {
   console.log("HEALTH_CHECK_HIT");
   const { isPgMem } = require('./db');
