@@ -312,6 +312,12 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       }
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setItems(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(itemId)));
+          setOpenMenuPostId(null);
+          DeviceEventEmitter.emit('item_deleted', itemId);
+          return;
+        }
         Alert.alert("Hata", result.message || "Sunucuda silinemedi, liste yenileniyor.");
         fetchPosts();
         return;

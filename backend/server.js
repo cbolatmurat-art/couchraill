@@ -5811,6 +5811,18 @@ app.delete('/api/posts/:id', async (req, res) => {
   try {
     const postId = String(req.params.id);
 
+    let pgDeleted = false;
+    try {
+      const result = await query('DELETE FROM posts WHERE id = $1', [postId]);
+      await query('DELETE FROM post_likes WHERE "postId" = $1', [postId]);
+      await query('DELETE FROM post_comments WHERE "postId" = $1', [postId]);
+      if (result.rowCount && result.rowCount > 0) {
+        pgDeleted = true;
+      }
+    } catch (pgError) {
+      console.error('[POST_DELETE_ERROR]', pgError);
+    }
+
     const db = readDB();
     if (!db.posts) db.posts = [];
 
@@ -5823,9 +5835,11 @@ app.delete('/api/posts/:id', async (req, res) => {
       String(p._id || p.id || p.postId) !== postId
     );
 
+    const jsonDeleted = db.posts.length !== before;
+
     if (process.env.NODE_ENV !== 'production') { console.log("POST SAYISI AFTER:", db.posts.length); }
 
-    if (db.posts.length === before) {
+    if (!pgDeleted && !jsonDeleted) {
       if (process.env.NODE_ENV !== 'production') { console.log("SILINEMEDI: ID BULUNAMADI", postId); }
       return res.status(404).json({ success: false, message: "Gönderi bulunamadı", postId });
     }

@@ -141,6 +141,12 @@ export default function FeedScreen() {
       }
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setFeed(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(itemId)));
+          setOpenMenuPostId(null);
+          import('react-native').then(({ DeviceEventEmitter }) => DeviceEventEmitter.emit('item_deleted', itemId));
+          return;
+        }
         import('react-native').then(({ Alert }) => Alert.alert("Silinemedi", result.message || `Status: ${response.status}`));
         fetchFeed();
         return;

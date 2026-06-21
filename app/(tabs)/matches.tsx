@@ -415,6 +415,12 @@ export default function DiscoverScreen() {
       } catch (e) {}
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setFeed(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(itemId)));
+          setOpenMenuPostId(null);
+          import('react-native').then(({ DeviceEventEmitter }) => DeviceEventEmitter.emit('item_deleted', itemId));
+          return;
+        }
         Alert.alert("Hata", result.message || "Silinemedi.");
         fetchFeed();
         return;
