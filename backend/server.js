@@ -3352,6 +3352,10 @@ app.get('/api/debug/find-user-by-email', (req, res) => {
       res.json({ exists: false });
     }
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ---- ADMIN USER MANAGEMENT ----
 app.get('/api/admin/users', checkAdminAuth, (req, res) => {
   try {
