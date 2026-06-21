@@ -530,27 +530,6 @@ export default function FeedScreen() {
   };
 
 
-  const handleDeleteCommentSwipe = async (comment: any) => {
-    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
-    if (comment.userId !== meId) return;
-
-    setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
-    setFeed(prev => prev.map(l => { if (l.id === activeListingId || l._id === activeListingId) { const isNormalized = l.commentsCount !== undefined; if (isNormalized) { return { ...l, commentsCount: Math.max(0, (l.commentsCount || 1) - 1) }; } else { return { ...l, commentCount: Math.max(0, (l.commentCount || 1) - 1) }; } } return l; }));
-    try {
-      const isListing = comment.id.startsWith('lc') || comment.listingId;
-      const type = isListing ? 'listings' : 'posts';
-      const parentId = activeListingId;
-      
-      const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
-      await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: meId })
-      });
-    } catch(e) {
-       console.error("Yorum silme hatası", e);
-    }
-  };
 
   const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
     // Keep the action container stationary behind the sliding row

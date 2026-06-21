@@ -377,27 +377,6 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   };
 
 
-  const handleDeleteCommentSwipe = async (comment: any) => {
-    const meId = currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
-    if (comment.userId !== meId) return;
-
-    setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
-    setItems(prev => prev.map(p => { if (p.id === selectedPostId || p._id === selectedPostId) { const isNormalized = p.commentsCount !== undefined; if (isNormalized) { return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }; } else { return { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) }; } } return p; }));
-    try {
-      const isListing = comment.id.startsWith('lc') || comment.listingId;
-      const type = isListing ? 'listings' : 'posts';
-      const parentId = selectedPostId;
-      
-      const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
-      await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: meId })
-      });
-    } catch(e) {
-       console.error("Yorum silme hatası", e);
-    }
-  };
 
   const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
     // Keep the action container stationary behind the sliding row
