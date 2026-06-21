@@ -584,7 +584,7 @@ export default function FeedScreen() {
 
         {hasReplies && !isRepliesOpen && (
           <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: true}))} style={{ marginLeft: 48, marginTop: 8 }}>
-            <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `—— ${replies.length} yanıtı gör` }</Text>
+            <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `${replies.length} yanıtı gör` }</Text>
           </TouchableOpacity>
         )}
 
@@ -626,7 +626,7 @@ export default function FeedScreen() {
               );
             })}
             <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: false}))} style={{ marginTop: 4 }}>
-              <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `—— Yanıtları gizle` }</Text>
+              <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `Yanıtları gizle` }</Text>
             </TouchableOpacity>
           </View>
         )}
