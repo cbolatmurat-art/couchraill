@@ -584,7 +584,7 @@ export default function FeedScreen() {
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <View style={{ flexDirection: 'row' }}>
+        <TouchableOpacity activeOpacity={0.7} onLongPress={() => handleCommentLongPress(item)} delayLongPress={300} style={{ flexDirection: 'row' }}>
           <TouchableOpacity onPress={() => {
               closeComments();
               handleNavigateToProfile(user.id);
@@ -615,7 +615,7 @@ export default function FeedScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {hasReplies && !isRepliesOpen && (
           <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: true}))} style={{ marginLeft: 48, marginTop: 8 }}>
@@ -629,7 +629,7 @@ export default function FeedScreen() {
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <TouchableOpacity key={reply.id} activeOpacity={1} onLongPress={() => handleCommentLongPress(reply)} delayLongPress={500} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <TouchableOpacity key={reply.id} activeOpacity={0.7} onLongPress={() => handleCommentLongPress(reply)} delayLongPress={300} style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
