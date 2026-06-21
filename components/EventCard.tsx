@@ -355,7 +355,7 @@ export const EventCard = React.memo(({
               <Text style={styles.detailText}>
                 {item.time || '-'}
                 {item.endDate || item.endTime 
-                  ? ` - ${item.endDate && item.endDate !== item.date ? item.endDate.slice(0, 5) + ' ' : ''}${item.endTime || ''}` 
+                  ? ` - ${item.endDate && item.endDate !== item.date ? (item.endDate.includes('-') ? item.endDate.split('-')[2] + '/' + item.endDate.split('-')[1] : item.endDate) + ' ' : ''}${item.endTime || ''}` 
                   : ''}
               </Text>
             </View>
