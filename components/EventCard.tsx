@@ -320,10 +320,7 @@ export const EventCard = React.memo(({
         <View style={styles.dateBox}>
           <Text style={styles.dateDay}>{day}</Text>
           <Text style={styles.dateMonth}>{month}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-            <Ionicons name="time-outline" size={12} color={Colors.primary} />
-            <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary, marginLeft: 2 }}>{item.time || '-'}</Text>
-          </View>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary, marginTop: 4 }}>{item.time || '-'}</Text>
         </View>
         
         <View style={styles.infoBox}>
