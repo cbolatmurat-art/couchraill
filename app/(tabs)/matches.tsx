@@ -1051,6 +1051,7 @@ export default function DiscoverScreen() {
                 extraData={comments}
                 showsVerticalScrollIndicator={false}
               />
+              </>
             )}
 
             <ScrollView keyboardShouldPersistTaps="handled" scrollEnabled={false} style={{flexGrow: 0, flexShrink: 0}}>
