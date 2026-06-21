@@ -155,7 +155,7 @@ export const PostCard = React.memo(({
               style={{ padding: 4 }}
               onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textLight} />
+              <Ionicons name="ellipsis-vertical" size={20} color={Colors.textLight} />
             </TouchableOpacity>
           </View>
         )}

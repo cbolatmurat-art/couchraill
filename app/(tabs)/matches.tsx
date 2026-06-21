@@ -135,7 +135,15 @@ export default function DiscoverScreen() {
         DeviceEventEmitter.emit('tab_refresh_end');
       }
     });
-    return () => sub.remove();
+
+    const delSub = DeviceEventEmitter.addListener('item_deleted', (deletedId: string) => {
+      setFeed(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(deletedId)));
+    });
+
+    return () => {
+      sub.remove();
+      delSub.remove();
+    };
   }, [fetchFeed]);
 
   useEffect(() => {
@@ -414,6 +422,7 @@ export default function DiscoverScreen() {
 
       setFeed(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(itemId)));
       setOpenMenuPostId(null);
+      import('react-native').then(({ DeviceEventEmitter }) => DeviceEventEmitter.emit('item_deleted', itemId));
       Alert.alert("Başarılı", `${item.type === 'event' ? 'Etkinlik' : isPost ? 'Gönderi' : 'İlan'} silindi.`);
     } catch (error: any) {
       Alert.alert("Hata", "Silme hatası oluştu.");

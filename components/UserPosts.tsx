@@ -74,7 +74,15 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
     const sub = DeviceEventEmitter.addListener('refresh_user_posts', () => {
       fetchPosts();
     });
-    return () => sub.remove();
+    
+    const delSub = DeviceEventEmitter.addListener('item_deleted', (deletedId: string) => {
+      setItems(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(deletedId)));
+    });
+
+    return () => {
+      sub.remove();
+      delSub.remove();
+    };
   }, [userId, currentUserId]);
 
   // Report State
@@ -314,8 +322,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       });
 
       setOpenMenuPostId(null);
-      DeviceEventEmitter.emit('refresh_request_index');
-      if (refreshData) await refreshData();
+      DeviceEventEmitter.emit('item_deleted', itemId);
       Alert.alert("Başarılı", `${isEvent ? 'Etkinlik' : isPost ? 'Gönderi' : 'İlan'} silindi.`);
     } catch (error: any) {
       console.error("DELETE CATCH ERROR:", error);

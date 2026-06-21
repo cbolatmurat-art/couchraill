@@ -151,6 +151,7 @@ export default function FeedScreen() {
       });
 
       setOpenMenuPostId(null);
+      import('react-native').then(({ DeviceEventEmitter }) => DeviceEventEmitter.emit('item_deleted', itemId));
       import('react-native').then(({ Alert }) => Alert.alert("Başarılı", `${item.type === 'event' ? 'Etkinlik' : isPost ? 'Gönderi' : 'İlan'} silindi.`));
     } catch (error: any) {
       console.error("DELETE CATCH ERROR:", error);
@@ -259,7 +260,15 @@ export default function FeedScreen() {
         DeviceEventEmitter.emit('tab_refresh_end');
       }
     });
-    return () => sub.remove();
+    
+    const delSub = DeviceEventEmitter.addListener('item_deleted', (deletedId: string) => {
+      setFeed(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(deletedId)));
+    });
+
+    return () => {
+      sub.remove();
+      delSub.remove();
+    };
   }, [fetchFeed]);
 
   const handleNavigateToProfile = useCallback((ownerId: string) => {
