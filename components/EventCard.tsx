@@ -320,7 +320,10 @@ export const EventCard = React.memo(({
         <View style={styles.dateBox}>
           <Text style={styles.dateDay}>{day}</Text>
           <Text style={styles.dateMonth}>{month}</Text>
-          {weekday ? <Text style={styles.dateWeekday}>{weekday}</Text> : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <Ionicons name="time-outline" size={12} color={Colors.primary} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary, marginLeft: 2 }}>{item.time || '-'}</Text>
+          </View>
         </View>
         
         <View style={styles.infoBox}>
@@ -350,20 +353,17 @@ export const EventCard = React.memo(({
           <Text style={styles.descriptionText} numberOfLines={2}>{item.description}</Text>
 
           <View style={styles.detailsRow}>
-            <View style={[styles.detailItem, { alignItems: 'flex-start' }]}>
-              <Ionicons name="time-outline" size={16} color="#757575" style={{ marginTop: 2 }} />
-              <View style={{ flexDirection: 'column', marginLeft: 6 }}>
-                <Text style={[styles.detailText, { marginLeft: 0 }]}>
-                  {item.time || '-'}
-                </Text>
-                {(item.endDate || item.endTime) && (
-                  <Text style={[styles.detailText, { marginLeft: 0, marginTop: 2, color: '#757575' }]}>
-                    Bitiş: {item.endDate && item.endDate !== item.date ? (item.endDate.includes('-') ? `${item.endDate.split('-')[2]}/${item.endDate.split('-')[1]}` : item.endDate) + ' ' : ''}{item.endTime || ''}
+            {(item.endDate || item.endTime) && (
+              <>
+                <View style={styles.detailItem}>
+                  <Ionicons name="time-outline" size={16} color="#757575" />
+                  <Text style={styles.detailText}>
+                    {item.endDate && item.endDate !== item.date ? (item.endDate.includes('-') ? `${item.endDate.split('-')[2]}/${item.endDate.split('-')[1]}` : item.endDate) + ' ' : ''}{item.endTime || ''}
                   </Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.detailSeparator} />
+                </View>
+                <View style={styles.detailSeparator} />
+              </>
+            )}
             <View style={styles.detailItem}>
               <Ionicons name="location-outline" size={16} color="#757575" />
               <Text style={styles.detailText}>{locationText || '-'}</Text>
