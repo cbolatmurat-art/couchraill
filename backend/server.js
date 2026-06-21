@@ -6031,14 +6031,14 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6)
     `, [newCommentId, postId, userId, text, createdAt, parentCommentId || null]);
 
-    let commenterUser = { id: userId, name: 'Bir kullanıcı', username: '', profileImage: null };
+        let commenterUser = { id: userId, name: 'Bir kullanıcı', username: '', profileImage: null };
+
+    const { rows: commenterRows } = await query(`SELECT id, name, username, "profileImage" FROM users WHERE id = $1`, [userId]);
+    if (commenterRows.length > 0) {
+      commenterUser = commenterRows[0];
+    }
 
     if (ownerId !== userId) {
-      const { rows: commenterRows } = await query(`SELECT id, name, username, "profileImage" FROM users WHERE id = $1`, [userId]);
-      if (commenterRows.length > 0) {
-        commenterUser = commenterRows[0];
-      }
-      
       await query(`
         INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
