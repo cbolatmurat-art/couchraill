@@ -34,6 +34,7 @@ export const EventCard = React.memo(({
   const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
 
   const [isJoined, setIsJoined] = useState(item.isJoined || false);
+  const [isWaitlisted, setIsWaitlisted] = useState(item.isWaitlisted || false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [participantsModalVisible, setParticipantsModalVisible] = useState(false);
   
@@ -50,8 +51,9 @@ export const EventCard = React.memo(({
 
   useEffect(() => {
     setIsJoined(item.isJoined || false);
+    setIsWaitlisted(item.isWaitlisted || false);
     setParticipantCount(item.participantCount || item.participants?.length || 0);
-  }, [item.isJoined, item.participantCount, item.participants]);
+  }, [item.isJoined, item.isWaitlisted, item.participantCount, item.participants]);
 
   // Global state sync
   useEffect(() => {
@@ -59,6 +61,7 @@ export const EventCard = React.memo(({
       if (data.eventId === item.id) {
         if (data.isJoined !== undefined) setIsJoined(data.isJoined);
         if (data.participantCount !== undefined) setParticipantCount(data.participantCount);
+        if (data.isWaitlisted !== undefined) setIsWaitlisted(data.isWaitlisted);
       }
     });
     return () => sub.remove();
@@ -229,8 +232,10 @@ export const EventCard = React.memo(({
         body: JSON.stringify({ userId: currentUser.id || currentUser._id })
       });
       const data = await response.json();
-      if (data.success) {
+      if (data.success || data.message === 'Zaten bildirim isteği oluşturuldu.') {
+        setIsWaitlisted(true);
         setNotifyModalVisible(true);
+        DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isWaitlisted: true });
       } else {
         Alert.alert('Bilgi', data.message || data.error || 'İşlem başarısız.');
       }
@@ -327,7 +332,12 @@ export const EventCard = React.memo(({
           <View style={styles.detailsRow}>
             <View style={styles.detailItem}>
               <Ionicons name="time-outline" size={16} color="#757575" />
-              <Text style={styles.detailText}>{item.time || '-'}</Text>
+              <Text style={styles.detailText}>
+                {item.time || '-'}
+                {item.endDate || item.endTime 
+                  ? ` - ${item.endDate && item.endDate !== item.date ? item.endDate.slice(0, 5) + ' ' : ''}${item.endTime || ''}` 
+                  : ''}
+              </Text>
             </View>
             <View style={styles.detailSeparator} />
             <View style={styles.detailItem}>
@@ -396,21 +406,32 @@ export const EventCard = React.memo(({
           <TouchableOpacity 
             style={[
               styles.joinButton, 
-              isJoined && styles.joinedButton
+              (isJoined || (item.participantLimit && participantCount >= item.participantLimit && isWaitlisted)) && styles.joinedButton
             ]} 
             onPress={
-              isJoined 
+              isJoined || (item.participantLimit && participantCount >= item.participantLimit && isWaitlisted)
                 ? undefined 
                 : (item.participantLimit && participantCount >= item.participantLimit 
                     ? handleNotifyMe
                     : handleJoin)
             }
-            activeOpacity={isJoined ? 1 : 0.6}
+            activeOpacity={isJoined || isWaitlisted ? 1 : 0.6}
           >
             <Text style={styles.joinButtonText}>
-              {isJoined ? 'Katılacaksın' : (!isJoined && item.participantLimit && participantCount >= item.participantLimit ? 'Bildirim Al' : 'Katıl')}
+              {isJoined 
+                ? 'Katılacaksın' 
+                : (item.participantLimit && participantCount >= item.participantLimit 
+                    ? (isWaitlisted ? 'Bildirim Açık' : 'Bildirim Al') 
+                    : 'Katıl')}
             </Text>
-            {isJoined && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
+            {(isJoined || (item.participantLimit && participantCount >= item.participantLimit && isWaitlisted)) && (
+              <Ionicons 
+                name={isWaitlisted && !isJoined ? "notifications" : "checkmark-circle-outline"} 
+                size={18} 
+                color="#FFF" 
+                style={{ marginLeft: 6 }} 
+              />
+            )}
           </TouchableOpacity>
         )}
       </View>

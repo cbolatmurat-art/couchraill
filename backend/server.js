@@ -76,6 +76,8 @@ const normalizeEvent = (e, currentUserId) => ({
   neighborhood: e.neighborhood,
   date: e.eventDate || e.date,
   time: e.eventTime || e.time,
+  endDate: e.endDate || null,
+  endTime: e.endTime || null,
   description: e.description || e.text,
   status: e.status || (e.isActive ? 'active' : 'inactive'),
   createdAt: e.createdAt,
@@ -92,7 +94,8 @@ const normalizeEvent = (e, currentUserId) => ({
   participantLimit: e.participantLimit ? parseInt(e.participantLimit) : null,
   priceType: e.priceType || 'free',
   coOrganizers: (typeof e.coOrganizers === 'string' ? JSON.parse(e.coOrganizers || '[]') : e.coOrganizers) || [],
-  isJoined: e.isJoined === true || false
+  isJoined: e.isJoined === true || false,
+  isWaitlisted: e.isWaitlisted === true || false
 });
 
 // Root and health routes — MUST be before all middleware for Railway
@@ -1468,6 +1471,7 @@ app.get('/api/events/feed', async (req, res) => {
         CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
         COALESCE(ei.participant_count, 0) as "participantCount",
         CASE WHEN mei."userId" IS NOT NULL THEN true ELSE false END as "isJoined",
+        CASE WHEN ewl."userId" IS NOT NULL THEN true ELSE false END as "isWaitlisted",
         u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
         u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
       FROM posts p
@@ -1477,6 +1481,7 @@ app.get('/api/events/feed', async (req, res) => {
       LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
       LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
+      LEFT JOIN event_waitlists ewl ON ewl."eventId" = p.id AND ewl."userId" = $1
       WHERE p."isTest" = false AND p.type = 'event' AND (p.status = 'active' OR p."isActive" = true)
       AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
       ORDER BY p."createdAt" DESC
@@ -5647,6 +5652,7 @@ app.get('/api/events/user/:userId', async (req, res) => {
         CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
         COALESCE(ei.participant_count, 0) as "participantCount",
         CASE WHEN mei."userId" IS NOT NULL THEN true ELSE false END as "isJoined",
+        CASE WHEN ewl."userId" IS NOT NULL THEN true ELSE false END as "isWaitlisted",
         u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
         u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
       FROM posts p
@@ -5656,6 +5662,7 @@ app.get('/api/events/user/:userId', async (req, res) => {
       LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $2
       LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $2 AND mei.type = 'join'
+      LEFT JOIN event_waitlists ewl ON ewl."eventId" = p.id AND ewl."userId" = $2
       WHERE p."userId" = $1 AND p.type = 'event' AND p."isTest" = false AND (p.status = 'active' OR p."isActive" = true)
       ORDER BY p."createdAt" DESC
     `, [resolvedUserId, resolvedCurrentUserId || resolvedUserId]);

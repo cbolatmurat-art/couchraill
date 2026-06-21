@@ -393,6 +393,13 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                 ? `${startDT.hour}:${startDT.minute}` 
                 : '';
 
+              const endDatePayload = (showEndDate && endDT.day !== 'GG' && endDT.month !== 'AA' && endDT.year !== 'YYYY') 
+                ? `${endDT.day}/${endDT.month}/${endDT.year}` 
+                : '';
+              const endTimePayload = (showEndDate && endDT.hour !== 'SS' && endDT.minute !== 'DD') 
+                ? `${endDT.hour}:${endDT.minute}` 
+                : '';
+
               const isTitleEmpty = !title?.trim();
               const isCityEmpty = !city?.trim();
               const isDistrictEmpty = !district?.trim();
@@ -436,6 +443,8 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
                   neighborhood: neighborhood.trim(),
                   date: datePayload.trim(),
                   time: timePayload.trim(),
+                  endDate: endDatePayload.trim() || null,
+                  endTime: endTimePayload.trim() || null,
                   priceType: isPaid ? 'paid' : 'free',
                   participantLimit: showParticipantLimit && participantLimit ? parseInt(participantLimit) : null,
                   coOrganizers: selectedCoOrganizers,
