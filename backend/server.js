@@ -1431,7 +1431,7 @@ app.get('/api/posts/feed', async (req, res) => {
     res.json({ success: true, items: normalizedPosts });
   } catch (err) {
     console.error('[POSTS_FEED_ERROR]', err);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -1511,7 +1511,7 @@ app.get('/api/events/feed', async (req, res) => {
     res.json({ success: true, items: normalizedEvents });
   } catch (err) {
     console.error('[EVENTS_FEED_ERROR]', err);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -1557,7 +1557,7 @@ app.post('/api/listings/:listingId/like', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('[LIKE_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -1569,7 +1569,7 @@ app.delete('/api/listings/:listingId/like', async (req, res) => {
     await query('DELETE FROM listing_likes WHERE "listingId" = $1 AND "userId" = $2', [listingId, userId]);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -1603,7 +1603,7 @@ app.get('/api/listings/:listingId/comments', async (req, res) => {
     
     res.json({ success: true, comments: populatedComments });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -1665,7 +1665,7 @@ app.post('/api/listings/:listingId/comments', async (req, res) => {
     });
   } catch (error) {
     console.error('[COMMENT_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -1808,7 +1808,7 @@ app.delete('/api/listings/:id', async (req, res) => {
     res.json({ success: true, message: 'İlan kaldırıldı.' });
   } catch (error) {
     console.error('[DELETE_LISTING_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası: İlan kaldırılamadı.' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -4207,7 +4207,7 @@ app.get('/api/users/:id/public', async (req, res) => {
     res.json({ success: true, profile: publicProfile });
   } catch (error) {
     console.error("[PUBLIC_PROFILE] Sunucu hatası:", error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası oluştu.' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -5322,7 +5322,7 @@ app.delete('/api/events/:eventId', async (req, res) => {
     return res.json({ success: true, message: 'Etkinlik başarıyla silindi.', deletedId: eventId });
   } catch (error) {
     console.error('[DELETE_EVENT_ERROR]', error.message);
-    return res.status(500).json({ success: false, error: 'Sunucu hatası: Etkinlik silinemedi.' });
+    return res.status(500).json({ success: false, error: 'Sunucu hatası: ' + (error.message || error.toString()) });
   }
 });
 
@@ -6048,7 +6048,7 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
     res.json({ success: true, comment: { id: newCommentId, postId, userId, text, createdAt, parentCommentId: parentCommentId || null, user: commenterUser } });
   } catch (error) {
     console.error('[POST_COMMENT_ERROR]', error.message);
-    res.status(500).json({ success: false, error: 'Yorum yapılamadı.' });
+    res.status(500).json({ success: false, error: 'Yorum yapılamadı: ' + (error.message || error.toString()) });
   }
 });
 // GET Admin Reports
