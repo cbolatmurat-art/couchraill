@@ -61,6 +61,8 @@ export default function DiscoverScreen() {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [comments, setComments] = useState<any[]>([]);
+  const [commentMenuVisible, setCommentMenuVisible] = useState(false);
+  const [selectedCommentForAction, setSelectedCommentForAction] = useState<any>(null);
   const [newComment, setNewComment] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -468,36 +470,35 @@ export default function DiscoverScreen() {
     const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
 
-    Alert.alert(
-      "Yorumu Sil",
-      "Bu yorumu silmek istediğinize emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        { 
-          text: "Sil", 
-          style: "destructive",
-          onPress: async () => {
-            setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
-            setFeed(prev => prev.map(l => { if (l.id === activeListingId || l._id === activeListingId) { return { ...l, commentCount: Math.max(0, (l.commentCount || 1) - 1) }; } return l; }));
-            try {
-              const isListing = comment.id.startsWith('lc') || comment.listingId;
-              const type = isListing ? 'listings' : 'posts';
-              const parentId = activeListingId;
-              
-              const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
-              await fetch(deleteUrl, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: meId })
-              });
-            } catch(e) {
-               console.error("Yorum silme hatası", e);
-            }
-          }
-        }
-      ]
-    );
+    setSelectedCommentForAction(comment);
+    setCommentMenuVisible(true);
   };
+
+  const handleDeleteComment = async () => {
+    if (!selectedCommentForAction) return;
+    const comment = selectedCommentForAction;
+    setCommentMenuVisible(false);
+    setSelectedCommentForAction(null);
+    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
+
+    setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
+    setFeed(prev => prev.map(l => { if (l.id === activeListingId || l._id === activeListingId) { return { ...l, commentCount: Math.max(0, (l.commentCount || 1) - 1) }; } return l; }));
+    try {
+      const isListing = comment.id.startsWith('lc') || comment.listingId;
+      const type = isListing ? 'listings' : 'posts';
+      const parentId = activeListingId;
+      
+      const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
+      await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: meId })
+      });
+    } catch(e) {
+       console.error("Yorum silme hatası", e);
+    }
+  };
+  
   const renderCommentItem = ({ item }: { item: any }) => {
     const user = item.user || {};
     const dateStr = new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

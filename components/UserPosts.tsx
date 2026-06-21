@@ -59,6 +59,8 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   // Post Menu State
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
   const [comments, setComments] = useState<any[]>([]);
+  const [commentMenuVisible, setCommentMenuVisible] = useState(false);
+  const [selectedCommentForAction, setSelectedCommentForAction] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -374,39 +376,38 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
 
 
   const handleCommentLongPress = (comment: any) => {
-    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUserId || currentUser?.email || "unknown";
+    const meId = currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
 
-    Alert.alert(
-      "Yorumu Sil",
-      "Bu yorumu silmek istediğinize emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        { 
-          text: "Sil", 
-          style: "destructive",
-          onPress: async () => {
-            setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
-            setItems(prev => prev.map(p => { if (p.id === selectedPostId || p._id === selectedPostId) { const isNormalized = p.commentsCount !== undefined; if (isNormalized) { return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }; } else { return { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) }; } } return p; }));
-            try {
-              const isListing = comment.id.startsWith('lc') || comment.listingId;
-              const type = isListing ? 'listings' : 'posts';
-              const parentId = selectedPostId;
-              
-              const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
-              await fetch(deleteUrl, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: meId })
-              });
-            } catch(e) {
-               console.error("Yorum silme hatası", e);
-            }
-          }
-        }
-      ]
-    );
+    setSelectedCommentForAction(comment);
+    setCommentMenuVisible(true);
   };
+
+  const handleDeleteComment = async () => {
+    if (!selectedCommentForAction) return;
+    const comment = selectedCommentForAction;
+    setCommentMenuVisible(false);
+    setSelectedCommentForAction(null);
+    const meId = currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
+
+    setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
+    setItems(prev => prev.map(p => { if (p.id === selectedPostId || p._id === selectedPostId) { const isNormalized = p.commentsCount !== undefined; if (isNormalized) { return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }; } else { return { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) }; } } return p; }));
+    try {
+      const isListing = comment.id.startsWith('lc') || comment.listingId;
+      const type = isListing ? 'listings' : 'posts';
+      const parentId = selectedPostId;
+      
+      const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
+      await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: meId })
+      });
+    } catch(e) {
+       console.error("Yorum silme hatası", e);
+    }
+  };
+  
   const renderCommentItem = ({ item }: { item: any }) => {
     const user = item.user || {};
     const dateStr = new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
