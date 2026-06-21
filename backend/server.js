@@ -1591,6 +1591,7 @@ app.get('/api/listings/:listingId/comments', async (req, res) => {
       userId: c.userId,
       content: c.content,
       text: c.content, // Fallback for old clients
+      parentCommentId: c.parentCommentId || null,
       createdAt: c.createdAt,
       user: {
         id: c.user_id,
@@ -5986,6 +5987,7 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
       postId: c.postId,
       userId: c.userId,
       text: c.content || c.text,
+      parentCommentId: c.parentCommentId || null,
       createdAt: c.createdAt,
       user: {
         id: c.user_id,
