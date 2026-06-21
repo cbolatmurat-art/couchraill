@@ -397,14 +397,28 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
     }
   };
 
-  const renderCommentRightActions = (comment: any) => {
+  const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
+    const trans = dragX.interpolate({
+      inputRange: [-70, 0],
+      outputRange: [0, 20],
+      extrapolate: 'clamp',
+    });
+    const opacity = dragX.interpolate({
+      inputRange: [-70, -30, 0],
+      outputRange: [1, 0.5, 0],
+      extrapolate: 'clamp',
+    });
+
     return (
       <TouchableOpacity 
         style={{ backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center', width: 70, height: '100%' }}
         onPress={() => handleDeleteCommentSwipe(comment)}
+        activeOpacity={0.8}
       >
-        <Ionicons name="trash-outline" size={24} color="#FFF" />
-        <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+        <Animated.View style={{ opacity, transform: [{ translateX: trans }], alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="trash-outline" size={24} color="#FFF" />
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+        </Animated.View>
       </TouchableOpacity>
     );
   };
@@ -433,7 +447,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <Swipeable enabled={item.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(item)}>
+        <Swipeable enabled={item.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
 
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity onPress={() => {
@@ -482,7 +496,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(reply)}>
+                <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
 
                 <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
