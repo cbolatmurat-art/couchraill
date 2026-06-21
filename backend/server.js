@@ -48,23 +48,42 @@ initDB()
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
-const normalizePost = (p, currentUserId, comments = []) => ({
-  id: p.id,
-  authorId: p.userId,
-  content: p.content || p.text,
-  createdAt: p.createdAt,
-  type: 'post',
-  author: {
-    id: p.userId,
-    fullName: p.owner_name || p.fullName || p.name,
-    username: p.owner_username || p.username,
-    profileImage: p.owner_profileImage || p.profileImage || p.avatar
-  },
-  likesCount: parseInt(p.likesCount || p.likeCount || 0),
-  likedByCurrentUser: p.likedByCurrentUser === true || p.isLikedByMe === true,
-  commentsCount: parseInt(p.commentsCount || p.commentCount || 0),
-  comments: comments
-});
+const normalizePost = (p, currentUserId, comments = []) => {
+  let locationParsed = null;
+  if (p.location) {
+    if (typeof p.location === 'string') {
+      try { locationParsed = JSON.parse(p.location); } catch { locationParsed = null; }
+    } else {
+      locationParsed = p.location;
+    }
+  }
+
+  return {
+    id: p.id,
+    authorId: p.userId,
+    content: p.content || p.text,
+    createdAt: p.createdAt,
+    type: 'post',
+    location: locationParsed || null,
+    taggedFriends: (() => {
+      const raw = p.taggedFriends;
+      if (!raw) return [];
+      if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return []; } }
+      return raw;
+    })(),
+    author: {
+      id: p.userId,
+      fullName: p.owner_name || p.fullName || p.name,
+      username: p.owner_username || p.username,
+      profileImage: p.owner_profileImage || p.profileImage || p.avatar,
+      isFullyVerified: p.owner_isFullyVerified || false,
+    },
+    likesCount: parseInt(p.likesCount || p.likeCount || 0),
+    likedByCurrentUser: p.likedByCurrentUser === true || p.isLikedByMe === true,
+    commentsCount: parseInt(p.commentsCount || p.commentCount || 0),
+    comments: comments
+  };
+};
 
 const normalizeEvent = (e, currentUserId) => ({
   id: e.id,
@@ -1396,7 +1415,8 @@ app.get('/api/posts/feed', async (req, res) => {
         COALESCE(pc.comment_count, 0) as "commentsCount",
         CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
         u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
-        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
+        u."profileImage" as "owner_profileImage", u."profileImage", u.avatar,
+        (u."identityVerified" OR u.verified) AND u."emailVerified" AND u."phoneVerified" as "owner_isFullyVerified"
       FROM posts p
       LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
       LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
