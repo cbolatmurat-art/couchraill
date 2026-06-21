@@ -97,8 +97,10 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
   const scrollViewRef = useRef<ScrollView>(null);
   const currentIndexRef = useRef(data.indexOf(selectedValue));
   const pendingIndexRef = useRef(data.indexOf(selectedValue));
+  // true while momentum is in flight — prevents onScrollEndDrag from committing early
+  const hasMomentumRef = useRef(false);
   const webScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
+
   useEffect(() => {
     const idx = data.indexOf(selectedValue);
     currentIndexRef.current = idx;
@@ -110,9 +112,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
     }
   }, []);
 
-  // Only called when scroll fully stops — commits value to parent once.
-  const commitScroll = (event: any) => {
-    const y = event.nativeEvent.contentOffset.y;
+  const commitIndex = (y: number) => {
     const index = Math.min(Math.max(0, Math.round(y / ITEM_HEIGHT)), data.length - 1);
     pendingIndexRef.current = index;
     if (data[index] && index !== currentIndexRef.current) {
@@ -121,7 +121,25 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
     }
   };
 
-  // Web: onScroll fires on every frame; debounce so we only commit after user stops scrolling.
+  // Fast scroll path: momentum started → only commit when momentum fully stops.
+  const handleMomentumScrollBegin = () => {
+    hasMomentumRef.current = true;
+  };
+
+  const handleMomentumScrollEnd = (event: any) => {
+    hasMomentumRef.current = false;
+    commitIndex(event.nativeEvent.contentOffset.y);
+  };
+
+  // Slow drag path: no momentum follows → commit here.
+  // Fast scroll path: hasMomentum is true here → skip, let handleMomentumScrollEnd handle it.
+  const handleScrollEndDrag = (event: any) => {
+    if (!hasMomentumRef.current) {
+      commitIndex(event.nativeEvent.contentOffset.y);
+    }
+  };
+
+  // Web: onScroll fires every frame; debounce 150ms so we commit only after user stops.
   const handleWebScroll = (event: any) => {
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.min(Math.max(0, Math.round(y / ITEM_HEIGHT)), data.length - 1);
@@ -142,18 +160,19 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
         ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
+        decelerationRate={0.98}
         scrollEventThrottle={16}
         onScroll={Platform.OS === 'web' ? handleWebScroll : undefined}
-        onMomentumScrollEnd={commitScroll}
-        onScrollEndDrag={commitScroll}
+        onMomentumScrollBegin={Platform.OS !== 'web' ? handleMomentumScrollBegin : undefined}
+        onMomentumScrollEnd={Platform.OS !== 'web' ? handleMomentumScrollEnd : undefined}
+        onScrollEndDrag={Platform.OS !== 'web' ? handleScrollEndDrag : undefined}
         contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
       >
         {data.map((item: string, index: number) => {
           const isSelected = item === selectedValue;
           return (
-            <TouchableOpacity 
-              key={index} 
+            <TouchableOpacity
+              key={index}
               activeOpacity={0.7}
               onPress={() => {
                 currentIndexRef.current = index;
