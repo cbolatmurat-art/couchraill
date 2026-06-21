@@ -95,9 +95,11 @@ export default function CreateEventScreen() {
 const ITEM_HEIGHT = 40;
 const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) => {
   const scrollViewRef = useRef<ScrollView>(null);
+  const currentIndexRef = useRef(data.indexOf(selectedValue));
   
   useEffect(() => {
     const idx = data.indexOf(selectedValue);
+    currentIndexRef.current = idx;
     if (idx > 0 && scrollViewRef.current) {
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: false });
@@ -108,7 +110,8 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
   const handleScroll = (event: any) => {
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.min(Math.max(0, Math.round(y / ITEM_HEIGHT)), data.length - 1);
-    if (data[index] && data[index] !== selectedValue) {
+    if (index !== currentIndexRef.current && data[index]) {
+      currentIndexRef.current = index;
       onValueChange(data[index]);
     }
   };
@@ -121,6 +124,8 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
+        scrollEventThrottle={16}
+        onScroll={Platform.OS === 'web' ? handleScroll : undefined}
         onMomentumScrollEnd={handleScroll}
         onScrollEndDrag={handleScroll}
         contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
@@ -128,9 +133,18 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
         {data.map((item: string, index: number) => {
           const isSelected = item === selectedValue;
           return (
-            <View key={index} style={{ height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity 
+              key={index} 
+              activeOpacity={0.7}
+              onPress={() => {
+                currentIndexRef.current = index;
+                onValueChange(item);
+                scrollViewRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+              }}
+              style={{ height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center' }}
+            >
               <Text style={{ fontSize: isSelected ? 18 : 15, color: isSelected ? '#000' : '#999', fontWeight: isSelected ? 'bold' : 'normal' }}>{item}</Text>
-            </View>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
