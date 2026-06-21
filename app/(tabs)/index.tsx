@@ -1,3 +1,4 @@
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, Animated, Dimensions, Alert, DeviceEventEmitter, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -105,9 +106,6 @@ export default function FeedScreen() {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [comments, setComments] = useState<any[]>([]);
-  const [commentMenuVisible, setCommentMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const [selectedCommentForAction, setSelectedCommentForAction] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -529,32 +527,9 @@ export default function FeedScreen() {
   };
 
 
-  const handleCommentLongPress = (comment: any, e: any) => {
+  const handleDeleteCommentSwipe = async (comment: any) => {
     const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
-
-    const { pageX, pageY } = e.nativeEvent;
-    const screenHeight = Dimensions.get('window').height;
-    const screenWidth = Dimensions.get('window').width;
-    
-    let menuY = pageY;
-    if (pageY > screenHeight - 150) {
-       menuY = pageY - 60;
-    } else {
-       menuY = pageY + 20;
-    }
-
-    setMenuPosition({ x: Math.max(16, Math.min(pageX - 50, screenWidth - 190)), y: menuY });
-    setSelectedCommentForAction(comment);
-    setCommentMenuVisible(true);
-  };
-
-  const handleDeleteComment = async () => {
-    if (!selectedCommentForAction) return;
-    const comment = selectedCommentForAction;
-    setCommentMenuVisible(false);
-    setSelectedCommentForAction(null);
-    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
 
     setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
     setFeed(prev => prev.map(l => { if (l.id === activeListingId || l._id === activeListingId) { const isNormalized = l.commentsCount !== undefined; if (isNormalized) { return { ...l, commentsCount: Math.max(0, (l.commentsCount || 1) - 1) }; } else { return { ...l, commentCount: Math.max(0, (l.commentCount || 1) - 1) }; } } return l; }));
@@ -573,7 +548,19 @@ export default function FeedScreen() {
        console.error("Yorum silme hatası", e);
     }
   };
-  
+
+  const renderCommentRightActions = (comment: any) => {
+    return (
+      <TouchableOpacity 
+        style={{ backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center', width: 70, height: '100%' }}
+        onPress={() => handleDeleteCommentSwipe(comment)}
+      >
+        <Ionicons name="trash-outline" size={24} color="#FFF" />
+        <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+      </TouchableOpacity>
+    );
+  };
+
   const renderCommentItem = ({ item }: { item: any }) => {
     const user = item.user || {};
     const dateStr = new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -965,30 +952,7 @@ export default function FeedScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Context Menu Modal */}
-      <Modal visible={commentMenuVisible} transparent={true} animationType="fade" onRequestClose={() => { setCommentMenuVisible(false); setSelectedCommentForAction(null); }}>
-        <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' }} onPress={() => { setCommentMenuVisible(false); setSelectedCommentForAction(null); }}>
-          <View style={{ 
-            position: 'absolute', 
-            top: menuPosition.y, 
-            left: menuPosition.x,
-            backgroundColor: '#FFF', 
-            borderRadius: 18, 
-            width: 170, 
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 8,
-            overflow: 'hidden' 
-          }}>
-            <TouchableOpacity onPress={handleDeleteComment} style={{ padding: 14, flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="trash-outline" size={20} color={Colors.danger} style={{ marginRight: 10 }} />
-              <Text style={{ color: Colors.danger, fontWeight: '600', fontSize: 15 }}>Yorumu Sil</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      
 
 
         <DeleteConfirmModal
