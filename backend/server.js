@@ -180,20 +180,45 @@ const generateUniqueUsername = async (name) => {
 const activeUsers = new Map(); // userId -> socket.id
 
 const sendPushNotification = async (receiverId, title, body, data = {}) => {
-  const db = readDB();
-  const user = db.users.find(u => u.id === receiverId);
-  if (!user || !user.pushToken) {
+  let pushToken = null;
+  
+  try {
+    const { query } = require('./db');
+    const { rows } = await query(`SELECT "pushToken" FROM users WHERE id = $1 LIMIT 1`, [receiverId]);
+    if (rows.length > 0 && rows[0].pushToken) {
+      pushToken = rows[0].pushToken;
+    } else {
+      // Fallback to db.json just in case
+      const db = readDB();
+      const user = db.users.find(u => u.id === receiverId);
+      if (user && user.pushToken) pushToken = user.pushToken;
+    }
+  } catch (error) {
+    console.error(`[PUSH] DB Error fetching push token: ${error.message}`);
+    // Fallback to db.json
+    const db = readDB();
+    const user = db.users.find(u => u.id === receiverId);
+    if (user && user.pushToken) pushToken = user.pushToken;
+  }
+
+  if (!pushToken) {
     console.log(`[PUSH] User ${receiverId} has no push token or user not found.`);
     return;
   }
 
-  const token = user.pushToken;
+  const token = pushToken;
   if (!token.startsWith('ExponentPushToken[')) {
     console.log(`[PUSH] Invalid Expo Push Token for user ${receiverId}: ${token}`);
     return;
   }
 
+  // Ensure eventId is in data if relatedType is event
+  if (data.type === 'system' && data.relatedId) {
+    data.eventId = data.relatedId;
+  }
+
   try {
+    console.log(`[PUSH] Sending to ${token} with data:`, data);
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
@@ -214,7 +239,8 @@ const sendPushNotification = async (receiverId, title, body, data = {}) => {
       const errorText = await response.text();
       console.error(`[PUSH] Expo push failed: ${errorText}`);
     } else {
-      console.log(`[PUSH] Notification sent successfully to user ${receiverId}`);
+      const resJson = await response.json();
+      console.log(`[PUSH] Notification sent successfully to user ${receiverId}. Result:`, resJson);
     }
   } catch (error) {
     console.error(`[PUSH] Error sending push notification: ${error.message}`);

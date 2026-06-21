@@ -107,6 +107,11 @@ export default function NotificationsScreen() {
       case 'moderation':
         router.push('/(tabs)/profile');
         break;
+      case 'system':
+        if (item.relatedType === 'event' && item.relatedId) {
+          router.push(`/event-details/${item.relatedId}`);
+        }
+        break;
       default:
         break;
     }

@@ -36,12 +36,14 @@ export function setupPushNotifications(currentUser: any, updateProfile: (updates
       const data = response.notification.request.content.data;
       console.log('[NOTIFICATION CLICKED] payload:', data);
       
-      if (data && data.conversationId) {
-        const { router } = require('expo-router');
-        setTimeout(() => {
+      const { router } = require('expo-router');
+      setTimeout(() => {
+        if (data && data.conversationId) {
           router.push(`/messages/${data.conversationId}`);
-        }, 100);
-      }
+        } else if (data && data.type === 'system' && data.relatedId) {
+          router.push(`/event-details/${data.relatedId}`);
+        }
+      }, 100);
     });
 
     return () => {
