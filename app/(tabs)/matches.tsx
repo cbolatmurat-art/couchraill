@@ -465,10 +465,8 @@ export default function DiscoverScreen() {
 
 
   const handleCommentLongPress = (comment: any) => {
-    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUserId || currentUser?.email || "unknown";
+    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
-    const commentTime = new Date(comment.createdAt).getTime();
-    if (Date.now() - commentTime > 60000) return;
 
     Alert.alert(
       "Yorumu Sil",

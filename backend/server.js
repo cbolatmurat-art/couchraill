@@ -1622,11 +1622,7 @@ app.delete('/api/listings/:listingId/comments/:commentId', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Bu yorumu silme yetkiniz yok.' });
     }
 
-    const commentTime = new Date(comment.createdAt).getTime();
-    const now = Date.now();
-    if (now - commentTime > 60000) {
-      return res.status(403).json({ success: false, error: 'Yorum oluşturulduktan 60 saniye sonra silinemez.' });
-    }
+
 
     await query('DELETE FROM listing_comments WHERE id = $1 OR "parentCommentId" = $1', [commentId]);
     res.json({ success: true });
@@ -6047,11 +6043,7 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Bu yorumu silme yetkiniz yok.' });
     }
 
-    const commentTime = new Date(comment.createdAt).getTime();
-    const now = Date.now();
-    if (now - commentTime > 60000) {
-      return res.status(403).json({ success: false, error: 'Yorum oluşturulduktan 60 saniye sonra silinemez.' });
-    }
+
 
     await query('DELETE FROM post_comments WHERE id = $1 OR "parentCommentId" = $1', [commentId]);
     res.json({ success: true });

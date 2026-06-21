@@ -376,8 +376,6 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   const handleCommentLongPress = (comment: any) => {
     const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUserId || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
-    const commentTime = new Date(comment.createdAt).getTime();
-    if (Date.now() - commentTime > 60000) return;
 
     Alert.alert(
       "Yorumu Sil",
@@ -744,7 +742,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       <Modal visible={commentsModalVisible} animationType="fade" transparent={true} onRequestClose={closeCommentsModal}>
         <View style={styles.modalOverlayFixed}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeCommentsModal} />
-          <Keyboard, KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+          <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
             <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
@@ -796,7 +794,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
             </View>
             </ScrollView>
             </Animated.View>
-          </Keyboard, KeyboardAvoidingView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
       <DeleteConfirmModal
