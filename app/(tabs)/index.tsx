@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, Animated, Dimensions, Alert, DeviceEventEmitter, RefreshControl, ScrollView } from 'react-native';
@@ -634,7 +635,7 @@ export default function FeedScreen() {
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <Swipeable enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(reply)}>
+                <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(reply)}>
 
                 <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
@@ -896,6 +897,7 @@ export default function FeedScreen() {
         transparent={true}
         onRequestClose={closeComments}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardAvoidingView 
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -958,6 +960,7 @@ export default function FeedScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+        </GestureHandlerRootView>
       </Modal>
 
       

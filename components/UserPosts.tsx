@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Modal, TextInput, FlatList, Keyboard, KeyboardAvoidingView, Platform, Alert, DeviceEventEmitter, Animated, Dimensions, ScrollView } from 'react-native';
@@ -481,7 +482,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <Swipeable enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(reply)}>
+                <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(reply)}>
 
                 <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
@@ -749,7 +750,8 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
 
       {/* Comments Modal */}
       <Modal visible={commentsModalVisible} animationType="fade" transparent={true} onRequestClose={closeCommentsModal}>
-        <View style={styles.modalOverlayFixed}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlayFixed}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeCommentsModal} />
           <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
             <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
@@ -803,8 +805,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
             </View>
             </ScrollView>
             </Animated.View>
-          </KeyboardAvoidingView>
-        </View>
+            </KeyboardAvoidingView>
+          </View>
+        </GestureHandlerRootView>
       </Modal>
       <DeleteConfirmModal
         visible={deleteModalVisible}
