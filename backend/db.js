@@ -558,6 +558,29 @@ const initDB = async () => {
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
     
+    // Performance Indexes
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications("userId")`,
+      `CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications("createdAt")`,
+      `CREATE INDEX IF NOT EXISTS idx_posts_user ON posts("userId")`,
+      `CREATE INDEX IF NOT EXISTS idx_posts_created ON posts("createdAt")`,
+      `CREATE INDEX IF NOT EXISTS idx_ev_inter_event ON event_interactions("eventId")`,
+      `CREATE INDEX IF NOT EXISTS idx_ev_inter_user ON event_interactions("userId")`,
+      `CREATE INDEX IF NOT EXISTS idx_ev_wait_event ON event_waitlists("eventId")`,
+      `CREATE INDEX IF NOT EXISTS idx_ev_wait_user ON event_waitlists("userId")`,
+      `CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages("conversationId")`,
+      `CREATE INDEX IF NOT EXISTS idx_msg_created ON messages("createdAt")`,
+      `CREATE INDEX IF NOT EXISTS idx_follows_following ON follows("followingUserId")`
+    ];
+
+    for (const idx of indexes) {
+      try {
+        await client.query(idx);
+      } catch (e) {
+        // Ignored for pg-mem or if index creation fails non-fatally
+      }
+    }
+
     // Legacy Follows Migration
     try {
       const fs = require('fs');
