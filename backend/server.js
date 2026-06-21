@@ -221,7 +221,7 @@ const sendPushNotification = async (receiverId, title, body, data = {}) => {
   }
 
   try {
-    console.log(`[PUSH] Sending to ${token} with data:`, data);
+    if (process.env.NODE_ENV !== 'production') { console.log(`[PUSH] Sending to ${token} with data:`, data); }
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
@@ -251,13 +251,13 @@ const sendPushNotification = async (receiverId, title, body, data = {}) => {
 };
 
 io.on('connection', (socket) => {
-  console.log(`[SOCKET] Client connected: ${socket.id}`);
+  if (process.env.NODE_ENV !== 'production') { console.log(`[SOCKET] Client connected: ${socket.id}`); }
 
   socket.on('user_connected', async (userId) => {
     if (!userId) return;
     activeUsers.set(userId, socket.id);
     socket.userId = userId;
-    console.log(`[SOCKET] User connected: ${userId} with socket ID: ${socket.id}`);
+    if (process.env.NODE_ENV !== 'production') { console.log(`[SOCKET] User connected: ${userId} with socket ID: ${socket.id}`); }
 
     let lastSeenStr = new Date().toISOString();
     
@@ -362,7 +362,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', async () => {
-    console.log(`[SOCKET] Client disconnected: ${socket.id}`);
+    if (process.env.NODE_ENV !== 'production') { console.log(`[SOCKET] Client disconnected: ${socket.id}`); }
     const userId = socket.userId;
     if (userId) {
       activeUsers.delete(userId);
@@ -659,7 +659,7 @@ app.post('/api/auth/login', async (req, res) => {
     `, [identifier, normalizedPhone || 'INVALID_PHONE']);
     const deletedDuplicateCount = deletedRows.length;
 
-    console.log(`[LOGIN_ATTEMPT] identifier: ${identifier}, activeUserFound: ${!!activeUser}, deletedDuplicateCount: ${deletedDuplicateCount}`);
+    if (process.env.NODE_ENV !== 'production') { console.log(`[LOGIN_ATTEMPT] identifier: ${identifier}, activeUserFound: ${!!activeUser}, deletedDuplicateCount: ${deletedDuplicateCount}`); }
 
     const isPhoneAttempt = !!normalizedPhone;
     const errorMsg = isPhoneAttempt ? 'Telefon Numarası veya Şifre Hatalı' : 'E-Posta veya Şifre Hatalı';
@@ -683,7 +683,7 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(401).json({ success: false, message: errorMsg });
       }
       
-      console.log(`[LOGIN_RESULT] identifier: ${identifier} -> success`);
+      if (process.env.NODE_ENV !== 'production') { console.log(`[LOGIN_RESULT] identifier: ${identifier} -> success`); }
       
       let sessionId = null;
       if (req.body.deviceInfo) {
@@ -1712,17 +1712,17 @@ app.post('/api/listings', async (req, res) => {
       if (!db.listings) db.listings = [];
       db.listings.unshift(newListing);
       writeDB(db);
-      console.log('CREATE_LISTING_SAVED_DBJSON', newListing.id);
+      if (process.env.NODE_ENV !== 'production') { console.log('CREATE_LISTING_SAVED_DBJSON', newListing.id); }
     } catch (dbErr) {
       console.error('Failed to save to db.json:', dbErr);
     }
 
-    console.log('CREATE_LISTING_SAVED_PG', JSON.stringify({
+    if (process.env.NODE_ENV !== 'production') { console.log('CREATE_LISTING_SAVED_PG', JSON.stringify({
       listingId: newListing.id,
       ownerId: newListing.hostId,
       city: newListing.city,
       isTimedListing: newListing.isTimedListing
-    }, null, 2));
+    }, null, 2)); }
 
     res.json({ success: true, listing: newListing });
   } catch (error) {
@@ -1827,10 +1827,10 @@ app.get('/api/requests/host', (req, res) => {
     };
   });
 
-  console.log('HOST_REQUESTS', JSON.stringify({
+  if (process.env.NODE_ENV !== 'production') { console.log('HOST_REQUESTS', JSON.stringify({
     hostId,
     count: populatedRequests.length
-  }, null, 2));
+  }, null, 2)); }
 
   res.json(populatedRequests);
 });
@@ -1919,21 +1919,21 @@ app.patch('/api/requests/:id/accept', async (req, res) => {
   const { hostId } = req.body;
   const requestId = req.params.id;
   
-  console.log("ACCEPT_REQUEST_HIT", JSON.stringify({ requestId, currentUserId: hostId }, null, 2));
+  if (process.env.NODE_ENV !== 'production') { console.log("ACCEPT_REQUEST_HIT", JSON.stringify({ requestId, currentUserId: hostId }, null, 2)); }
 
   const db = readDB();
   const request = db.requests.find(r => r.id === requestId);
   
   if (!request) return res.status(404).json({ error: 'Request not found' });
   
-  console.log("ACCEPT_REQUEST_FOUND", JSON.stringify({
+  if (process.env.NODE_ENV !== 'production') { console.log("ACCEPT_REQUEST_FOUND", JSON.stringify({
     requestId,
     guestId: request.userId,
     hostId: request.hostId,
     listingId: request.listingId,
     oldStatus: request.status,
     newStatus: 'accepted'
-  }, null, 2));
+  }, null, 2)); }
 
   if (request.hostId !== hostId) return res.status(403).json({ error: 'Unauthorized' });
   if (request.status !== 'pending') return res.status(400).json({ error: 'Request is not pending' });
@@ -1957,10 +1957,10 @@ app.patch('/api/requests/:id/accept', async (req, res) => {
       createdAt: new Date()
     });
 
-    console.log("REQUEST_ACCEPTED_NOTIFICATION_CREATED", {
+    if (process.env.NODE_ENV !== 'production') { console.log("REQUEST_ACCEPTED_NOTIFICATION_CREATED", {
       guestId: request.guestId,
       requestId: request._id || request.id
-    });
+    }); }
   } catch (error) {
     console.error(error);
   }
@@ -2243,8 +2243,8 @@ app.post('/api/verification/request', upload.fields([
   { name: 'idBackImage', maxCount: 1 },
   { name: 'selfieImage', maxCount: 1 }
 ]), async (req, res) => {
-  console.log(`[POST /api/verification/request] req.body:`, req.body);
-  console.log(`[POST /api/verification/request] req.files keys:`, req.files ? Object.keys(req.files) : 'null');
+  if (process.env.NODE_ENV !== 'production') { console.log(`[POST /api/verification/request] req.body:`, req.body); }
+  if (process.env.NODE_ENV !== 'production') { console.log(`[POST /api/verification/request] req.files keys:`, req.files ? Object.keys(req.files) : 'null'); }
   
   const { userId, kvkkAccepted, consentAccepted } = req.body;
   
@@ -3638,9 +3638,9 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
       }
     });
 
-    console.log("BREVO_SENDERS_RESPONSE_STATUS:", sendersRes.status);
+    if (process.env.NODE_ENV !== 'production') { console.log("BREVO_SENDERS_RESPONSE_STATUS:", sendersRes.status); }
     const sendersData = await sendersRes.json().catch(() => null);
-    console.log("BREVO_SENDERS_RESPONSE_BODY:", JSON.stringify(sendersData));
+    if (process.env.NODE_ENV !== 'production') { console.log("BREVO_SENDERS_RESPONSE_BODY:", JSON.stringify(sendersData)); }
 
     if (sendersRes.status === 401 || sendersRes.status === 403 || (sendersData && sendersData.code === "unauthorized")) {
       const errDetail = "Brevo API Yetkilendirme Hatası: API anahtarı veya IP adresi yetkilendirilmemiş. Lütfen Brevo panelinden IP adresinizi yetkilendirdiğinizden emin olun.";
@@ -3711,8 +3711,8 @@ app.post('/api/auth/send-email-verification', async (req, res) => {
 
     const responseData = await response.json().catch(() => null);
 
-    console.log("BREVO_API_RESPONSE_STATUS:", response.status);
-    console.log("BREVO_API_RESPONSE_BODY:", JSON.stringify(responseData));
+    if (process.env.NODE_ENV !== 'production') { console.log("BREVO_API_RESPONSE_STATUS:", response.status); }
+    if (process.env.NODE_ENV !== 'production') { console.log("BREVO_API_RESPONSE_BODY:", JSON.stringify(responseData)); }
 
     if (!response.ok) {
       console.error("BREVO_API_ERROR_RESPONSE:", responseData);
@@ -5754,7 +5754,7 @@ app.post('/api/posts', async (req, res) => {
 });
 
 app.delete('/api/posts/:id', async (req, res) => {
-  console.log("BACKEND DELETE GELDI:", req.params.id);
+  if (process.env.NODE_ENV !== 'production') { console.log("BACKEND DELETE GELDI:", req.params.id); }
 
   try {
     const postId = String(req.params.id);
@@ -5762,8 +5762,8 @@ app.delete('/api/posts/:id', async (req, res) => {
     const db = readDB();
     if (!db.posts) db.posts = [];
 
-    console.log("POSTS VAR MI:", typeof db.posts !== "undefined");
-    console.log("POST SAYISI BEFORE:", db.posts?.length);
+    if (process.env.NODE_ENV !== 'production') { console.log("POSTS VAR MI:", typeof db.posts !== "undefined"); }
+    if (process.env.NODE_ENV !== 'production') { console.log("POST SAYISI BEFORE:", db.posts?.length); }
 
     const before = db.posts.length;
 
@@ -5771,10 +5771,10 @@ app.delete('/api/posts/:id', async (req, res) => {
       String(p._id || p.id || p.postId) !== postId
     );
 
-    console.log("POST SAYISI AFTER:", db.posts.length);
+    if (process.env.NODE_ENV !== 'production') { console.log("POST SAYISI AFTER:", db.posts.length); }
 
     if (db.posts.length === before) {
-      console.log("SILINEMEDI: ID BULUNAMADI", postId);
+      if (process.env.NODE_ENV !== 'production') { console.log("SILINEMEDI: ID BULUNAMADI", postId); }
       return res.status(404).json({ success: false, message: "Gönderi bulunamadı", postId });
     }
 
@@ -5783,7 +5783,7 @@ app.delete('/api/posts/:id', async (req, res) => {
 
     writeDB(db);
 
-    console.log("SILINDI:", postId);
+    if (process.env.NODE_ENV !== 'production') { console.log("SILINDI:", postId); }
     return res.json({ success: true, deletedId: postId });
   } catch (error) {
     console.error("BACKEND DELETE ERROR:", error);
@@ -6109,8 +6109,8 @@ app.post('/api/admin/reports/:id/resolve', checkAdminAuth, async (req, res) => {
 
 // PATCH Reject Report
 app.patch('/api/admin/reports/:reportId/reject', checkAdminAuth, async (req, res) => {
-  console.log(`[API REQUEST] ${req.method} ${req.originalUrl}`);
-  console.log('[API BODY]', req.body);
+  if (process.env.NODE_ENV !== 'production') { console.log(`[API REQUEST] ${req.method} ${req.originalUrl}`); }
+  if (process.env.NODE_ENV !== 'production') { console.log('[API BODY]', req.body); }
   
   try {
     const reportId = req.params.reportId;
@@ -6121,7 +6121,7 @@ app.patch('/api/admin/reports/:reportId/reject', checkAdminAuth, async (req, res
     if (rows.length === 0) {
       console.log('[REJECT REPORT] Şikayet bulunamadı:', reportId);
       const responseBody = { success: false, error: 'Şikayet bulunamadı.' };
-      console.log(`[API RESPONSE] 404`, responseBody);
+      if (process.env.NODE_ENV !== 'production') { console.log(`[API RESPONSE] 404`, responseBody); }
       return res.status(404).json(responseBody);
     }
     const report = rows[0];
@@ -6174,12 +6174,12 @@ app.patch('/api/admin/reports/:reportId/reject', checkAdminAuth, async (req, res
     }
 
     const responseBody = { success: true, report };
-    console.log(`[API RESPONSE] 200`, responseBody);
+    if (process.env.NODE_ENV !== 'production') { console.log(`[API RESPONSE] 200`, responseBody); }
     res.json(responseBody);
   } catch (error) {
     console.error('[ADMIN_REPORT_REJECT_ERROR]', error);
     const responseBody = { success: false, error: 'Şikayet reddedilemedi.' };
-    console.log(`[API RESPONSE] 500`, responseBody);
+    if (process.env.NODE_ENV !== 'production') { console.log(`[API RESPONSE] 500`, responseBody); }
     res.status(500).json(responseBody);
   }
 });
@@ -6539,7 +6539,7 @@ setInterval(async () => {
   try {
     const { rows: pending } = await query(`
       SELECT * FROM pending_follow_notifications 
-      WHERE status = 'pending' AND action_type = 'unfollow' AND scheduled_at <= NOW()
+      WHERE status = 'pending' AND action_type = 'unfollow' AND scheduled_at <= CURRENT_TIMESTAMP
     `);
     
     if (pending.length > 0) {
