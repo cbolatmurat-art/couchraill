@@ -669,6 +669,7 @@ export default function AdminScreen() {
       { id: 'post', label: 'Gönderiler' },
       { id: 'listing', label: 'İlanlar' },
       { id: 'event', label: 'Etkinlikler' },
+      { id: 'comment', label: 'Yorumlar' },
       { id: 'other', label: 'Diğer' },
     ];
 
