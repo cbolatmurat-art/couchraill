@@ -5392,13 +5392,18 @@ app.delete('/api/events/:eventId/join', async (req, res) => {
     if (postRows.length > 0) {
       const event = postRows[0];
       if (event.participantLimit) {
+        let coOrg = event.coOrganizers;
+        if (typeof coOrg === 'string') {
+          try { coOrg = JSON.parse(coOrg); } catch(e) { coOrg = null; }
+        }
+        
         const { rows: pRows } = await query(`
           SELECT COUNT(DISTINCT ei."userId") as count 
           FROM event_interactions ei 
           WHERE ei."eventId" = $1 AND ei.type = 'join' 
             AND ei."userId" != $2
             AND ($3::jsonb IS NULL OR jsonb_typeof($3::jsonb) != 'array' OR NOT ($3::jsonb @> jsonb_build_array(ei."userId"::text)))
-        `, [eventId, event.authorId || event.userId || '', event.coOrganizers ? JSON.stringify(event.coOrganizers) : null]);
+        `, [eventId, event.authorId || event.userId || '', coOrg ? JSON.stringify(coOrg) : null]);
         
         const count = parseInt(pRows[0].count || 0);
         const availableSlots = event.participantLimit - count;
@@ -5547,13 +5552,18 @@ app.delete('/api/events/:eventId/participants/:participantId', async (req, res) 
 
     // Check waitlist
     if (event.participantLimit) {
+      let coOrg = event.coOrganizers;
+      if (typeof coOrg === 'string') {
+        try { coOrg = JSON.parse(coOrg); } catch(e) { coOrg = null; }
+      }
+
       const { rows: pRows } = await query(`
         SELECT COUNT(DISTINCT ei."userId") as count 
         FROM event_interactions ei 
         WHERE ei."eventId" = $1 AND ei.type = 'join' 
           AND ei."userId" != $2
           AND ($3::jsonb IS NULL OR jsonb_typeof($3::jsonb) != 'array' OR NOT ($3::jsonb @> jsonb_build_array(ei."userId"::text)))
-      `, [eventId, event.authorId || event.userId || '', event.coOrganizers ? JSON.stringify(event.coOrganizers) : null]);
+      `, [eventId, event.authorId || event.userId || '', coOrg ? JSON.stringify(coOrg) : null]);
       
       const count = parseInt(pRows[0].count || 0);
       const availableSlots = event.participantLimit - count;
