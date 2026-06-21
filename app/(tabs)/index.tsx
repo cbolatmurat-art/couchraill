@@ -871,19 +871,24 @@ export default function FeedScreen() {
                 <ActivityIndicator size="large" color={Colors.primary} />
               </View>
             ) : (
-              <FlatList
+              <>
+                {commentError ? <Text style={{color: 'red', textAlign: 'center', padding: 8}}>{commentError}</Text> : null}
+                <FlatList
                 data={comments.filter(c => !c.parentCommentId)}
                 keyExtractor={item => item.id}
                 renderItem={renderCommentItem}
                 contentContainerStyle={styles.commentsList}
+                extraData={comments}
                 ListEmptyComponent={() => (
                   <Text style={styles.emptyCommentsText}>
                     {commentError || 'Henüz yorum yok. İlk yorumu sen yap!'}
                   </Text>
                 )}
               />
+              </>
             )}
 
+            <ScrollView keyboardShouldPersistTaps="handled" scrollEnabled={false} style={{flexGrow: 0, flexShrink: 0}}>
             <View style={styles.commentInputContainer}>
               <TextInput
                 ref={commentInputRef}
@@ -906,6 +911,7 @@ export default function FeedScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

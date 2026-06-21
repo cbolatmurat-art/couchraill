@@ -714,14 +714,19 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
             {loadingComments ? (
               <View style={{ padding: 20 }}><ActivityIndicator size="large" color={Colors.primary} /></View>
             ) : (
+              <>
+                {commentError ? <Text style={{color: 'red', textAlign: 'center', padding: 8}}>{commentError}</Text> : null}
               <FlatList
                 data={comments.filter(c => !c.parentCommentId)}
                 keyExtractor={item => item.id}
                 renderItem={renderCommentItem}
                 contentContainerStyle={{ padding: 16 }}
+                extraData={comments}
                 ListEmptyComponent={<Text style={{ textAlign: 'center', color: Colors.textLight, marginTop: 20 }}>Henüz yorum yok. İlk yorumu sen yap!</Text>}
               />
+              </>
             )}
+            <ScrollView keyboardShouldPersistTaps="handled" scrollEnabled={false} style={{flexGrow: 0, flexShrink: 0}}>
             <View style={styles.commentInputContainer}>
               <TextInput
                 ref={commentInputRef}
@@ -748,6 +753,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
                 )}
               </TouchableOpacity>
             </View>
+            </ScrollView>
             </Animated.View>
           </KeyboardAvoidingView>
         </View>
