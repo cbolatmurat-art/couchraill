@@ -378,33 +378,6 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
 
 
 
-  const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
-    // Keep the action container stationary behind the sliding row
-    // Swipeable translates the wrapper by dragX. We counteract it so it stays at the right edge.
-    const trans = dragX.interpolate({
-      inputRange: [-70, 0],
-      outputRange: [0, -70],
-      extrapolate: 'clamp',
-    });
-
-    return (
-      <View style={{ width: 70 }}>
-        <Animated.View style={{ flex: 1, backgroundColor: Colors.danger, transform: [{ translateX: trans }] }}>
-          <TouchableOpacity 
-            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-            onPress={() => {
-              setCommentToDelete(comment);
-              setCommentDeleteModalVisible(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="trash-outline" size={24} color="#FFF" />
-            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    );
-  };
 
   const handleDeleteCommentSwipe = async (comment: any) => {
     const meId = currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
