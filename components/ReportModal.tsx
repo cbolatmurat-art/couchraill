@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../constants/config';
 import { AlertHelper } from '../utils/AlertHelper';
 
-export type ContentType = 'post' | 'listing' | 'event' | 'other';
+export type ContentType = 'post' | 'listing' | 'event' | 'comment' | 'other';
 
 interface ReportModalProps {
   visible: boolean;

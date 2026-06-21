@@ -582,6 +582,31 @@ export default function FeedScreen() {
     );
   };
 
+  const renderCommentLeftActions = (comment: any, progress: any, dragX: any) => {
+    const trans = dragX.interpolate({
+      inputRange: [0, 70],
+      outputRange: [0, -70], // When open (70), shifts left to counteract slide and remain stationary.
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <Animated.View style={{ width: 70, backgroundColor: Colors.warning, transform: [{ translateX: trans }] }}>
+        <TouchableOpacity 
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+          onPress={() => {
+            if (typeof handleReportConfirm === 'function') {
+              handleReportConfirm({ ...comment, isComment: true });
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="flag-outline" size={24} color="#FFF" />
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Şikayet</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
 ;
 
 
@@ -614,7 +639,7 @@ export default function FeedScreen() {
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <Swipeable enabled={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
+        <Swipeable enabled={true} friction={2} rightThreshold={40} leftThreshold={40} renderRightActions={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown') ? (progress, dragX) => renderCommentRightActions(item, progress, dragX) : undefined} renderLeftActions={!(item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')) ? (progress, dragX) => renderCommentLeftActions(item, progress, dragX) : undefined}>
 
         <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
           <TouchableOpacity onPress={() => {
@@ -1022,7 +1047,7 @@ export default function FeedScreen() {
           onClose={() => setReportModalVisible(false)}
           reporterUserId={currentUser.id || currentUser.userId || currentUser._id || currentUser.uid || currentUser.email || currentUser.username || "unknown_reporter"}
           reportedUserId={reportItem.userId || reportItem.authorId || reportItem.ownerId || reportItem.hostId || (reportItem.owner && reportItem.owner.id) || (reportItem.author && reportItem.author.id)}
-          contentType={(reportItem.type === 'listing' || reportItem.isListing) ? 'listing' : (reportItem.type === 'event' || reportItem.isEvent) ? 'event' : 'post'}
+          contentType={(reportItem.type === 'listing' || reportItem.isListing) ? 'listing' : (reportItem.type === 'event' || reportItem.isEvent) ? 'event' : reportItem.isComment ? 'comment' : 'post'}
           contentId={reportItem.id}
         />
       )}
