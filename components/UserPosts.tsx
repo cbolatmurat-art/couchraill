@@ -432,7 +432,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <TouchableOpacity activeOpacity={0.7} onLongPress={(e) => handleCommentLongPress(item, e)} delayLongPress={300} style={{ flexDirection: 'row' }}>
+        <Swipeable enabled={item.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(item)}>
+
+        <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity onPress={() => {
               closeCommentsModal();
               handleProfilePress(user.id);
@@ -463,7 +465,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               </View>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
+
+        </Swipeable>
 
         {hasReplies && !isRepliesOpen && (
           <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: true}))} style={{ marginLeft: 48, marginTop: 8 }}>
@@ -477,7 +481,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <TouchableOpacity key={reply.id} activeOpacity={0.7} onLongPress={(e) => handleCommentLongPress(reply, e)} delayLongPress={300} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <Swipeable enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} renderRightActions={() => renderCommentRightActions(reply)}>
+
+                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
@@ -505,7 +511,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
                       </View>
                     </View>
                   </View>
-                </TouchableOpacity>
+                </View>
+
+                </Swipeable>
               );
             })}
             <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: false}))} style={{ marginTop: 4 }}>
