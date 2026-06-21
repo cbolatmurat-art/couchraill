@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, Animated, Dimensions, Alert, DeviceEventEmitter, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, Animated, Dimensions, Alert, DeviceEventEmitter, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform, Alert, DeviceEventEmitter, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform, Alert, DeviceEventEmitter, Animated, Dimensions, ScrollView } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { API_BASE_URL } from '../constants/config';

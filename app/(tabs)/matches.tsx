@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, KeyboardAvoidingView, Platform, TextInput, Image, Keyboard, Alert, DeviceEventEmitter, Dimensions, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, KeyboardAvoidingView, Platform, TextInput, Image, Keyboard, Alert, DeviceEventEmitter, Dimensions, LayoutAnimation, UIManager, ScrollView } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
