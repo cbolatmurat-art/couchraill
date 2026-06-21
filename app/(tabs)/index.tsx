@@ -551,28 +551,25 @@ export default function FeedScreen() {
   };
 
   const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
+    // Keep the action container stationary behind the sliding row
+    // Swipeable translates the wrapper by dragX. We counteract it so it stays at the right edge.
     const trans = dragX.interpolate({
       inputRange: [-70, 0],
-      outputRange: [0, 20],
-      extrapolate: 'clamp',
-    });
-    const opacity = dragX.interpolate({
-      inputRange: [-70, -30, 0],
-      outputRange: [1, 0.5, 0],
+      outputRange: [0, -70],
       extrapolate: 'clamp',
     });
 
     return (
-      <TouchableOpacity 
-        style={{ backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center', width: 70, height: '100%' }}
-        onPress={() => handleDeleteCommentSwipe(comment)}
-        activeOpacity={0.8}
-      >
-        <Animated.View style={{ opacity, transform: [{ translateX: trans }], alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={{ width: 70, height: '100%', transform: [{ translateX: trans }] }}>
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center' }}
+          onPress={() => handleDeleteCommentSwipe(comment)}
+          activeOpacity={0.8}
+        >
           <Ionicons name="trash-outline" size={24} color="#FFF" />
           <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
-        </Animated.View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
