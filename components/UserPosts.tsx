@@ -463,7 +463,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       <View style={{ marginBottom: 16 }}>
         <Swipeable enabled={item.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
 
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
           <TouchableOpacity onPress={() => {
               closeCommentsModal();
               handleProfilePress(user.id);

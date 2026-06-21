@@ -616,7 +616,7 @@ export default function FeedScreen() {
       <View style={{ marginBottom: 16 }}>
         <Swipeable enabled={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
 
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
           <TouchableOpacity onPress={() => {
               closeComments();
               handleNavigateToProfile(user.id);
