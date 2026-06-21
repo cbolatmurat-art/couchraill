@@ -665,7 +665,7 @@ export default function FeedScreen() {
               return (
                 <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
 
-                <View style={{ flexDirection: 'row', backgroundColor: '#FFF' }}>
+                <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
