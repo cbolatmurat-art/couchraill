@@ -60,6 +60,8 @@ export default function DiscoverScreen() {
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
   // Comments State
+  const [commentDeleteModalVisible, setCommentDeleteModalVisible] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<any>(null);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [comments, setComments] = useState<any[]>([]);
@@ -498,6 +500,56 @@ export default function DiscoverScreen() {
     });
 
     return (
+      <View style={{ width: 70 }}>
+        <Animated.View style={{ flex: 1, backgroundColor: Colors.danger, transform: [{ translateX: trans }] }}>
+          <TouchableOpacity 
+            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => {
+              setCommentToDelete(comment);
+              setCommentDeleteModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={24} color="#FFF" />
+            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const handleDeleteCommentSwipe = async (comment: any) => {
+    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
+    if (comment.userId !== meId) return;
+
+    setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
+    setFeed(prev => prev.map(l => { if (l.id === activeListingId || l._id === activeListingId) { return { ...l, commentCount: Math.max(0, (l.commentCount || 1) - 1) }; } return l; }));
+    try {
+      const isListing = comment.id.startsWith('lc') || comment.listingId;
+      const type = isListing ? 'listings' : 'posts';
+      const parentId = activeListingId;
+      
+      const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
+      await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: meId })
+      });
+    } catch(e) {
+       console.error("Yorum silme hatası", e);
+    }
+  };
+
+  const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
+    // Keep the action container stationary behind the sliding row
+    // Swipeable translates the wrapper by dragX. We counteract it so it stays at the right edge.
+    const trans = dragX.interpolate({
+      inputRange: [-70, 0],
+      outputRange: [0, -70],
+      extrapolate: 'clamp',
+    });
+
+    return (
       <Animated.View style={{ width: 70, height: '100%', transform: [{ translateX: trans }] }}>
         <TouchableOpacity 
           style={{ flex: 1, backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center' }}
@@ -537,7 +589,7 @@ export default function DiscoverScreen() {
       <View style={{ marginBottom: 16 }}>
         <Swipeable enabled={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
 
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', backgroundColor: '#FFF' }}>
           <TouchableOpacity onPress={() => {
               closeComments();
               handleNavigateToProfile(user.id);
@@ -586,7 +638,7 @@ export default function DiscoverScreen() {
               return (
                 <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
 
-                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', marginBottom: 12, backgroundColor: '#FFF' }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />

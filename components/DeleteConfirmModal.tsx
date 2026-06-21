@@ -6,15 +6,17 @@ interface DeleteConfirmModalProps {
   visible: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  title?: string;
+  text?: string;
 }
 
-export const DeleteConfirmModal = ({ visible, onCancel, onConfirm }: DeleteConfirmModalProps) => {
+export const DeleteConfirmModal = ({ visible, onCancel, onConfirm, title = "Gönderiyi sil", text = "Bu gönderiyi silmek istediğinize emin misiniz?" }: DeleteConfirmModalProps) => {
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <Text style={styles.title}>Gönderiyi sil</Text>
-          <Text style={styles.text}>Bu gönderiyi silmek istediğinize emin misiniz?</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.text}>{text}</Text>
           
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>

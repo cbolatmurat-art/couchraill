@@ -34,6 +34,8 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   const [postsError, setPostsError] = useState<string | null>(null);
 
   // Comments Modal State
+  const [commentDeleteModalVisible, setCommentDeleteModalVisible] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<any>(null);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
@@ -407,6 +409,56 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
     });
 
     return (
+      <View style={{ width: 70 }}>
+        <Animated.View style={{ flex: 1, backgroundColor: Colors.danger, transform: [{ translateX: trans }] }}>
+          <TouchableOpacity 
+            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => {
+              setCommentToDelete(comment);
+              setCommentDeleteModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={24} color="#FFF" />
+            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const handleDeleteCommentSwipe = async (comment: any) => {
+    const meId = currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
+    if (comment.userId !== meId) return;
+
+    setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
+    setItems(prev => prev.map(p => { if (p.id === selectedPostId || p._id === selectedPostId) { const isNormalized = p.commentsCount !== undefined; if (isNormalized) { return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }; } else { return { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) }; } } return p; }));
+    try {
+      const isListing = comment.id.startsWith('lc') || comment.listingId;
+      const type = isListing ? 'listings' : 'posts';
+      const parentId = selectedPostId;
+      
+      const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
+      await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: meId })
+      });
+    } catch(e) {
+       console.error("Yorum silme hatası", e);
+    }
+  };
+
+  const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
+    // Keep the action container stationary behind the sliding row
+    // Swipeable translates the wrapper by dragX. We counteract it so it stays at the right edge.
+    const trans = dragX.interpolate({
+      inputRange: [-70, 0],
+      outputRange: [0, -70],
+      extrapolate: 'clamp',
+    });
+
+    return (
       <Animated.View style={{ width: 70, height: '100%', transform: [{ translateX: trans }] }}>
         <TouchableOpacity 
           style={{ flex: 1, backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center' }}
@@ -446,7 +498,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       <View style={{ marginBottom: 16 }}>
         <Swipeable enabled={item.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
 
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', backgroundColor: '#FFF' }}>
           <TouchableOpacity onPress={() => {
               closeCommentsModal();
               handleProfilePress(user.id);
@@ -495,7 +547,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               return (
                 <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
 
-                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', marginBottom: 12, backgroundColor: '#FFF' }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
@@ -820,7 +872,20 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
           </View>
         </GestureHandlerRootView>
       </Modal>
-      <DeleteConfirmModal
+              <DeleteConfirmModal
+          visible={commentDeleteModalVisible}
+          onCancel={() => { setCommentDeleteModalVisible(false); setCommentToDelete(null); }}
+          onConfirm={() => {
+            setCommentDeleteModalVisible(false);
+            if (commentToDelete) {
+              handleDeleteCommentSwipe(commentToDelete);
+              setCommentToDelete(null);
+            }
+          }}
+          title="Yorumu Sil"
+          text="Yorumunuzu silmek istediğinize emin misiniz?"
+        />
+        <DeleteConfirmModal
         visible={deleteModalVisible}
         onCancel={() => { setDeleteModalVisible(false); setItemToDelete(null); }}
         onConfirm={() => {
