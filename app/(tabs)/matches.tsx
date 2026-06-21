@@ -493,34 +493,35 @@ export default function DiscoverScreen() {
   };
 
   const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
-    // Reveal animation using width growth and anchoring to the right.
-    // This allows the row to remain transparent while hiding the action perfectly when closed.
-    const width = dragX.interpolate({
+    // Reveal from behind animation WITHOUT animating width.
+    // We use a fixed-width container with overflow hidden.
+    // The inner content is translated right by dragX to stay stationary.
+    const trans = dragX.interpolate({
       inputRange: [-70, 0],
-      outputRange: [70, 0],
+      outputRange: [0, -70], // When closed (0), shifted left by 70 to sit at ScreenWidth - 70.
       extrapolate: 'clamp',
     });
 
     return (
-      <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
-        <Animated.View style={{ width, overflow: 'hidden', position: 'relative' }}>
-          <View style={{ width: 70, position: 'absolute', right: 0, top: 0, bottom: 0, backgroundColor: Colors.danger }}>
-            <TouchableOpacity 
-              style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-              onPress={() => {
-                setCommentToDelete(comment);
-                setCommentDeleteModalVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="trash-outline" size={24} color="#FFF" />
-              <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
-            </TouchableOpacity>
-          </View>
+      <View style={{ width: 70, overflow: 'hidden' }}>
+        <Animated.View style={{ flex: 1, backgroundColor: Colors.danger, transform: [{ translateX: trans }] }}>
+          <TouchableOpacity 
+            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => {
+              setCommentToDelete(comment);
+              setCommentDeleteModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={24} color="#FFF" />
+            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+          </TouchableOpacity>
         </Animated.View>
       </View>
     );
   };
+
+
 
 ;
 
