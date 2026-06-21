@@ -778,6 +778,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       DeviceEventEmitter.emit('social_stats_updated', data);
     });
 
+    newSocket.on('event_capacity_changed', (data: { eventId: string, participantCount: number }) => {
+      console.log('[SOCKET] event_capacity_changed:', data);
+      DeviceEventEmitter.emit('global_event_update', data);
+    });
+
     newSocket.on('message_reaction_updated', (data: { messageId: string, reactions: any[] }) => {
       console.log('[SOCKET] message_reaction_updated:', data);
       setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m));

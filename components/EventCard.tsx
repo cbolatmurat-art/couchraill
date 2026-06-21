@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert, Platform, DeviceEventEmitter } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -48,10 +48,21 @@ export const EventCard = React.memo(({
   const [removeConfirmParticipantId, setRemoveConfirmParticipantId] = useState<string | null>(null);
   const [notifyModalVisible, setNotifyModalVisible] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setIsJoined(item.isJoined || false);
     setParticipantCount(item.participantCount || item.participants?.length || 0);
   }, [item.isJoined, item.participantCount, item.participants]);
+
+  // Global state sync
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('global_event_update', (data) => {
+      if (data.eventId === item.id) {
+        if (data.isJoined !== undefined) setIsJoined(data.isJoined);
+        if (data.participantCount !== undefined) setParticipantCount(data.participantCount);
+      }
+    });
+    return () => sub.remove();
+  }, [item.id]);
 
   const sortedParticipants = React.useMemo(() => {
     if (!participantsList || participantsList.length === 0) {
@@ -110,10 +121,17 @@ export const EventCard = React.memo(({
     const shouldCount = !isOwner && !isCoOrg;
 
     const previousCount = participantCount;
-    setIsJoined(true);
+    const newIsJoined = true;
+    let newCount = participantCount;
+    
     if (shouldCount) {
-      setParticipantCount(prev => prev + 1);
+      newCount = participantCount + 1;
     }
+
+    // Optimistic update
+    setIsJoined(newIsJoined);
+    setParticipantCount(newCount);
+    DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isJoined: newIsJoined, participantCount: newCount });
 
     try {
       const response = await fetch(`${API_BASE_URL}/events/${item.id}/join`, {
@@ -125,10 +143,21 @@ export const EventCard = React.memo(({
       if (!data.success && data.message !== 'Zaten katıldınız.') {
         throw new Error(data.error || 'Katılım işlemi başarısız');
       }
-    } catch (error) {
+    } catch (error: any) {
       setIsJoined(false);
-      setParticipantCount(previousCount);
-      Alert.alert('Hata', 'İşlem gerçekleştirilemedi, lütfen tekrar deneyin.');
+      let revertCount = previousCount;
+      if (error.message === 'Kontenjan dolu.') {
+        if (item.participantLimit) {
+          revertCount = item.participantLimit;
+        }
+        setParticipantCount(revertCount);
+        DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isJoined: false, participantCount: revertCount });
+        Alert.alert('Bilgi', 'Maalesef etkinlik kontenjanı dolmuş. İsterseniz bildirim alabilirsiniz.');
+      } else {
+        setParticipantCount(previousCount);
+        DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isJoined: false, participantCount: previousCount });
+        Alert.alert('Hata', error.message || 'İşlem gerçekleştirilemedi, lütfen tekrar deneyin.');
+      }
     }
   };
 
@@ -142,7 +171,9 @@ export const EventCard = React.memo(({
       const data = await response.json();
       if (data.success) {
         setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== participantId));
-        setParticipantCount(prev => Math.max(0, prev - 1));
+        const newCount = Math.max(0, participantCount - 1);
+        setParticipantCount(newCount);
+        DeviceEventEmitter.emit('global_event_update', { eventId: item.id, participantCount: newCount });
       } else {
         Alert.alert('Hata', data.error || 'Katılımcı çıkarılamadı.');
       }
@@ -159,11 +190,17 @@ export const EventCard = React.memo(({
     const shouldCount = !isOwner && !isCoOrg;
 
     const previousCount = participantCount;
-    setIsJoined(false);
+    let newCount = participantCount;
+    
     if (shouldCount) {
-      setParticipantCount(prev => Math.max(0, prev - 1));
+      newCount = Math.max(0, participantCount - 1);
     }
+    
+    setIsJoined(false);
+    setParticipantCount(newCount);
     setParticipantsList(prev => prev.filter(p => (p.id || p._id) !== (currentUser.id || currentUser._id)));
+    
+    DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isJoined: false, participantCount: newCount });
 
     try {
       const response = await fetch(`${API_BASE_URL}/events/${item.id}/join`, {
@@ -178,6 +215,7 @@ export const EventCard = React.memo(({
     } catch (error) {
       setIsJoined(true);
       setParticipantCount(previousCount);
+      DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isJoined: true, participantCount: previousCount });
       Alert.alert('Hata', 'Bir sorun oluştu.');
     }
   };

@@ -5312,6 +5312,8 @@ app.post('/api/events/:eventId/join', async (req, res) => {
     const newIntId = `eint_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     await query(`INSERT INTO event_interactions (id, "eventId", "userId", type, "createdAt") VALUES ($1, $2, $3, 'join', $4)`, [newIntId, eventId, userId, new Date().toISOString()]);
 
+    io.emit('event_capacity_changed', { eventId, participantCount: currentCount + 1 });
+
     res.json({ success: true });
   } catch (error) {
     if (error.code === '23505') {
@@ -5337,13 +5339,18 @@ app.post('/api/events/:eventId/waitlist', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Etkinlik sahibi bekleme listesine eklenemez.' });
     }
 
+    let coOrg = event.coOrganizers;
+    if (typeof coOrg === 'string') {
+      try { coOrg = JSON.parse(coOrg); } catch(e) { coOrg = null; }
+    }
+
     const { rows: pRows } = await query(`
       SELECT COUNT(DISTINCT ei."userId") as count 
       FROM event_interactions ei 
       WHERE ei."eventId" = $1 AND ei.type = 'join' 
         AND ei."userId" != $2
         AND ($3::jsonb IS NULL OR jsonb_typeof($3::jsonb) != 'array' OR NOT ($3::jsonb @> jsonb_build_array(ei."userId"::text)))
-    `, [eventId, event.authorId || event.userId || '', event.coOrganizers ? JSON.stringify(event.coOrganizers) : null]);
+    `, [eventId, event.authorId || event.userId || '', coOrg ? JSON.stringify(coOrg) : null]);
     
     const count = parseInt(pRows[0].count || 0);
     if (!event.participantLimit || count < event.participantLimit) {
@@ -5406,6 +5413,7 @@ app.delete('/api/events/:eventId/join', async (req, res) => {
         `, [eventId, event.authorId || event.userId || '', coOrg ? JSON.stringify(coOrg) : null]);
         
         const count = parseInt(pRows[0].count || 0);
+        io.emit('event_capacity_changed', { eventId, participantCount: count });
         const availableSlots = event.participantLimit - count;
         
         if (availableSlots > 0) {
@@ -5429,6 +5437,10 @@ app.delete('/api/events/:eventId/join', async (req, res) => {
             });
           }
         }
+      } else {
+        // limit yoksa da participantCount yolla
+        const { rows: pRows2 } = await query(`SELECT COUNT(*) as count FROM event_interactions WHERE "eventId" = $1 AND type = 'join'`, [eventId]);
+        io.emit('event_capacity_changed', { eventId, participantCount: parseInt(pRows2[0].count || 0) });
       }
     }
     
@@ -5566,6 +5578,7 @@ app.delete('/api/events/:eventId/participants/:participantId', async (req, res) 
       `, [eventId, event.authorId || event.userId || '', coOrg ? JSON.stringify(coOrg) : null]);
       
       const count = parseInt(pRows[0].count || 0);
+      io.emit('event_capacity_changed', { eventId, participantCount: count });
       const availableSlots = event.participantLimit - count;
       
       if (availableSlots > 0) {
@@ -5589,6 +5602,9 @@ app.delete('/api/events/:eventId/participants/:participantId', async (req, res) 
           });
         }
       }
+    } else {
+      const { rows: pRows2 } = await query(`SELECT COUNT(*) as count FROM event_interactions WHERE "eventId" = $1 AND type = 'join'`, [eventId]);
+      io.emit('event_capacity_changed', { eventId, participantCount: parseInt(pRows2[0].count || 0) });
     }
 
     res.json({ success: true, message: 'Kullanıcı etkinlikten çıkarıldı.' });

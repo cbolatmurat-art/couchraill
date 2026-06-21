@@ -99,6 +99,7 @@ function RootLayoutContent() {
       <Stack.Screen name="reset-password" options={{ title: 'Şifre Sıfırla', headerShown: false }} />
       <Stack.Screen name="admin" options={{ headerShown: false }} />
       <Stack.Screen name="admin-login" options={{ headerShown: false }} />
+      <Stack.Screen name="event-details/[id]" options={{ presentation: 'transparentModal', headerShown: false, animation: 'fade' }} />
 
       {/* Legal & Policy Screens */}
       <Stack.Screen name="legal/kvkk" options={{ title: 'Gizlilik' }} />
