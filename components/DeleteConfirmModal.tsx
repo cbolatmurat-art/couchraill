@@ -8,9 +8,10 @@ interface DeleteConfirmModalProps {
   onConfirm: () => void;
   title?: string;
   text?: string;
+  cancelText?: string;
 }
 
-export const DeleteConfirmModal = ({ visible, onCancel, onConfirm, title = "Gönderiyi sil", text = "Bu gönderiyi silmek istediğinize emin misiniz?" }: DeleteConfirmModalProps) => {
+export const DeleteConfirmModal = ({ visible, onCancel, onConfirm, title = "Gönderiyi sil", text = "Bu gönderiyi silmek istediğinize emin misiniz?", cancelText = "Vazgeç" }: DeleteConfirmModalProps) => {
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
@@ -20,7 +21,7 @@ export const DeleteConfirmModal = ({ visible, onCancel, onConfirm, title = "Gön
           
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-              <Text style={styles.cancelText}>Vazgeç</Text>
+              <Text style={styles.cancelText}>{cancelText}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm}>
               <Text style={styles.confirmText}>Sil</Text>

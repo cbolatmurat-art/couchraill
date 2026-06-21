@@ -555,27 +555,38 @@ export default function FeedScreen() {
   };
 
   const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
-    // Keep the action container stationary behind the sliding row
-    // Swipeable translates the wrapper by dragX. We counteract it so it stays at the right edge.
-    const trans = dragX.interpolate({
+    // Reveal animation using width growth and anchoring to the right.
+    // This allows the row to remain transparent while hiding the action perfectly when closed.
+    const width = dragX.interpolate({
       inputRange: [-70, 0],
-      outputRange: [0, -70],
+      outputRange: [70, 0],
       extrapolate: 'clamp',
     });
 
     return (
-      <Animated.View style={{ width: 70, height: '100%', transform: [{ translateX: trans }] }}>
-        <TouchableOpacity 
-          style={{ flex: 1, backgroundColor: Colors.danger, justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => handleDeleteCommentSwipe(comment)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="trash-outline" size={24} color="#FFF" />
-          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
+        <Animated.View style={{ width, overflow: 'hidden', position: 'relative' }}>
+          <View style={{ width: 70, position: 'absolute', right: 0, top: 0, bottom: 0, backgroundColor: Colors.danger }}>
+            <TouchableOpacity 
+              style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+              onPress={() => {
+                setCommentToDelete(comment);
+                setCommentDeleteModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={24} color="#FFF" />
+              <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
     );
   };
+
+;
+
+;
 
   const renderCommentItem = ({ item }: { item: any }) => {
     const user = item.user || {};
@@ -603,7 +614,7 @@ export default function FeedScreen() {
       <View style={{ marginBottom: 16 }}>
         <Swipeable enabled={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(item, progress, dragX)}>
 
-        <View style={{ flexDirection: 'row', backgroundColor: '#FFF' }}>
+        <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity onPress={() => {
               closeComments();
               handleNavigateToProfile(user.id);
@@ -652,7 +663,7 @@ export default function FeedScreen() {
               return (
                 <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
 
-                <View style={{ flexDirection: 'row', marginBottom: 12, backgroundColor: '#FFF' }}>
+                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
@@ -992,7 +1003,7 @@ export default function FeedScreen() {
             }
           }}
           title="Yorumu Sil"
-          text="Yorumunuzu silmek istediğinize emin misiniz?"
+          text="Bu yorumu silmek istediğinize emin misiniz?" cancelText="İptal"
         />
         <DeleteConfirmModal
           visible={deleteModalVisible}
