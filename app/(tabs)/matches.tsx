@@ -359,7 +359,6 @@ export default function DiscoverScreen() {
     if (!newComment.trim() || !currentUser || !activeListingId) return;
     setSubmittingComment(true);
     setCommentError('');
-    Keyboard.dismiss();
     try {
       const activeItem = feed.find(l => l.id === activeListingId);
       const itemType = activeItem?.type || 'listing';
@@ -375,6 +374,7 @@ export default function DiscoverScreen() {
       const data = await res.json();
       
       if (data.success) {
+        Keyboard.dismiss();
         setComments([data.comment, ...comments]);
         setNewComment('');
         if (replyingToCommentId) {

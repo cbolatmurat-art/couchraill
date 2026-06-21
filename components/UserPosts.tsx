@@ -261,6 +261,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       console.log("COMMENT_SEND_RESPONSE", data);
 
       if (data.success) {
+        Keyboard.dismiss();
         setComments(prev => [data.comment, ...prev]);
         setNewComment('');
         if (replyingToCommentId) {

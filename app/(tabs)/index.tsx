@@ -406,7 +406,6 @@ export default function FeedScreen() {
     
     setSubmittingComment(true);
     setCommentError('');
-    Keyboard.dismiss();
 
     try {
       const activeItem = feed.find(l => l.id === activeListingId);
@@ -423,6 +422,7 @@ export default function FeedScreen() {
       const data = await res.json();
       
       if (data.success) {
+        Keyboard.dismiss();
         setComments([data.comment, ...comments]);
         setNewComment('');
         if (replyingToCommentId) {
@@ -896,7 +896,7 @@ export default function FeedScreen() {
               />
               <TouchableOpacity 
                 style={[styles.commentSubmitBtn, !newComment.trim() && { opacity: 0.5 }]}
-                onPress={submitComment}
+                onPressIn={submitComment}
                 disabled={submittingComment || !newComment.trim()}
               >
                 {submittingComment ? (
