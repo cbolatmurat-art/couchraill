@@ -377,6 +377,9 @@ export default function DiscoverScreen() {
       if (data.success) {
         setComments([data.comment, ...comments]);
         setNewComment('');
+        if (replyingToCommentId) {
+          setOpenReplies(prev => ({ ...prev, [replyingToCommentId]: true }));
+        }
         setReplyingToCommentId(null);
         setFeed(prevFeed => prevFeed.map(l => {
           if (l.id === activeListingId) {

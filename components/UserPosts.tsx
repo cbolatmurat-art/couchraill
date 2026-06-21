@@ -263,6 +263,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       if (data.success) {
         setComments(prev => [data.comment, ...prev]);
         setNewComment('');
+        if (replyingToCommentId) {
+          setOpenReplies(prev => ({ ...prev, [replyingToCommentId]: true }));
+        }
         setReplyingToCommentId(null);
         // Update post comment count
         setItems(prev => prev.map(p => {

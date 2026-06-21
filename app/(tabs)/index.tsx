@@ -425,6 +425,9 @@ export default function FeedScreen() {
       if (data.success) {
         setComments([data.comment, ...comments]);
         setNewComment('');
+        if (replyingToCommentId) {
+          setOpenReplies(prev => ({ ...prev, [replyingToCommentId]: true }));
+        }
         setReplyingToCommentId(null);
         // Update feed comment count
         setFeed(prevFeed => prevFeed.map(l => {
