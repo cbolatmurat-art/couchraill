@@ -22,15 +22,32 @@ const getRelativeTime = (createdAt: string | undefined): string => {
   if (!createdAt) return '';
   const now = Date.now();
   const created = new Date(createdAt).getTime();
-  const diffMs = now - created;
+  const diffMs = Math.max(0, now - created);
   const diffMin = Math.floor(diffMs / 60000);
   const diffHour = Math.floor(diffMs / 3600000);
+  const diffDay = Math.floor(diffMs / 86400000);
+  const diffWeek = Math.floor(diffDay / 7);
 
-  if (diffMin < 1) return 'Az önce';
-  if (diffMin < 60) return `${diffMin} dakika önce`;
-  if (diffHour < 24) return `${diffHour} saat önce`;
+  if (diffHour < 24) {
+    if (diffMin < 60) return `${Math.max(1, diffMin)}dk`;
+    return `${diffHour}s`;
+  }
 
-  return new Date(createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  if (diffDay < 7) {
+    return `${diffDay}g`;
+  }
+
+  const isMoreThanYear = diffDay >= 365;
+
+  if (isMoreThanYear) {
+    const dateObj = new Date(createdAt);
+    const d = dateObj.getDate();
+    const m = dateObj.getMonth() + 1;
+    const y = dateObj.getFullYear().toString().slice(-2);
+    return `${d}/${m}/${y}`;
+  }
+
+  return `${diffWeek}h`;
 };
 
 export const PostCard = React.memo(({
@@ -134,31 +151,32 @@ export const PostCard = React.memo(({
               )}
             </View>
 
-            {/* Sub-row: location (if any) + bullet + time */}
-            <View style={styles.metaRow}>
-              {locationStr && (
-                <>
-                  <Ionicons name="location-outline" size={12} color={Colors.textLight} />
-                  <Text style={styles.metaText} numberOfLines={1}>{locationStr}</Text>
-                  <Text style={styles.metaDot}> · </Text>
-                </>
-              )}
-              <Text style={styles.metaText}>{timeStr}</Text>
-            </View>
+            {/* Sub-row: location (if any) */}
+            {locationStr && (
+              <View style={styles.metaRow}>
+                <Ionicons name="location-outline" size={12} color={Colors.textLight} />
+                <Text style={styles.metaText} numberOfLines={1}>{locationStr}</Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
 
-        {/* Three-dot menu */}
-        {setOpenMenuId && (
-          <View style={{ position: 'relative', zIndex: 100 }}>
-            <TouchableOpacity
-              style={{ padding: 4 }}
-              onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-            >
-              <Ionicons name="ellipsis-vertical" size={20} color={Colors.textLight} />
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Time and Three-dot menu */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 100 }}>
+          <Text style={{ fontSize: 13, color: Colors.textLight, marginRight: setOpenMenuId ? 4 : 0 }}>
+            {timeStr}
+          </Text>
+          {setOpenMenuId && (
+            <View style={{ position: 'relative' }}>
+              <TouchableOpacity
+                style={{ padding: 4 }}
+                onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+              >
+                <Ionicons name="ellipsis-vertical" size={20} color={Colors.textLight} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* BODY */}

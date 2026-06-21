@@ -62,6 +62,9 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const commentInputRef = useRef<TextInput>(null);
+  const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
+  const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
 
   const handleProfilePress = (ownerId: string) => {
     if (!ownerId || ownerId === currentUserId) return;
@@ -244,7 +247,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       const res = await fetch(`${API_BASE_URL}/posts/${selectedPostId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUserId, text: newComment.trim() })
+        body: JSON.stringify({ userId: currentUserId, text: newComment.trim(), parentCommentId: replyingToCommentId })
       });
       const text = await res.text();
       let data: any = {};
@@ -260,6 +263,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       if (data.success) {
         setComments(prev => [data.comment, ...prev]);
         setNewComment('');
+        setReplyingToCommentId(null);
         // Update post comment count
         setItems(prev => prev.map(p => {
           if (p.id === selectedPostId) {
@@ -364,22 +368,107 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
     const user = item.user || {};
     const dateStr = new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     
+    const getRelTime = (date: string) => {
+      if (!date) return '';
+      const diffMin = Math.floor(Math.max(0, Date.now() - new Date(date).getTime()) / 60000);
+      if (diffMin < 60) return `${Math.max(1, diffMin)}dk`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${diffHour}s`;
+      const diffDay = Math.floor(diffHour / 24);
+      if (diffDay < 7) return `${diffDay}g`;
+      const diffWeek = Math.floor(diffDay / 7);
+      if (diffDay < 365) return `${diffWeek}h`;
+      return `${Math.floor(diffDay / 365)}y`;
+    };
+    const relDateStr = getRelTime(item.createdAt) || dateStr;
+
+    const replies = comments.filter(c => c.parentCommentId === item.id);
+    const hasReplies = replies.length > 0;
+    const isRepliesOpen = openReplies[item.id];
+
     return (
-      <View style={styles.commentItem}>
-        {user.profileImage ? (
-          <Image source={{ uri: user.profileImage }} style={styles.commentAvatar} />
-        ) : (
-          <View style={styles.commentAvatarPlaceholder}>
-            <Text style={styles.commentAvatarText}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+      <View style={{ marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity onPress={() => {
+              closeCommentsModal();
+              handleProfilePress(user.id);
+            }}>
+            {user.profileImage ? (
+              <Image source={{ uri: user.profileImage }} style={styles.commentAvatar} />
+            ) : (
+              <View style={styles.commentAvatarPlaceholder}>
+                <Text style={styles.commentAvatarText}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <View style={styles.commentContent}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.commentUsername}>{user.username || user.name}</Text>
+                <Text style={styles.commentText}>{item.text}</Text>
+                <TouchableOpacity onPress={() => {
+                  setNewComment(`@${user.username || user.name} `);
+                  setReplyingToCommentId(item.id);
+                  setTimeout(() => commentInputRef.current?.focus(), 50);
+                }} style={{ marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, color: Colors.textLight, fontWeight: '600' }}>Yanıtla</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.commentDate}>{relDateStr}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {hasReplies && !isRepliesOpen && (
+          <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: true}))} style={{ marginLeft: 48, marginTop: 8 }}>
+            <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `—— ${replies.length} yanıtı gör` }</Text>
+          </TouchableOpacity>
+        )}
+
+        {isRepliesOpen && (
+          <View style={{ marginLeft: 48, marginTop: 8 }}>
+            {replies.map((reply: any) => {
+              const rUser = reply.user || {};
+              const rDateStr = getRelTime(reply.createdAt) || dateStr;
+              return (
+                <View key={reply.id} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                  <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
+                    {rUser.profileImage ? (
+                      <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
+                    ) : (
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>{rUser.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={styles.commentUsername}>{rUser.username || rUser.name}</Text>
+                        <Text style={styles.commentText}>{reply.text}</Text>
+                        <TouchableOpacity onPress={() => {
+                          setNewComment(`@${rUser.username || rUser.name} `);
+                          setReplyingToCommentId(item.id);
+                          setTimeout(() => commentInputRef.current?.focus(), 50);
+                        }} style={{ marginTop: 4 }}>
+                          <Text style={{ fontSize: 12, color: Colors.textLight, fontWeight: '600' }}>Yanıtla</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.commentDate}>{rDateStr}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+            <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: false}))} style={{ marginTop: 4 }}>
+              <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `—— Yanıtları gizle` }</Text>
+            </TouchableOpacity>
           </View>
         )}
-        <View style={styles.commentContent}>
-          <View style={styles.commentHeader}>
-            <Text style={styles.commentUsername}>{user.username || user.name}</Text>
-            <Text style={styles.commentDate}>{dateStr}</Text>
-          </View>
-          <Text style={styles.commentText}>{item.text}</Text>
-        </View>
       </View>
     );
   };
@@ -622,7 +711,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               <View style={{ padding: 20 }}><ActivityIndicator size="large" color={Colors.primary} /></View>
             ) : (
               <FlatList
-                data={comments}
+                data={comments.filter(c => !c.parentCommentId)}
                 keyExtractor={item => item.id}
                 renderItem={renderCommentItem}
                 contentContainerStyle={{ padding: 16 }}
@@ -631,6 +720,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
             )}
             <View style={styles.commentInputContainer}>
               <TextInput
+                ref={commentInputRef}
                 style={styles.commentInput}
                 placeholder="Yorum yaz..."
                 placeholderTextColor={Colors.textLight}
@@ -735,7 +825,7 @@ const styles = StyleSheet.create({
   },
 
   // Modal Styles
-  modalOverlayFixed: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalOverlayFixed: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', justifyContent: 'flex-end' },
   modalSheetWrapper: { justifyContent: 'flex-end' },
   modalBackground: { flex: 1 },
   modalContent: {
@@ -744,6 +834,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '80%',
     minHeight: '50%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -759,7 +854,7 @@ const styles = StyleSheet.create({
   commentAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 12 },
   commentAvatarPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   commentAvatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  commentContent: { flex: 1, backgroundColor: Colors.background, padding: 12, borderRadius: 12 },
+  commentContent: { flex: 1 },
   commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   commentUsername: { fontWeight: 'bold', fontSize: 14 },
   commentDate: { fontSize: 12, color: Colors.textLight },

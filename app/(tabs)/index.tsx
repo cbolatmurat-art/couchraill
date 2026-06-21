@@ -109,6 +109,9 @@ export default function FeedScreen() {
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState('');
+  const commentInputRef = useRef<TextInput>(null);
+  const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
+  const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
@@ -395,6 +398,7 @@ export default function FeedScreen() {
     setCommentsModalVisible(false);
     setActiveListingId(null);
     setNewComment('');
+    setReplyingToCommentId(null);
   };
 
   const submitComment = async () => {
@@ -414,14 +418,14 @@ export default function FeedScreen() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, text: newComment })
+        body: JSON.stringify({ userId: currentUser.id, text: newComment, parentCommentId: replyingToCommentId })
       });
       const data = await res.json();
       
       if (data.success) {
         setComments([data.comment, ...comments]);
         setNewComment('');
-        
+        setReplyingToCommentId(null);
         // Update feed comment count
         setFeed(prevFeed => prevFeed.map(l => {
           if (l.id === activeListingId) {
@@ -522,27 +526,107 @@ export default function FeedScreen() {
     const user = item.user || {};
     const dateStr = new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     
+    const getRelTime = (date: string) => {
+      if (!date) return '';
+      const diffMin = Math.floor(Math.max(0, Date.now() - new Date(date).getTime()) / 60000);
+      if (diffMin < 60) return `${Math.max(1, diffMin)}dk`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${diffHour}s`;
+      const diffDay = Math.floor(diffHour / 24);
+      if (diffDay < 7) return `${diffDay}g`;
+      const diffWeek = Math.floor(diffDay / 7);
+      if (diffDay < 365) return `${diffWeek}h`;
+      return `${Math.floor(diffDay / 365)}y`;
+    };
+    const relDateStr = getRelTime(item.createdAt) || dateStr;
+
+    const replies = comments.filter(c => c.parentCommentId === item.id);
+    const hasReplies = replies.length > 0;
+    const isRepliesOpen = openReplies[item.id];
+
     return (
-      <View style={styles.commentItem}>
-        <TouchableOpacity onPress={() => {
-            closeComments();
-            handleNavigateToProfile(user.id);
-          }}>
-          {user.profileImage ? (
-            <Image source={{ uri: user.profileImage }} style={styles.commentAvatar} />
-          ) : (
-            <View style={styles.commentAvatarPlaceholder}>
-              <Text style={styles.commentAvatarText}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+      <View style={{ marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity onPress={() => {
+              closeComments();
+              handleNavigateToProfile(user.id);
+            }}>
+            {user.profileImage ? (
+              <Image source={{ uri: user.profileImage }} style={styles.commentAvatar} />
+            ) : (
+              <View style={styles.commentAvatarPlaceholder}>
+                <Text style={styles.commentAvatarText}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <View style={styles.commentContent}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.commentUsername}>{user.username || user.name}</Text>
+                <Text style={styles.commentText}>{item.text}</Text>
+                <TouchableOpacity onPress={() => {
+                  setNewComment(`@${user.username || user.name} `);
+                  setReplyingToCommentId(item.id);
+                  setTimeout(() => commentInputRef.current?.focus(), 50);
+                }} style={{ marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, color: Colors.textLight, fontWeight: '600' }}>Yanıtla</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.commentDate}>{relDateStr}</Text>
+              </View>
             </View>
-          )}
-        </TouchableOpacity>
-        <View style={styles.commentContent}>
-          <View style={styles.commentHeader}>
-            <Text style={styles.commentUsername}>{user.username || user.name}</Text>
-            <Text style={styles.commentDate}>{dateStr}</Text>
           </View>
-          <Text style={styles.commentText}>{item.text}</Text>
         </View>
+
+        {hasReplies && !isRepliesOpen && (
+          <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: true}))} style={{ marginLeft: 48, marginTop: 8 }}>
+            <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `—— ${replies.length} yanıtı gör` }</Text>
+          </TouchableOpacity>
+        )}
+
+        {isRepliesOpen && (
+          <View style={{ marginLeft: 48, marginTop: 8 }}>
+            {replies.map((reply: any) => {
+              const rUser = reply.user || {};
+              const rDateStr = getRelTime(reply.createdAt) || dateStr;
+              return (
+                <View key={reply.id} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                  <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
+                    {rUser.profileImage ? (
+                      <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
+                    ) : (
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>{rUser.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={styles.commentUsername}>{rUser.username || rUser.name}</Text>
+                        <Text style={styles.commentText}>{reply.text}</Text>
+                        <TouchableOpacity onPress={() => {
+                          setNewComment(`@${rUser.username || rUser.name} `);
+                          setReplyingToCommentId(item.id);
+                          setTimeout(() => commentInputRef.current?.focus(), 50);
+                        }} style={{ marginTop: 4 }}>
+                          <Text style={{ fontSize: 12, color: Colors.textLight, fontWeight: '600' }}>Yanıtla</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.commentDate}>{rDateStr}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+            <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: false}))} style={{ marginTop: 4 }}>
+              <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '600' }}>{ `—— Yanıtları gizle` }</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -785,7 +869,7 @@ export default function FeedScreen() {
               </View>
             ) : (
               <FlatList
-                data={comments}
+                data={comments.filter(c => !c.parentCommentId)}
                 keyExtractor={item => item.id}
                 renderItem={renderCommentItem}
                 contentContainerStyle={styles.commentsList}
@@ -799,6 +883,7 @@ export default function FeedScreen() {
 
             <View style={styles.commentInputContainer}>
               <TextInput
+                ref={commentInputRef}
                 style={styles.commentInput}
                 placeholder="Yorum ekle..."
                 value={newComment}
@@ -1070,7 +1155,7 @@ const styles = StyleSheet.create({
   },
   modalBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'transparent',
   },
   modalContent: {
     backgroundColor: Colors.background,

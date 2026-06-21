@@ -1609,7 +1609,7 @@ app.get('/api/listings/:listingId/comments', async (req, res) => {
 app.post('/api/listings/:listingId/comments', async (req, res) => {
   try {
     const { listingId } = req.params;
-    const { userId, text } = req.body;
+    const { userId, text, parentCommentId } = req.body;
     
     if (!userId || !text || text.trim().length === 0) {
       return res.status(400).json({ success: false, error: 'Kullanıcı ve yorum metni gerekli.' });
@@ -1634,9 +1634,9 @@ app.post('/api/listings/:listingId/comments', async (req, res) => {
 
     const newCommentId = `lc${Date.now()}`;
     await query(`
-      INSERT INTO listing_comments (id, "listingId", "userId", content)
-      VALUES ($1, $2, $3, $4)
-    `, [newCommentId, listingId, userId, text.trim()]);
+      INSERT INTO listing_comments (id, "listingId", "userId", content, "parentCommentId")
+      VALUES ($1, $2, $3, $4, $5)
+    `, [newCommentId, listingId, userId, text.trim(), parentCommentId || null]);
 
     const { rows: users } = await query('SELECT id, name, username, "profileImage" FROM users WHERE id = $1', [userId]);
     const user = users[0] || {};
@@ -1657,6 +1657,7 @@ app.post('/api/listings/:listingId/comments', async (req, res) => {
         userId,
         text: text.trim(),
         content: text.trim(),
+        parentCommentId: parentCommentId || null,
         createdAt: new Date().toISOString(),
         user
       } 
@@ -6003,7 +6004,7 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
 
 app.post('/api/posts/:postId/comments', async (req, res) => {
   const { postId } = req.params;
-  const { userId, text } = req.body;
+  const { userId, text, parentCommentId } = req.body;
   if (!userId || !text) return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
   if (text.length > 500) return res.status(400).json({ success: false, error: 'Yorum çok uzun.' });
 
@@ -6024,9 +6025,9 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
     const createdAt = new Date().toISOString();
 
     await query(`
-      INSERT INTO post_comments (id, "postId", "userId", content, "createdAt")
-      VALUES ($1, $2, $3, $4, $5)
-    `, [newCommentId, postId, userId, text, createdAt]);
+      INSERT INTO post_comments (id, "postId", "userId", content, "createdAt", "parentCommentId")
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [newCommentId, postId, userId, text, createdAt, parentCommentId || null]);
 
     let commenterUser = { id: userId, name: 'Bir kullanıcı', username: '', profileImage: null };
 
@@ -6042,7 +6043,7 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
       `, [`n_${Date.now()}`, ownerId, 'comment', 'Yeni Yorum', `${commenterUser.name} gönderine yorum yaptı.`, postId, 'post', createdAt]);
     }
 
-    res.json({ success: true, comment: { id: newCommentId, postId, userId, text, createdAt, user: commenterUser } });
+    res.json({ success: true, comment: { id: newCommentId, postId, userId, text, createdAt, parentCommentId: parentCommentId || null, user: commenterUser } });
   } catch (error) {
     console.error('[POST_COMMENT_ERROR]', error.message);
     res.status(500).json({ success: false, error: 'Yorum yapılamadı.' });
