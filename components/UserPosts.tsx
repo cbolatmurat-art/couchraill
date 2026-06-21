@@ -62,6 +62,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
   const commentInputRef = useRef<TextInput>(null);
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
@@ -280,9 +281,12 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
           }
           return p;
         }));
+      } else {
+        setCommentError(data.error || 'Yorum gönderilemedi.');
       }
     } catch (err) {
       console.error('Submit comment error', err);
+      setCommentError('Bağlantı hatası.');
     } finally {
       setSubmittingComment(false);
     }
