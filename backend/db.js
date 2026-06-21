@@ -90,8 +90,19 @@ const initDB = async () => {
   }
 
 
+
+  // FORCE CRITICAL ALTERS BEFORE ANYTHING ELSE TO ENSURE THEY RUN
+  try {
+    await client.query(`ALTER TABLE listing_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
+    await client.query(`ALTER TABLE post_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
+    console.log('[DB] parentCommentId columns ensured.');
+  } catch(e) {
+    console.warn('[DB WARNING] Force alters failed:', e.message);
+  }
+
   try {
     await client.query('BEGIN');
+
 
     // Users
     await client.query(`
