@@ -402,33 +402,34 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   };
 
   const renderCommentRightActions = (comment: any, progress: any, dragX: any) => {
-    // Reveal from behind animation WITHOUT animating width.
-    // We use a fixed-width container with overflow hidden.
-    // The inner content is translated right by dragX to stay stationary.
+    // Reveal from behind animation using ONLY translateX.
+    // To make it perfectly stationary while the row slides left by dragX,
+    // we translate the action by an opposing amount.
+    // The permanent -70 shift hides it behind the row when closed.
     const trans = dragX.interpolate({
       inputRange: [-70, 0],
-      outputRange: [0, -70], // When closed (0), shifted left by 70 to sit at ScreenWidth - 70.
+      outputRange: [0, -70], // When open (-70), sits natively. When closed (0), shifted left by 70 to hide behind row.
       extrapolate: 'clamp',
     });
 
     return (
-      <View style={{ width: 70, overflow: 'hidden' }}>
-        <Animated.View style={{ flex: 1, backgroundColor: Colors.danger, transform: [{ translateX: trans }] }}>
-          <TouchableOpacity 
-            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-            onPress={() => {
-              setCommentToDelete(comment);
-              setCommentDeleteModalVisible(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="trash-outline" size={24} color="#FFF" />
-            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+      <Animated.View style={{ width: 70, backgroundColor: Colors.danger, transform: [{ translateX: trans }] }}>
+        <TouchableOpacity 
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+          onPress={() => {
+            setCommentToDelete(comment);
+            setCommentDeleteModalVisible(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={24} color="#FFF" />
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Sil</Text>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
+
+;
 
 
 
@@ -511,7 +512,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               return (
                 <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
 
-                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', backgroundColor: '#FFF' }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
