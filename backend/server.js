@@ -5391,6 +5391,20 @@ app.post('/api/events/:eventId/waitlist', async (req, res) => {
   }
 });
 
+app.delete('/api/events/:eventId/waitlist', async (req, res) => {
+  const { eventId } = req.params;
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+
+  try {
+    const { rowCount } = await query(`DELETE FROM event_waitlists WHERE "eventId" = $1 AND "userId" = $2`, [eventId, userId]);
+    res.json({ success: true, message: 'Bildirim kapatıldı.', deleted: rowCount > 0 });
+  } catch (error) {
+    console.error('[DELETE_WAITLIST_ERROR]', error.message);
+    res.status(500).json({ success: false, error: 'Bildirim kapatılamadı. Lütfen tekrar deneyin.' });
+  }
+});
+
 app.delete('/api/events/:eventId/join', async (req, res) => {
   const { eventId } = req.params;
   const { userId } = req.body;

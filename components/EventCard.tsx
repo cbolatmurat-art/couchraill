@@ -244,6 +244,26 @@ export const EventCard = React.memo(({
     }
   };
 
+  const handleCancelWaitlist = async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/waitlist`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id || currentUser._id })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIsWaitlisted(false);
+        DeviceEventEmitter.emit('global_event_update', { eventId: item.id, isWaitlisted: false });
+      } else {
+        Alert.alert('Hata', data.error || 'İşlem başarısız.');
+      }
+    } catch (error) {
+      Alert.alert('Hata', 'Bir sorun oluştu.');
+    }
+  };
+
   const handleShareToUser = async (conversationId: string) => {
     if (!currentUser) return;
     const senderName = currentUser.name || currentUser.username || 'Bir kullanıcı';
@@ -446,6 +466,11 @@ export const EventCard = React.memo(({
           {isOwner && (
             <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
+            </TouchableOpacity>
+          )}
+          {!isOwner && !isJoined && !!item.participantLimit && participantCount >= item.participantLimit && isWaitlisted && (
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { handleCancelWaitlist(); if (setOpenMenuId) setOpenMenuId(null); }}>
+              <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Bildirimi Kapat</Text>
             </TouchableOpacity>
           )}
           {!isOwner && (
