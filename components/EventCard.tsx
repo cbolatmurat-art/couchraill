@@ -355,7 +355,7 @@ export const EventCard = React.memo(({
                 >
                   <Ionicons name="people-outline" size={16} color="#757575" />
                   <Text style={styles.detailText}>
-                    Kontenjan: <Text style={{ color: participantCount >= item.participantLimit ? '#FF3B30' : '#6B46C1', textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text>/{item.participantLimit}
+                    Kontenjan: <Text style={{ color: participantCount >= item.participantLimit ? '#FF3B30' : Colors.primary, textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text>/{item.participantLimit}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -369,7 +369,7 @@ export const EventCard = React.memo(({
                 >
                   <Ionicons name="people-outline" size={16} color="#757575" />
                   <Text style={styles.detailText}>
-                    <Text style={{ color: '#6B46C1', textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text> kişi katılacak
+                    <Text style={{ color: Colors.primary, textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text> kişi katılacak
                   </Text>
                 </TouchableOpacity>
               </>
@@ -382,7 +382,7 @@ export const EventCard = React.memo(({
 
       <View style={styles.bottomSection}>
         <TouchableOpacity style={styles.sendButton} onPress={() => setShareModalVisible(true)}>
-          <Ionicons name="paper-plane-outline" size={18} color="#6B46C1" />
+          <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
           <Text style={styles.sendButtonText}>Davet Et</Text>
         </TouchableOpacity>
 
@@ -588,11 +588,11 @@ export const EventCard = React.memo(({
       <Modal visible={notifyModalVisible} transparent animationType="fade" onRequestClose={() => setNotifyModalVisible(false)}>
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmContainer}>
-            <Ionicons name="notifications-outline" size={32} color="#6B46C1" style={{ marginBottom: 16 }} />
+            <Ionicons name="notifications-outline" size={32} color={Colors.primary} style={{ marginBottom: 16 }} />
             <Text style={styles.confirmTitle}>Bildirim Al</Text>
             <Text style={styles.confirmDesc}>Etkinlikte kontenjan açıldığında bildirim gönderilecektir.</Text>
             <View style={styles.confirmBtnRow}>
-              <TouchableOpacity style={[styles.confirmActionBtn, { backgroundColor: '#6B46C1', width: '100%' }]} onPress={() => setNotifyModalVisible(false)}>
+              <TouchableOpacity style={[styles.confirmActionBtn, { backgroundColor: Colors.primary, width: '100%' }]} onPress={() => setNotifyModalVisible(false)}>
                 <Text style={styles.confirmActionText}>Tamam</Text>
               </TouchableOpacity>
             </View>
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
   dateBox: {
     width: 76,
     height: 100,
-    backgroundColor: '#F9F5FF',
+    backgroundColor: 'rgba(232, 93, 4, 0.08)',
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -632,13 +632,13 @@ const styles = StyleSheet.create({
   dateDay: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#6B46C1',
+    color: Colors.primary,
     lineHeight: 36,
   },
   dateMonth: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B46C1',
+    color: Colors.primary,
     marginTop: 2,
   },
   dateWeekday: {
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#7B61FF',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E6E0F8',
+    borderColor: 'rgba(232, 93, 4, 0.2)',
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   sendButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B46C1',
+    color: Colors.primary,
     marginLeft: 6,
   },
   spacer: {
@@ -767,13 +767,13 @@ const styles = StyleSheet.create({
   joinButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#7B61FF',
+    backgroundColor: Colors.primary,
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
   joinedButton: {
-    backgroundColor: '#5E35B1',
+    backgroundColor: Colors.secondary,
   },
   disabledButton: {
     backgroundColor: '#CCCCCC',
@@ -797,12 +797,12 @@ const styles = StyleSheet.create({
   contactAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   contactAvatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   contactName: { fontSize: 16, fontWeight: '600', color: '#333' },
-  organizerBadge: { backgroundColor: '#F0E6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  organizerBadgeText: { color: '#6B46C1', fontSize: 12, fontWeight: '600' },
+  organizerBadge: { backgroundColor: 'rgba(232, 93, 4, 0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  organizerBadgeText: { color: Colors.primary, fontSize: 12, fontWeight: '600' },
   removeParticipantBtn: { backgroundColor: '#FFEBEE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   removeParticipantText: { color: '#FF3B30', fontSize: 12, fontWeight: '600' },
-  sendActionBtn: { backgroundColor: '#F9F5FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
-  sendActionBtnText: { color: '#6B46C1', fontWeight: '600', fontSize: 14 },
+  sendActionBtn: { backgroundColor: 'rgba(232, 93, 4, 0.08)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
+  sendActionBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#999', marginTop: 20 },
   confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   confirmContainer: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, width: '85%', maxWidth: 340, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 10 },
