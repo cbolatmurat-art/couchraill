@@ -106,6 +106,7 @@ export default function FeedScreen() {
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentMenuVisible, setCommentMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedCommentForAction, setSelectedCommentForAction] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -528,10 +529,22 @@ export default function FeedScreen() {
   };
 
 
-  const handleCommentLongPress = (comment: any) => {
+  const handleCommentLongPress = (comment: any, e: any) => {
     const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
 
+    const { pageX, pageY } = e.nativeEvent;
+    const screenHeight = Dimensions.get('window').height;
+    const screenWidth = Dimensions.get('window').width;
+    
+    let menuY = pageY;
+    if (pageY > screenHeight - 150) {
+       menuY = pageY - 60;
+    } else {
+       menuY = pageY + 20;
+    }
+
+    setMenuPosition({ x: Math.max(16, Math.min(pageX - 50, screenWidth - 190)), y: menuY });
     setSelectedCommentForAction(comment);
     setCommentMenuVisible(true);
   };
@@ -585,7 +598,7 @@ export default function FeedScreen() {
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <TouchableOpacity activeOpacity={0.7} onLongPress={() => handleCommentLongPress(item)} delayLongPress={300} style={{ flexDirection: 'row' }}>
+        <TouchableOpacity activeOpacity={0.7} onLongPress={(e) => handleCommentLongPress(item, e)} delayLongPress={300} style={{ flexDirection: 'row' }}>
           <TouchableOpacity onPress={() => {
               closeComments();
               handleNavigateToProfile(user.id);
@@ -630,7 +643,7 @@ export default function FeedScreen() {
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <TouchableOpacity key={reply.id} activeOpacity={0.7} onLongPress={() => handleCommentLongPress(reply)} delayLongPress={300} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <TouchableOpacity key={reply.id} activeOpacity={0.7} onLongPress={(e) => handleCommentLongPress(reply, e)} delayLongPress={300} style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
@@ -954,10 +967,24 @@ export default function FeedScreen() {
 
       {/* Context Menu Modal */}
       <Modal visible={commentMenuVisible} transparent={true} animationType="fade" onRequestClose={() => { setCommentMenuVisible(false); setSelectedCommentForAction(null); }}>
-        <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }} onPress={() => { setCommentMenuVisible(false); setSelectedCommentForAction(null); }}>
-          <View style={{ backgroundColor: '#FFF', borderRadius: 14, width: 250, overflow: 'hidden' }}>
-            <TouchableOpacity onPress={handleDeleteComment} style={{ padding: 16, alignItems: 'center' }}>
-              <Text style={{ color: Colors.danger, fontWeight: '600', fontSize: 16 }}>Yorumu Sil</Text>
+        <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' }} onPress={() => { setCommentMenuVisible(false); setSelectedCommentForAction(null); }}>
+          <View style={{ 
+            position: 'absolute', 
+            top: menuPosition.y, 
+            left: menuPosition.x,
+            backgroundColor: '#FFF', 
+            borderRadius: 18, 
+            width: 170, 
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 8,
+            overflow: 'hidden' 
+          }}>
+            <TouchableOpacity onPress={handleDeleteComment} style={{ padding: 14, flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="trash-outline" size={20} color={Colors.danger} style={{ marginRight: 10 }} />
+              <Text style={{ color: Colors.danger, fontWeight: '600', fontSize: 15 }}>Yorumu Sil</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
