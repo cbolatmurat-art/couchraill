@@ -525,6 +525,43 @@ export default function FeedScreen() {
     );
   };
 
+
+  const handleCommentLongPress = (comment: any) => {
+    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUserId || currentUser?.email || "unknown";
+    if (comment.userId !== meId) return;
+    const commentTime = new Date(comment.createdAt).getTime();
+    if (Date.now() - commentTime > 60000) return;
+
+    Alert.alert(
+      "Yorumu Sil",
+      "Bu yorumu silmek istediğinize emin misiniz?",
+      [
+        { text: "İptal", style: "cancel" },
+        { 
+          text: "Sil", 
+          style: "destructive",
+          onPress: async () => {
+            setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
+            setFeed(prev => prev.map(l => { if (l.id === activeListingId || l._id === activeListingId) { const isNormalized = l.commentsCount !== undefined; if (isNormalized) { return { ...l, commentsCount: Math.max(0, (l.commentsCount || 1) - 1) }; } else { return { ...l, commentCount: Math.max(0, (l.commentCount || 1) - 1) }; } } return l; }));
+            try {
+              const isListing = comment.id.startsWith('lc') || comment.listingId;
+              const type = isListing ? 'listings' : 'posts';
+              const parentId = activeListingId;
+              
+              const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
+              await fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: meId })
+              });
+            } catch(e) {
+               console.error("Yorum silme hatası", e);
+            }
+          }
+        }
+      ]
+    );
+  };
   const renderCommentItem = ({ item }: { item: any }) => {
     const user = item.user || {};
     const dateStr = new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -594,7 +631,7 @@ export default function FeedScreen() {
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <View key={reply.id} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <TouchableOpacity key={reply.id} activeOpacity={1} onLongPress={() => handleCommentLongPress(reply)} delayLongPress={500} style={{ flexDirection: 'row', marginBottom: 12 }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
@@ -622,7 +659,7 @@ export default function FeedScreen() {
                       </View>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
             <TouchableOpacity onPress={() => setOpenReplies(prev => ({...prev, [item.id]: false}))} style={{ marginTop: 4 }}>
