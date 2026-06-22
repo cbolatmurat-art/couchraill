@@ -202,35 +202,49 @@ export const ListingCard = React.memo(({
           </Text>
         ) : null}
 
-        <View style={styles.infoBoxesContainer}>
+        <View style={styles.infoDivider} />
+
+        <View style={styles.minimalInfoContainer}>
           {locationString ? (
-            <View style={[styles.infoBox, { backgroundColor: '#FFF4E5' }]}>
-              <Ionicons name="location-outline" size={24} color="#F57C00" style={styles.infoBoxIcon} />
-              <View style={styles.infoBoxTextContainer}>
-                <Text style={styles.infoBoxValue} numberOfLines={1}>{locationString}</Text>
-                <Text style={styles.infoBoxLabel}>Konum</Text>
+            <View style={styles.minimalInfoItem}>
+              <View style={[styles.iconWrapper, { backgroundColor: '#FFF4E5' }]}>
+                <Ionicons name="location-outline" size={22} color="#F57C00" />
+              </View>
+              <View style={styles.minimalInfoText}>
+                <Text style={styles.minimalInfoValue} numberOfLines={2}>{locationString}</Text>
+                <Text style={styles.minimalInfoLabel}>Konum</Text>
               </View>
             </View>
           ) : null}
 
           {formattedStayDuration ? (
-            <View style={[styles.infoBox, { backgroundColor: '#F3E8FF' }]}>
-              <Ionicons name="calendar-outline" size={24} color="#7C3AED" style={styles.infoBoxIcon} />
-              <View style={styles.infoBoxTextContainer}>
-                <Text style={styles.infoBoxValue} numberOfLines={1}>{formattedStayDuration}</Text>
-                <Text style={styles.infoBoxLabel}>Müsaitlik</Text>
+            <>
+              {locationString && <View style={styles.verticalDivider} />}
+              <View style={styles.minimalInfoItem}>
+                <View style={[styles.iconWrapper, { backgroundColor: '#F3E8FF' }]}>
+                  <Ionicons name="calendar-outline" size={22} color="#7C3AED" />
+                </View>
+                <View style={styles.minimalInfoText}>
+                  <Text style={styles.minimalInfoValue} numberOfLines={1}>{formattedStayDuration}</Text>
+                  <Text style={styles.minimalInfoLabel}>Müsaitlik</Text>
+                </View>
               </View>
-            </View>
+            </>
           ) : null}
 
           {isTimedListing && rawExpiresAt ? (
-            <View style={[styles.infoBox, { backgroundColor: '#E8F5E9' }]}>
-              <Ionicons name="time-outline" size={24} color="#4CAF50" style={styles.infoBoxIcon} />
-              <View style={styles.infoBoxTextContainer}>
-                <Text style={styles.infoBoxValue} numberOfLines={1}>{isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}</Text>
-                <Text style={styles.infoBoxLabel}>Süreli ilan</Text>
+            <>
+              {(locationString || formattedStayDuration) && <View style={styles.verticalDivider} />}
+              <View style={styles.minimalInfoItem}>
+                <View style={[styles.iconWrapper, { backgroundColor: '#E8F5E9' }]}>
+                  <Ionicons name="time-outline" size={22} color="#4CAF50" />
+                </View>
+                <View style={styles.minimalInfoText}>
+                  <Text style={styles.minimalInfoValue} numberOfLines={1}>{isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}</Text>
+                  <Text style={styles.minimalInfoLabel}>Süreli İlan</Text>
+                </View>
               </View>
-            </View>
+            </>
           ) : null}
         </View>
 
@@ -270,19 +284,19 @@ export const ListingCard = React.memo(({
 });
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFF', borderRadius: 16, marginBottom: 16, padding: 16, paddingBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#F0F2F5' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  card: { backgroundColor: '#FFF', borderRadius: 20, marginBottom: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#F0F2F5' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   ownerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  avatar: { width: 44, height: 44, borderRadius: 22, marginRight: 12 },
-  avatarPlaceholder: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
+  avatarPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarText: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
   ownerText: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  ownerName: { ...Typography.subtitle, fontWeight: '700' },
-  ownerUsername: { fontSize: 13, color: Colors.textLight, marginTop: 2 },
+  ownerName: { fontSize: 17, fontWeight: '700', color: Colors.text },
+  ownerUsername: { fontSize: 13, color: Colors.textLight, marginTop: 4 },
   headerRight: { flexDirection: 'row', alignItems: 'flex-start' },
   headerRightContent: { alignItems: 'flex-end', justifyContent: 'center' },
-  headerDate: { fontSize: 12, color: Colors.textLight, fontWeight: '500' },
+  headerDate: { fontSize: 13, color: Colors.textLight, fontWeight: '500' },
   descriptionRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
   descriptionCol: { flex: 1 },
   badgeWrapperAbsolute: { position: 'absolute', right: 0, alignItems: 'center', zIndex: 10 },
@@ -293,26 +307,21 @@ const styles = StyleSheet.create({
   badgeContainer: { backgroundColor: '#FFF4E5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
   badgeText: { fontSize: 11, color: '#F57C00', fontWeight: '600' },
   cardBody: { marginBottom: 8, position: 'relative' },
-  cardTitle: { ...Typography.body, fontSize: 16, fontWeight: '600', lineHeight: 22, marginBottom: 8 },
+  cardTitle: { fontSize: 20, fontWeight: '800', color: Colors.text, marginBottom: 10, lineHeight: 26 },
   locationText: { fontSize: 14, color: Colors.text, fontWeight: '600', opacity: 0.8 },
   durationText: { fontSize: 13, color: Colors.textLight, fontWeight: '500', marginBottom: 8 },
-  cardDescription: { ...Typography.body, fontSize: 14, color: Colors.text, lineHeight: 20 },
+  cardDescription: { fontSize: 15, color: Colors.textLight, lineHeight: 24, marginBottom: 4 },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   tag: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   tagText: { fontSize: 13, color: Colors.textLight, marginLeft: 4, fontWeight: '500' },
-  infoBoxesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  infoBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, flex: 1, minWidth: '45%' },
-  infoBoxIcon: { marginRight: 10 },
-  infoBoxTextContainer: { flex: 1 },
-  infoBoxValue: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 2 },
-  infoBoxLabel: { fontSize: 12, color: Colors.textLight },
-  bottomActionBar: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 12 },
-  leftActions: { flexDirection: 'row', gap: 8 },
-  actionBoxButton: { width: 72, height: 60, borderRadius: 12, borderWidth: 1, borderColor: '#E0E0E0', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
-  actionBoxText: { fontSize: 10, color: Colors.textLight, marginTop: 4, fontWeight: '500' },
-  interestBtn: { flex: 1, backgroundColor: '#FF7A00', height: 60, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  interestBtnDisabled: { backgroundColor: '#E0E0E0' },
-  interestBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  infoDivider: { height: 1, backgroundColor: '#F0F2F5', marginTop: 16, marginBottom: 16 },
+  minimalInfoContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  minimalInfoItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  iconWrapper: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  minimalInfoText: { flex: 1, justifyContent: 'center' },
+  minimalInfoValue: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 4 },
+  minimalInfoLabel: { fontSize: 12, color: Colors.textLight },
+  verticalDivider: { width: 1, backgroundColor: '#F0F2F5', marginHorizontal: 12, height: '80%' },
   dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
   dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
   dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text }
