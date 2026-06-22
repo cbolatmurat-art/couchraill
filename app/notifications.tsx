@@ -120,10 +120,7 @@ export default function NotificationsScreen() {
             const parentCommentId = parts.length >= 2 ? parts[1] : undefined;
             const replyCommentId = parts.length >= 3 ? parts[2] : undefined;
             
-            router.push({
-              pathname: '/',
-              params: { openPostComments: postId, topCommentId: parentCommentId, highlightCommentId: replyCommentId, tab: 'community' }
-            });
+            router.push(`/(tabs)?openPostComments=${postId}&topCommentId=${parentCommentId || ''}&highlightCommentId=${replyCommentId || ''}&tab=community`);
           }
         }
         break;
