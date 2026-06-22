@@ -6086,11 +6086,43 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
       commenterUser = commenterRows[0];
     }
 
-    if (ownerId !== userId) {
+    if (parentCommentId) {
+      const { rows: parentRows } = await query(`SELECT "userId" FROM post_comments WHERE id = $1`, [parentCommentId]);
+      if (parentRows.length > 0) {
+        const parentOwnerId = parentRows[0].userId;
+        if (parentOwnerId !== userId) {
+          const complexRelatedId = `${postId}|${parentCommentId}|${newCommentId}`;
+          const notifId = `n_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          await query(`
+            INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
+            VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+          `, [notifId, parentOwnerId, 'comment_reply', 'Yorum Yanıtı', `${commenterUser.name} yorumunuza yanıt verdi.`, complexRelatedId, 'post', createdAt]);
+
+          if (typeof sendPushNotification === 'function') {
+            sendPushNotification(parentOwnerId, 'Yorum Yanıtı', `${commenterUser.name} yorumunuza yanıt verdi.`, { type: 'comment_reply', relatedId: complexRelatedId, relatedType: 'post' });
+          }
+          const receiverSocketId = activeUsers.get(parentOwnerId);
+          if (receiverSocketId) {
+            io.to(receiverSocketId).emit('social_notification', { id: notifId, userId: parentOwnerId, type: 'comment_reply', title: 'Yorum Yanıtı', message: `${commenterUser.name} yorumunuza yanıt verdi.`, relatedId: complexRelatedId, relatedType: 'post', read: false, createdAt });
+            io.to(receiverSocketId).emit('social_stats_updated', { userId: parentOwnerId });
+          }
+        }
+      }
+    } else if (ownerId !== userId) {
+      const notifId = `n_${Date.now()}`;
       await query(`
         INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType", read, "createdAt")
         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
-      `, [`n_${Date.now()}`, ownerId, 'comment', 'Yeni Yorum', `${commenterUser.name} gönderine yorum yaptı.`, postId, 'post', createdAt]);
+      `, [notifId, ownerId, 'comment', 'Yeni Yorum', `${commenterUser.name} gönderine yorum yaptı.`, postId, 'post', createdAt]);
+
+      if (typeof sendPushNotification === 'function') {
+        sendPushNotification(ownerId, 'Yeni Yorum', `${commenterUser.name} gönderine yorum yaptı.`, { type: 'comment', relatedId: postId, relatedType: 'post' });
+      }
+      const receiverSocketId = activeUsers.get(ownerId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('social_notification', { id: notifId, userId: ownerId, type: 'comment', title: 'Yeni Yorum', message: `${commenterUser.name} gönderine yorum yaptı.`, relatedId: postId, relatedType: 'post', read: false, createdAt });
+        io.to(receiverSocketId).emit('social_stats_updated', { userId: ownerId });
+      }
     }
 
     res.json({ success: true, comment: { id: newCommentId, postId, userId, text, createdAt, parentCommentId: parentCommentId || null, user: commenterUser } });

@@ -112,6 +112,21 @@ export default function NotificationsScreen() {
           router.push(`/event-details/${item.relatedId}`);
         }
         break;
+      case 'comment_reply':
+        if (item.relatedId) {
+          const parts = item.relatedId.split('|');
+          if (parts.length >= 1) {
+            const postId = parts[0];
+            const parentCommentId = parts.length >= 2 ? parts[1] : undefined;
+            const replyCommentId = parts.length >= 3 ? parts[2] : undefined;
+            
+            router.push({
+              pathname: '/(tabs)/index',
+              params: { openPostComments: postId, topCommentId: parentCommentId, highlightCommentId: replyCommentId, tab: 'community' }
+            });
+          }
+        }
+        break;
       default:
         break;
     }

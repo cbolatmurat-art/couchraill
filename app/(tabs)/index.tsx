@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { useAppContext } from '../../context/AppContext';
-import { useRouter, Redirect } from 'expo-router';
+import { useRouter, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../../constants/config';
 import { Button } from '../../components/Button';
@@ -21,6 +21,8 @@ import { ReportModal, ContentType } from '../../components/ReportModal';
 export default function FeedScreen() {
   const { currentUser, authLoading, getSocialList } = useAppContext();
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { openPostComments, topCommentId, highlightCommentId, tab } = params;
 
   const [feed, setFeed] = useState<any[]>([]);
   const [isFollowingAnyone, setIsFollowingAnyone] = useState<boolean>(true);
@@ -242,6 +244,17 @@ export default function FeedScreen() {
   }, [currentUser, getSocialList, followingIds.length]);
 
   useEffect(() => {
+    if (tab && (tab === 'hosts' || tab === 'community' || tab === 'events')) {
+      setActiveTab(tab as any);
+    }
+    if (openPostComments) {
+      setTimeout(() => {
+        openComments(openPostComments as string, 'post', topCommentId as string, highlightCommentId as string);
+      }, 500);
+    }
+  }, [openPostComments, topCommentId, highlightCommentId, tab]);
+
+  useEffect(() => {
     if (currentUser) {
       fetchFeed();
       
@@ -375,12 +388,17 @@ export default function FeedScreen() {
     }
   }, [currentUser]);
 
-  const openComments = useCallback(async (itemId: string, itemType: string = 'listing') => {
+  const [commentTopCommentId, setCommentTopCommentId] = useState<string | null>(null);
+  const [commentHighlightCommentId, setCommentHighlightCommentId] = useState<string | null>(null);
+
+  const openComments = useCallback(async (itemId: string, itemType: string = 'listing', topId?: string, highlightId?: string) => {
     setActiveListingId(itemId);
     setCommentsModalVisible(true);
     setLoadingComments(true);
     setCommentError('');
     setComments([]);
+    if (topId) setCommentTopCommentId(topId);
+    if (highlightId) setCommentHighlightCommentId(highlightId);
 
     try {
       const endpoint = (itemType === 'post' || itemType === 'event')
@@ -389,7 +407,17 @@ export default function FeedScreen() {
       const res = await fetch(endpoint);
       const data = await res.json();
       if (data.success) {
-        setComments(data.comments || []);
+        let fetchedComments = data.comments || [];
+        if (topId) {
+          const topIndex = fetchedComments.findIndex((c: any) => c.id === topId);
+          if (topIndex > -1) {
+            const topComment = fetchedComments[topIndex];
+            fetchedComments.splice(topIndex, 1);
+            fetchedComments.unshift(topComment);
+            setOpenReplies(prev => ({ ...prev, [topId]: true }));
+          }
+        }
+        setComments(fetchedComments);
       }
     } catch (err) {
       setCommentError('Yorumlar yüklenemedi.');
@@ -403,6 +431,8 @@ export default function FeedScreen() {
     setActiveListingId(null);
     setNewComment('');
     setReplyingToCommentId(null);
+    setCommentTopCommentId(null);
+    setCommentHighlightCommentId(null);
   };
 
   const submitComment = async () => {
@@ -582,10 +612,10 @@ export default function FeedScreen() {
     );
   };
 
-  const renderCommentLeftActions = (comment: any, progress: any, dragX: any) => {
+  const renderReportRightAction = (comment: any, progress: any, dragX: any) => {
     const trans = dragX.interpolate({
-      inputRange: [0, 70],
-      outputRange: [0, -70], // When open (70), shifts left to counteract slide and remain stationary.
+      inputRange: [-70, 0],
+      outputRange: [0, -70], 
       extrapolate: 'clamp',
     });
 
@@ -639,7 +669,15 @@ export default function FeedScreen() {
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <Swipeable enabled={true} friction={2} rightThreshold={40} leftThreshold={40} renderRightActions={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown') ? (progress, dragX) => renderCommentRightActions(item, progress, dragX) : undefined} renderLeftActions={!(item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')) ? (progress, dragX) => renderCommentLeftActions(item, progress, dragX) : undefined}>
+        <Swipeable 
+          enabled={true} 
+          friction={2} 
+          rightThreshold={40} 
+          renderRightActions={(progress, dragX) => {
+            const isMine = item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown');
+            return isMine ? renderCommentRightActions(item, progress, dragX) : renderReportRightAction(item, progress, dragX);
+          }}
+        >
 
         <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
           <TouchableOpacity onPress={() => {
@@ -688,9 +726,18 @@ export default function FeedScreen() {
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
+                <Swipeable 
+                  key={'reply-' + reply.id} 
+                  enabled={true} 
+                  friction={2} 
+                  rightThreshold={40} 
+                  renderRightActions={(progress, dragX) => {
+                    const isMine = reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown');
+                    return isMine ? renderCommentRightActions(reply, progress, dragX) : renderReportRightAction(reply, progress, dragX);
+                  }}
+                >
 
-                <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
+                <View style={{ flexDirection: 'row', backgroundColor: reply.id === commentHighlightCommentId ? '#EEF2FF' : Colors.background, padding: reply.id === commentHighlightCommentId ? 6 : 0, borderRadius: 8 }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>
                     {rUser.profileImage ? (
                       <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />

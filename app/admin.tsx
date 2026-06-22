@@ -1280,17 +1280,19 @@ export default function AdminScreen() {
                           )}
 
                           <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                            <Text style={{ fontSize: 13, color: '#64748B', fontWeight: 'bold', marginBottom: 8 }}>Bağlı Olduğu İçerik:</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                              <Ionicons name={complaintDetails.content.post_type === 'event' ? 'calendar-outline' : 'document-text-outline'} size={16} color="#64748B" />
-                              <Text style={{ marginLeft: 6, fontSize: 13, color: '#475569', fontWeight: '500' }}>
-                                {complaintDetails.content.post_type === 'event' ? 'Etkinlik' : 'Gönderi'} 
-                                {complaintDetails.content.post_owner_name ? ` - ${complaintDetails.content.post_owner_name}` : ''}
+                            <Text style={{ fontSize: 13, color: '#64748B', fontWeight: 'bold', marginBottom: 8 }}>Bağlı Gönderi Önizlemesi:</Text>
+                            <View style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                <Ionicons name={complaintDetails.content.post_type === 'event' ? 'calendar-outline' : 'document-text-outline'} size={16} color="#64748B" />
+                                <Text style={{ marginLeft: 6, fontSize: 13, color: '#475569', fontWeight: 'bold' }}>
+                                  {complaintDetails.content.post_type === 'event' ? 'Etkinlik' : 'Gönderi'} 
+                                  {complaintDetails.content.post_owner_name ? ` • ${complaintDetails.content.post_owner_name}` : ''}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 14, color: '#334155' }} numberOfLines={4}>
+                                {complaintDetails.content.post_title || complaintDetails.content.post_text || 'İçerik metni bulunamadı.'}
                               </Text>
                             </View>
-                            <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic' }} numberOfLines={3}>
-                              {complaintDetails.content.post_title || complaintDetails.content.post_text || 'İçerik metni bulunamadı.'}
-                            </Text>
                           </View>
 
                           <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1299,12 +1301,15 @@ export default function AdminScreen() {
                           
                           <View style={{ marginTop: 16, flexDirection: 'row', gap: 12 }}>
                             <Pressable 
-                              style={[styles.outlineBtn, { borderColor: '#4F46E5', flex: 1 }]} 
+                              style={[styles.solidBtn, { backgroundColor: '#EF4444', flex: 1 }]} 
                               onPress={() => {
-                                AlertHelper.alert('Bilgi', `Yorum ID: ${complaintDetails.content.id}\nİçerik ID: ${complaintDetails.content.postId}`);
+                                AlertHelper.confirm('Yorumu Kaldır', 'Bu yorumu kaldırmak istediğinize emin misiniz?', () => {
+                                  handleRemoveContent(complaintDetails.report.contentType, complaintDetails.report.contentId, complaintDetails.report.id, complaintDetails.report.reportedUserId, complaintDetails.report.reason);
+                                });
                               }}
+                              disabled={actionInProgress}
                             >
-                              <Text style={[styles.outlineBtnText, { color: '#4F46E5' }]}>ID Kopyala</Text>
+                              {actionInProgress ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.solidBtnText}>Yorumu Kaldır</Text>}
                             </Pressable>
                           </View>
                         </View>
@@ -1352,10 +1357,16 @@ export default function AdminScreen() {
 
                   <Text style={styles.sectionTitle}>Hızlı Aksiyonlar</Text>
                   <View style={styles.actionGrid}>
-                    <Pressable style={styles.actionGridBtn} onPress={() => handleRemoveContent(complaintDetails.report.contentType, complaintDetails.report.contentId, complaintDetails.report.id, complaintDetails.report.reportedUserId, complaintDetails.report.reason)} disabled={actionInProgress}>
-                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                      <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>İçeriği Kaldır</Text>
-                    </Pressable>
+                    {complaintDetails.report.contentType !== 'comment' && (
+                      <Pressable style={styles.actionGridBtn} onPress={() => {
+                        AlertHelper.confirm('İçeriği Kaldır', 'Bu içeriği kaldırmak istediğinize emin misiniz?', () => {
+                          handleRemoveContent(complaintDetails.report.contentType, complaintDetails.report.contentId, complaintDetails.report.id, complaintDetails.report.reportedUserId, complaintDetails.report.reason);
+                        });
+                      }} disabled={actionInProgress}>
+                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                        <Text style={[styles.actionGridBtnText, { color: '#EF4444' }]}>İçeriği Kaldır</Text>
+                      </Pressable>
+                    )}
                     {complaintDetails.report.reported_active === false ? (
                       <Pressable style={styles.actionGridBtn} onPress={() => handleActivateUser(complaintDetails.report.reportedUserId)} disabled={actionInProgress}>
                         <Ionicons name="person-add-outline" size={20} color="#10B981" />
