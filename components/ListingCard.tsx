@@ -207,8 +207,8 @@ export const ListingCard = React.memo(({
             <View style={[styles.infoBox, { backgroundColor: '#FFF4E5' }]}>
               <Ionicons name="location-outline" size={24} color="#F57C00" style={styles.infoBoxIcon} />
               <View style={styles.infoBoxTextContainer}>
-                <Text style={styles.infoBoxValue} numberOfLines={1}>{itemCity ? `${itemCity}, ${itemDistrict}` : locationString}</Text>
-                <Text style={styles.infoBoxLabel}>İlçe / Mahalle</Text>
+                <Text style={styles.infoBoxValue} numberOfLines={1}>{locationString}</Text>
+                <Text style={styles.infoBoxLabel}>Konum</Text>
               </View>
             </View>
           ) : null}
@@ -245,46 +245,6 @@ export const ListingCard = React.memo(({
 
       </View>
 
-      {!isOwner && (
-        <View style={styles.bottomActionBar}>
-          <View style={styles.leftActions}>
-            <TouchableOpacity 
-              style={styles.actionBoxButton} 
-              onPress={() => {
-                const targetUserId = owner.id || item.hostId || item.ownerId || item.userId;
-                if (targetUserId) router.push(`/chat/${targetUserId}`);
-              }}
-            >
-              <Ionicons name="chatbubble-outline" size={22} color={Colors.text} />
-              <Text style={styles.actionBoxText}>Mesaj Gönder</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.actionBoxButton} 
-              onPress={async () => {
-                try {
-                  await Share.share({
-                    message: `${ownerName} kişisinin ilanını incele: "${item.title || item.text || 'İlan'}"\n\nMisafirim Ol`,
-                  });
-                } catch (e) {
-                  console.error(e);
-                }
-              }}
-            >
-              <Ionicons name="arrow-redo-outline" size={22} color={Colors.text} />
-              <Text style={styles.actionBoxText}>Paylaş</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.interestBtn, isExpired && styles.interestBtnDisabled]} 
-            onPress={handleInterestPress}
-            disabled={isExpired}
-          >
-            <Text style={styles.interestBtnText}>{isExpired ? 'Süresi Doldu' : 'İlgileniyorum'}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
