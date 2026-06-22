@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Share } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,38 @@ interface ListingCardProps {
   onDeleteConfirm: (item: any) => void;
   onReportConfirm?: (item: any) => void;
 }
+
+const getRelativeTime = (createdAt: string | undefined): string => {
+  if (!createdAt) return '';
+  const now = Date.now();
+  const created = new Date(createdAt).getTime();
+  const diffMs = Math.max(0, now - created);
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHour = Math.floor(diffMs / 3600000);
+  const diffDay = Math.floor(diffMs / 86400000);
+  const diffWeek = Math.floor(diffDay / 7);
+
+  if (diffHour < 24) {
+    if (diffMin < 60) return `${Math.max(1, diffMin)}dk`;
+    return `${diffHour}s`;
+  }
+
+  if (diffDay < 7) {
+    return `${diffDay}g`;
+  }
+
+  const isMoreThanYear = diffDay >= 365;
+
+  if (isMoreThanYear) {
+    const dateObj = new Date(createdAt);
+    const d = dateObj.getDate();
+    const m = dateObj.getMonth() + 1;
+    const y = dateObj.getFullYear().toString().slice(-2);
+    return `${d}/${m}/${y}`;
+  }
+
+  return `${diffWeek}h`;
+};
 
 export const ListingCard = React.memo(({
   item,
@@ -100,7 +132,12 @@ export const ListingCard = React.memo(({
   const itemNeighborhood = item.neighborhood || item.mahalle || '';
   
   const locationParts = [itemCity, itemDistrict, itemNeighborhood].filter(p => !!p);
-  const locationString = locationParts.length > 0 ? `📍 ${locationParts.join(' / ')}` : '';
+  const locationString = locationParts.length > 0 ? `${locationParts.join(' / ')}` : '';
+
+  const ownerLivingCity = owner.livingCity || owner.city || item.ownerCity || '';
+  const ownerCityDisplay = ownerLivingCity ? `📍 ${ownerLivingCity}` : '';
+
+  const timeStr = getRelativeTime(item.createdAt);
 
   const rawStayDuration =
     item.guestStayDuration ||
@@ -135,21 +172,20 @@ export const ListingCard = React.memo(({
                 <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" style={{ marginLeft: 4 }} />
               )}
             </View>
-            {ownerUsername ? <Text style={styles.ownerUsername}>@{ownerUsername}</Text> : null}
+            {ownerCityDisplay ? <Text style={styles.ownerUsername}>{ownerCityDisplay}</Text> : null}
           </View>
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
           <View style={styles.headerRightContent}>
-            {dateStr ? <Text style={styles.headerDate}>{dateStr}</Text> : null}
-
+            {timeStr ? <Text style={styles.headerDate}>{timeStr}</Text> : null}
           </View>
           {setOpenMenuId && (
             <TouchableOpacity 
               style={{ padding: 4, marginLeft: 8 }}
               onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textLight} />
+              <Ionicons name="ellipsis-vertical" size={20} color={Colors.textLight} />
             </TouchableOpacity>
           )}
         </View>
@@ -160,35 +196,42 @@ export const ListingCard = React.memo(({
           <Text style={styles.cardTitle} numberOfLines={2}>{item.title || item.text}</Text>
         ) : null}
 
-        {locationString ? (
-          <Text style={styles.locationText}>{locationString}</Text>
-        ) : null}
-
-        {isTimedListing && rawExpiresAt ? (
-          <View style={[styles.badgeWrapperAbsolute, { top: (item.title || item.text) ? 34 : 0 }]}>
-            <View style={[styles.countdownBadge, isExpired && styles.countdownBadgeExpired]}>
-              <Text style={styles.countdownBadgeText}>
-                {isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}
-              </Text>
-            </View>
-            <Text style={styles.countdownLabel}>Süreli İlan</Text>
-          </View>
-        ) : null}
-
-        {formattedStayDuration ? (
-          <Text style={styles.durationText}>
-            ⏳ {formattedStayDuration} Misafir Edebilir
+        {(item.description || item.aboutHome || item.details || item.content) ? (
+          <Text style={styles.cardDescription} numberOfLines={3}>
+            {item.description || item.aboutHome || item.details || item.content}
           </Text>
         ) : null}
 
-        <View style={styles.descriptionRow}>
-          <View style={styles.descriptionCol}>
-            {(item.description || item.aboutHome || item.details || item.content) ? (
-              <Text style={styles.cardDescription} numberOfLines={3}>
-                {item.description || item.aboutHome || item.details || item.content}
-              </Text>
-            ) : null}
-          </View>
+        <View style={styles.infoBoxesContainer}>
+          {locationString ? (
+            <View style={[styles.infoBox, { backgroundColor: '#FFF4E5' }]}>
+              <Ionicons name="location-outline" size={24} color="#F57C00" style={styles.infoBoxIcon} />
+              <View style={styles.infoBoxTextContainer}>
+                <Text style={styles.infoBoxValue} numberOfLines={1}>{itemCity ? `${itemCity}, ${itemDistrict}` : locationString}</Text>
+                <Text style={styles.infoBoxLabel}>İlçe / Mahalle</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {formattedStayDuration ? (
+            <View style={[styles.infoBox, { backgroundColor: '#F3E8FF' }]}>
+              <Ionicons name="calendar-outline" size={24} color="#7C3AED" style={styles.infoBoxIcon} />
+              <View style={styles.infoBoxTextContainer}>
+                <Text style={styles.infoBoxValue} numberOfLines={1}>{formattedStayDuration}</Text>
+                <Text style={styles.infoBoxLabel}>Müsaitlik</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {isTimedListing && rawExpiresAt ? (
+            <View style={[styles.infoBox, { backgroundColor: '#E8F5E9' }]}>
+              <Ionicons name="time-outline" size={24} color="#4CAF50" style={styles.infoBoxIcon} />
+              <View style={styles.infoBoxTextContainer}>
+                <Text style={styles.infoBoxValue} numberOfLines={1}>{isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}</Text>
+                <Text style={styles.infoBoxLabel}>Süreli ilan</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         {item.price ? (
@@ -203,13 +246,42 @@ export const ListingCard = React.memo(({
       </View>
 
       {!isOwner && (
-        <View style={styles.actionBar}>
+        <View style={styles.bottomActionBar}>
+          <View style={styles.leftActions}>
+            <TouchableOpacity 
+              style={styles.actionBoxButton} 
+              onPress={() => {
+                const targetUserId = owner.id || item.hostId || item.ownerId || item.userId;
+                if (targetUserId) router.push(`/chat/${targetUserId}`);
+              }}
+            >
+              <Ionicons name="chatbubble-outline" size={22} color={Colors.text} />
+              <Text style={styles.actionBoxText}>Mesaj Gönder</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionBoxButton} 
+              onPress={async () => {
+                try {
+                  await Share.share({
+                    message: `${ownerName} kişisinin ilanını incele: "${item.title || item.text || 'İlan'}"\n\nMisafirim Ol`,
+                  });
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+            >
+              <Ionicons name="arrow-redo-outline" size={22} color={Colors.text} />
+              <Text style={styles.actionBoxText}>Paylaş</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity 
             style={[styles.interestBtn, isExpired && styles.interestBtnDisabled]} 
             onPress={handleInterestPress}
             disabled={isExpired}
           >
-            <Text style={styles.interestBtnText}>{isExpired ? 'Süresi Doldu' : '❤️ İlgileniyorum'}</Text>
+            <Text style={styles.interestBtnText}>{isExpired ? 'Süresi Doldu' : 'İlgileniyorum'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -268,8 +340,17 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   tag: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   tagText: { fontSize: 13, color: Colors.textLight, marginLeft: 4, fontWeight: '500' },
-  actionBar: { marginTop: 12 },
-  interestBtn: { backgroundColor: '#FF7A00', paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', width: '100%' },
+  infoBoxesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  infoBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, flex: 1, minWidth: '45%' },
+  infoBoxIcon: { marginRight: 10 },
+  infoBoxTextContainer: { flex: 1 },
+  infoBoxValue: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 2 },
+  infoBoxLabel: { fontSize: 12, color: Colors.textLight },
+  bottomActionBar: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 12 },
+  leftActions: { flexDirection: 'row', gap: 8 },
+  actionBoxButton: { width: 72, height: 60, borderRadius: 12, borderWidth: 1, borderColor: '#E0E0E0', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
+  actionBoxText: { fontSize: 10, color: Colors.textLight, marginTop: 4, fontWeight: '500' },
+  interestBtn: { flex: 1, backgroundColor: '#FF7A00', height: 60, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   interestBtnDisabled: { backgroundColor: '#E0E0E0' },
   interestBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
