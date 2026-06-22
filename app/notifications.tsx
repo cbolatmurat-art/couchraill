@@ -121,7 +121,7 @@ export default function NotificationsScreen() {
             const replyCommentId = parts.length >= 3 ? parts[2] : undefined;
             
             router.push({
-              pathname: '/(tabs)/index',
+              pathname: '/',
               params: { openPostComments: postId, topCommentId: parentCommentId, highlightCommentId: replyCommentId, tab: 'community' }
             });
           }

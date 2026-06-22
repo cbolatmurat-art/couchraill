@@ -563,15 +563,15 @@ export default function FeedScreen() {
 
 
   const handleDeleteCommentSwipe = async (comment: any) => {
-    const meId = currentUserId || currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
+    const meId = currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || "unknown";
     if (comment.userId !== meId) return;
 
     setComments(prev => prev.filter(c => c.id !== comment.id && c.parentCommentId !== comment.id));
-    setItems(prev => prev.map(p => { if (p.id === selectedPostId || p._id === selectedPostId) { const isNormalized = p.commentsCount !== undefined; if (isNormalized) { return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }; } else { return { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) }; } } return p; }));
+    setFeed(prev => prev.map(p => { if (p.id === activeListingId || p._id === activeListingId) { const isNormalized = p.commentsCount !== undefined; if (isNormalized) { return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }; } else { return { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) }; } } return p; }));
     try {
       const isListing = comment.id.startsWith('lc') || comment.listingId;
       const type = isListing ? 'listings' : 'posts';
-      const parentId = selectedPostId;
+      const parentId = activeListingId;
       
       const deleteUrl = `${API_BASE_URL}/${type}/${parentId}/comments/${comment.id}`;
       await fetch(deleteUrl, {
