@@ -39,6 +39,26 @@ export const EventCard = React.memo(({
   const [participantsModalVisible, setParticipantsModalVisible] = useState(false);
   
   const slideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  const shareSlideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  const openShareModal = () => {
+    setShareModalVisible(true);
+    Animated.timing(shareSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeShareModal = () => {
+    Animated.timing(shareSlideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setShareModalVisible(false);
+    });
+  };
 
   // Do not use demo data. If there's no actual data, default to 0.
   const initialCount = item.participantCount || item.participants?.length || 0;
@@ -271,7 +291,7 @@ export const EventCard = React.memo(({
     
     // Pass the full event item stringified in mediaUrl so the chat screen can render it
     await sendMessage(conversationId, messageText, undefined, 'eventShare', JSON.stringify(item));
-    setShareModalVisible(false);
+    closeShareModal();
   };
 
   const recentContacts = conversations
@@ -412,7 +432,7 @@ export const EventCard = React.memo(({
       <View style={styles.divider} />
 
       <View style={styles.bottomSection}>
-        <TouchableOpacity style={styles.sendButton} onPress={() => setShareModalVisible(true)}>
+        <TouchableOpacity style={styles.sendButton} onPress={openShareModal}>
           <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
           <Text style={styles.sendButtonText}>Davet Et</Text>
         </TouchableOpacity>
@@ -500,16 +520,16 @@ export const EventCard = React.memo(({
       {/* Share Modal */}
       <Modal
         visible={shareModalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
-        onRequestClose={() => setShareModalVisible(false)}
+        onRequestClose={closeShareModal}
       >
-        <View style={[styles.modalOverlay, { backgroundColor: 'transparent' }]}>
-          <TouchableOpacity style={styles.dismissOverlay} onPress={() => setShareModalVisible(false)} />
-          <View style={styles.modalContent}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.dismissOverlay} onPress={closeShareModal} />
+          <Animated.View style={[styles.modalContent, { transform: [{ translateY: shareSlideAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Etkinliği Gönder</Text>
-              <TouchableOpacity onPress={() => setShareModalVisible(false)}>
+              <TouchableOpacity onPress={closeShareModal}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
@@ -535,7 +555,7 @@ export const EventCard = React.memo(({
                 </View>
               )}
             />
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
