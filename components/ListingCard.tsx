@@ -202,50 +202,31 @@ export const ListingCard = React.memo(({
           </Text>
         ) : null}
 
-        <View style={styles.infoDivider} />
-
-        <View style={styles.minimalInfoContainer}>
+        <View style={styles.mobileInfoContainer}>
           {locationString ? (
-            <View style={styles.minimalInfoItem}>
-              <View style={[styles.iconWrapper, { backgroundColor: '#FFF4E5' }]}>
-                <Ionicons name="location-outline" size={22} color="#F57C00" />
-              </View>
-              <View style={styles.minimalInfoText}>
-                <Text style={styles.minimalInfoValue} numberOfLines={2}>{locationString}</Text>
-                <Text style={styles.minimalInfoLabel}>Konum</Text>
+            <View style={styles.mobileInfoRowFull}>
+              <View style={styles.mobileInfoText}>
+                <Text style={styles.mobileInfoValue} numberOfLines={2}>📍 {locationString}</Text>
+                <Text style={styles.mobileInfoLabel}>Konum</Text>
               </View>
             </View>
           ) : null}
 
-          {formattedStayDuration ? (
-            <>
-              {locationString && <View style={styles.verticalDivider} />}
-              <View style={styles.minimalInfoItem}>
-                <View style={[styles.iconWrapper, { backgroundColor: '#F3E8FF' }]}>
-                  <Ionicons name="calendar-outline" size={22} color="#7C3AED" />
-                </View>
-                <View style={styles.minimalInfoText}>
-                  <Text style={styles.minimalInfoValue} numberOfLines={1}>{formattedStayDuration}</Text>
-                  <Text style={styles.minimalInfoLabel}>Müsaitlik</Text>
-                </View>
+          <View style={styles.mobileInfoRowBoxes}>
+            {formattedStayDuration ? (
+              <View style={styles.mobileInfoBox}>
+                <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
+                <Text style={styles.mobileInfoLabel}>Müsaitlik</Text>
               </View>
-            </>
-          ) : null}
+            ) : null}
 
-          {isTimedListing && rawExpiresAt ? (
-            <>
-              {(locationString || formattedStayDuration) && <View style={styles.verticalDivider} />}
-              <View style={styles.minimalInfoItem}>
-                <View style={[styles.iconWrapper, { backgroundColor: '#E8F5E9' }]}>
-                  <Ionicons name="time-outline" size={22} color="#4CAF50" />
-                </View>
-                <View style={styles.minimalInfoText}>
-                  <Text style={styles.minimalInfoValue} numberOfLines={1}>{isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}</Text>
-                  <Text style={styles.minimalInfoLabel}>Süreli İlan</Text>
-                </View>
+            {isTimedListing && rawExpiresAt ? (
+              <View style={styles.mobileInfoBox}>
+                <Text style={styles.mobileInfoValue} numberOfLines={1}>⏳ {isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}</Text>
+                <Text style={styles.mobileInfoLabel}>Süreli İlan</Text>
               </View>
-            </>
-          ) : null}
+            ) : null}
+          </View>
         </View>
 
         {item.price ? (
@@ -315,13 +296,13 @@ const styles = StyleSheet.create({
   tag: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   tagText: { fontSize: 13, color: Colors.textLight, marginLeft: 4, fontWeight: '500' },
   infoDivider: { height: 1, backgroundColor: '#F0F2F5', marginTop: 16, marginBottom: 16 },
-  minimalInfoContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  minimalInfoItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  iconWrapper: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  minimalInfoText: { flex: 1, justifyContent: 'center' },
-  minimalInfoValue: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 4 },
-  minimalInfoLabel: { fontSize: 12, color: Colors.textLight },
-  verticalDivider: { width: 1, backgroundColor: '#F0F2F5', marginHorizontal: 12, height: '80%' },
+  mobileInfoContainer: { marginTop: 12, gap: 8 },
+  mobileInfoRowFull: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 12 },
+  mobileInfoRowBoxes: { flexDirection: 'row', gap: 8 },
+  mobileInfoBox: { flex: 1, backgroundColor: '#F8F9FA', borderRadius: 12, padding: 12 },
+  mobileInfoText: { justifyContent: 'center' },
+  mobileInfoValue: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 4 },
+  mobileInfoLabel: { fontSize: 12, color: Colors.textLight },
   dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
   dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
   dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text }
