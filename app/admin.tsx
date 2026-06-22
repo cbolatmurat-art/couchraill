@@ -1253,6 +1253,63 @@ export default function AdminScreen() {
                         </View>
                       )}
 
+                      {complaintDetails.report.contentType === 'comment' && (
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            {complaintDetails.content.owner_avatar ? (
+                              <Image source={{ uri: complaintDetails.content.owner_avatar }} style={styles.previewAvatar} />
+                            ) : (
+                              <View style={[styles.previewAvatar, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="person" size={16} color="#94A3B8" />
+                              </View>
+                            )}
+                            <View style={{ marginLeft: 8 }}>
+                              <Text style={styles.previewOwnerName}>{complaintDetails.content.owner_name}</Text>
+                              <Text style={styles.previewOwnerUsername}>@{complaintDetails.content.owner_username}</Text>
+                            </View>
+                          </View>
+                          
+                          <Text style={{ fontSize: 13, color: '#64748B', fontWeight: 'bold', marginBottom: 4 }}>Yorum Metni:</Text>
+                          <Text style={[styles.previewDesc, { color: '#0F172A', fontStyle: 'italic', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }]}>"{complaintDetails.content.content || complaintDetails.content.text}"</Text>
+
+                          {complaintDetails.content.parent_comment_text && (
+                            <View style={{ marginTop: 12, padding: 10, backgroundColor: '#F1F5F9', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#CBD5E1' }}>
+                              <Text style={{ fontSize: 11, color: '#64748B', fontWeight: 'bold', marginBottom: 4 }}>Yanıt Verilen Yorum:</Text>
+                              <Text style={{ fontSize: 13, color: '#475569' }} numberOfLines={3}>"{complaintDetails.content.parent_comment_text}"</Text>
+                            </View>
+                          )}
+
+                          <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 13, color: '#64748B', fontWeight: 'bold', marginBottom: 8 }}>Bağlı Olduğu İçerik:</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                              <Ionicons name={complaintDetails.content.post_type === 'event' ? 'calendar-outline' : 'document-text-outline'} size={16} color="#64748B" />
+                              <Text style={{ marginLeft: 6, fontSize: 13, color: '#475569', fontWeight: '500' }}>
+                                {complaintDetails.content.post_type === 'event' ? 'Etkinlik' : 'Gönderi'} 
+                                {complaintDetails.content.post_owner_name ? ` - ${complaintDetails.content.post_owner_name}` : ''}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic' }} numberOfLines={3}>
+                              {complaintDetails.content.post_title || complaintDetails.content.post_text || 'İçerik metni bulunamadı.'}
+                            </Text>
+                          </View>
+
+                          <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={styles.previewDate}>Yorum Tarihi: {new Date(complaintDetails.content.createdAt).toLocaleString('tr-TR')}</Text>
+                          </View>
+                          
+                          <View style={{ marginTop: 16, flexDirection: 'row', gap: 12 }}>
+                            <Pressable 
+                              style={[styles.outlineBtn, { borderColor: '#4F46E5', flex: 1 }]} 
+                              onPress={() => {
+                                AlertHelper.alert('Bilgi', `Yorum ID: ${complaintDetails.content.id}\nİçerik ID: ${complaintDetails.content.postId}`);
+                              }}
+                            >
+                              <Text style={[styles.outlineBtnText, { color: '#4F46E5' }]}>ID Kopyala</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
+
                       {complaintDetails.report.contentType === 'user' && (
                         <View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>

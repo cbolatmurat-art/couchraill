@@ -6115,7 +6115,7 @@ app.get('/api/admin/reports', checkAdminAuth, async (req, res) => {
 
     if (type && type !== 'all') {
       if (type === 'other') {
-        queryStr += ` WHERE r."contentType" NOT IN ('listing', 'post', 'event')`;
+        queryStr += ` WHERE r."contentType" NOT IN ('listing', 'post', 'event', 'comment')`;
       } else {
         queryStr += ` WHERE r."contentType" = $1`;
         queryParams.push(type);
@@ -6128,7 +6128,8 @@ app.get('/api/admin/reports', checkAdminAuth, async (req, res) => {
     res.json({ success: true, reports: rows });
   } catch (error) {
     console.error('[ADMIN_REPORTS_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Şikayetler alınamadı.' });
+    require('fs').writeFileSync('backend_error.log', error.stack || error.toString());
+    res.status(500).json({ success: false, error: 'Şikayetler alınamadı.', details: error.message });
   }
 });
 // DELETE All Reports
@@ -6184,6 +6185,23 @@ app.get('/api/admin/reports/:id/details', checkAdminAuth, async (req, res) => {
         FROM posts p
         LEFT JOIN users u ON (p."userId" = u.id OR p."authorId" = u.id)
         WHERE p.id = $1
+      `, [report.contentId]);
+      if (rows.length > 0) {
+        content = rows[0];
+      } else {
+        isDeleted = true;
+      }
+    } else if (report.contentType === 'comment') {
+      const { rows } = await query(`
+        SELECT c.*, u.name as owner_name, u.username as owner_username, u."profileImage" as owner_avatar,
+               p.text as post_text, p.title as post_title, p.type as post_type, pu.name as post_owner_name,
+               pc.content as parent_comment_text
+        FROM post_comments c
+        LEFT JOIN users u ON c."userId" = u.id
+        LEFT JOIN posts p ON c."postId" = p.id
+        LEFT JOIN users pu ON p."userId" = pu.id
+        LEFT JOIN post_comments pc ON c."parentCommentId" = pc.id
+        WHERE c.id = $1
       `, [report.contentId]);
       if (rows.length > 0) {
         content = rows[0];
@@ -6309,6 +6327,8 @@ app.post('/api/admin/moderate/hide-content', checkAdminAuth, async (req, res) =>
       await query(`DELETE FROM listings WHERE id = $1`, [contentId]);
     } else if (contentType === 'post' || contentType === 'event') {
       await query(`DELETE FROM posts WHERE id = $1`, [contentId]);
+    } else if (contentType === 'comment') {
+      await query(`DELETE FROM post_comments WHERE id = $1 OR "parentCommentId" = $1`, [contentId]);
     }
 
     // A) İçeriği kaldırılan kullanıcıya bildirim gönder.
