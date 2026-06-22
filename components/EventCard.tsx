@@ -504,7 +504,7 @@ export const EventCard = React.memo(({
         transparent={true}
         onRequestClose={() => setShareModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity style={styles.dismissOverlay} onPress={() => setShareModalVisible(false)} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
