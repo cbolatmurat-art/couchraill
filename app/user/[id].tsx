@@ -312,10 +312,11 @@ export default function PublicProfileScreen() {
 
     let parts = [];
     if (profile?.gender && profile.gender !== 'Söylemek istemiyorum') {
-      parts.push(profile.gender);
+      const genderSymbol = profile.gender === 'Erkek' ? '♂' : (profile.gender === 'Kadın' ? '♀' : profile.gender);
+      parts.push(genderSymbol);
     }
     if (profile?.city) {
-      parts.push(`📍 ${profile.city}`);
+      parts.push(profile.city);
     }
     if (dateStr) {
       parts.push(dateStr);
@@ -337,6 +338,7 @@ export default function PublicProfileScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
+        <Stack.Screen options={{ title: '', headerShadowVisible: false, headerBackTitleVisible: false }} />
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );

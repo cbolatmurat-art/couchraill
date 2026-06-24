@@ -530,10 +530,11 @@ export default function ProfileScreen() {
     
     let parts = [];
     if (currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum') {
-      parts.push(currentUser.gender);
+      const genderSymbol = currentUser.gender === 'Erkek' ? '♂' : (currentUser.gender === 'Kadın' ? '♀' : currentUser.gender);
+      parts.push(genderSymbol);
     }
     if (currentUser.city) {
-      parts.push(`📍 ${currentUser.city}`);
+      parts.push(currentUser.city);
     }
     if (dateStr) {
       parts.push(dateStr);
