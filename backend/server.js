@@ -859,6 +859,7 @@ app.get('/api/auth/me', async (req, res) => {
       }
     }
     
+    user.identityVerified = user.identityVerified || user.identityVerificationStatus === 'verified' || user.verified || false;
     res.json({ success: true, user, sessionId: newSessionCreated ? activeSessionId : undefined });
   } catch (error) {
     console.error('[AUTH_ME_ERROR]', error);
@@ -4210,7 +4211,7 @@ app.get('/api/users/:id/public', async (req, res) => {
       profileImage: user.profileImage || user.avatar,
       city: user.city || user.livingCity,
       verified: user.verified,
-      identityVerified: user.identityVerified,
+      identityVerified: user.identityVerified || user.identityVerificationStatus === 'verified' || user.verified || false,
       identityVerificationStatus: user.identityVerificationStatus,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,

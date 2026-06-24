@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Text, Animated, Platform, Switch, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Animated, Platform, Switch, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput, Alert } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { CityPicker } from '../../components/CityPicker';
 import { useAppContext } from '../../context/AppContext';
-import { useRouter, Redirect, useLocalSearchParams } from 'expo-router';
+import { useRouter, Redirect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../../constants/config';
 import { DeviceEventEmitter } from 'react-native';
+import * as Location from 'expo-location';
 
 export default function CreateListingScreen() {
   const { currentUser, refreshData, setListings, fetchListingsAndRequests } = useAppContext();
   const router = useRouter();
+  const navigation = useNavigation();
 
   if (currentUser?.userType !== 'host') {
     return <Redirect href="/(tabs)" />;
@@ -28,14 +30,197 @@ export default function CreateListingScreen() {
   const [neighborhood, setNeighborhood] = useState(params.neighborhood as string || '');
   const [guestStayDuration, setGuestStayDuration] = useState(params.guestStayDuration as string || '');
   const [description, setDescription] = useState(params.description as string || '');
+  const [targetAudience, setTargetAudience] = useState<'public' | 'verified_only'>((params.targetAudience as any) || 'public');
   const [isTimedListing, setIsTimedListing] = useState(params.isTimedListing === 'true' || false);
   const [listingDurationDays, setListingDurationDays] = useState(params.listingDurationDays ? Number(params.listingDurationDays) : 3);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+  React.useEffect(() => {
+    if (!editId && !params.city) {
+      console.log("[LOCATION] Otomatik konum alma basladi.");
+      const detectLocation = async () => {
+        setIsDetectingLocation(true);
+        try {
+          const locationPromise = new Promise<any>(async (resolve, reject) => {
+            console.log("[LOCATION] Izin isteniyor...");
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+              reject(new Error('Permission denied'));
+              return;
+            }
+            let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            resolve(location);
+          });
+          
+          const timeoutPromise = new Promise<any>((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout')), 5000);
+          });
+
+          const loc = await Promise.race([locationPromise, timeoutPromise]);
+          
+          if (loc?.coords) {
+            console.log("[LOCATION] Konum basariyla alindi. Koordinatlar cozumleniyor...");
+            let reverse = await Location.reverseGeocodeAsync({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude
+            });
+            
+            if (reverse && reverse.length > 0) {
+              const place = reverse[0];
+              const detectedCity = place.region || place.city || place.subregion;
+              const detectedDistrict = place.subregion || place.city;
+              if (detectedCity) {
+                console.log("[LOCATION] Cozumlenen sehir/ilce:", detectedCity, detectedDistrict);
+                setCity(detectedCity);
+                if (detectedDistrict && detectedDistrict !== detectedCity) {
+                   let finalDistrict = detectedDistrict;
+                   const cityLower = detectedCity.toLocaleLowerCase('tr-TR');
+                   const districtLower = finalDistrict.toLocaleLowerCase('tr-TR');
+                   
+                   if (districtLower.startsWith(cityLower)) {
+                     finalDistrict = finalDistrict.substring(detectedCity.length).trim();
+                   }
+                   
+                   if (finalDistrict) {
+                     setDistrict(finalDistrict);
+                   } else {
+                     setDistrict('');
+                   }
+                }
+                
+                let detectedNeighborhood = place.district || '';
+                if (detectedNeighborhood && detectedDistrict && detectedNeighborhood.toLocaleLowerCase('tr-TR') === detectedDistrict.toLocaleLowerCase('tr-TR')) {
+                  detectedNeighborhood = '';
+                }
+                
+                if (!detectedNeighborhood || detectedNeighborhood.trim() === '') {
+                  setNeighborhood('Mahalle Algılanamadı');
+                } else {
+                  setNeighborhood(detectedNeighborhood.trim());
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.log("[LOCATION] Konum otomatik alınamadı veya zaman asimina ugradi:", error);
+        } finally {
+          console.log("[LOCATION] Konum alma islemi bitti.");
+          setIsDetectingLocation(false);
+        }
+      };
+      
+      detectLocation();
+    }
+  }, []);
+
+  const handleClose = React.useCallback(() => {
+    setTitle('');
+    setCity('');
+    setDistrict('');
+    setNeighborhood('');
+    setGuestStayDuration('');
+    setDescription('');
+    setIsTimedListing(false);
+    setListingDurationDays(3);
+    setTargetAudience('public');
+    
+    router.back();
+  }, [router]);
+
+  React.useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={handleClose} style={{ marginRight: 16 }}>
+          <Ionicons name="close" size={28} color={Colors.text} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, handleClose]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
   const [toast, setToast] = useState<{visible: boolean, message: string, type: 'success'|'error'}>({visible: false, message: '', type: 'success'});
   const [toastAnim] = useState(new Animated.Value(-100));
+
+  const [isLocationModalVisible, setLocationModalVisible] = useState(false);
+  const locOverlayAnim = React.useRef(new Animated.Value(0)).current;
+  const locSlideAnim = React.useRef(new Animated.Value(500)).current;
+
+  const [isAudienceModalVisible, setAudienceModalVisible] = useState(false);
+  const audOverlayAnim = React.useRef(new Animated.Value(0)).current;
+  const audSlideAnim = React.useRef(new Animated.Value(300)).current;
+
+  const [isMoreOptionsVisible, setMoreOptionsVisible] = useState(false);
+  const overlayAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(500)).current;
+
+  const openAudienceModal = () => {
+    setAudienceModalVisible(true);
+    Animated.parallel([
+      Animated.timing(audOverlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.spring(audSlideAnim, { toValue: 0, tension: 65, friction: 10, useNativeDriver: true })
+    ]).start();
+  };
+
+  const closeAudienceModal = () => {
+    Animated.parallel([
+      Animated.timing(audOverlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(audSlideAnim, { toValue: 300, duration: 200, useNativeDriver: true })
+    ]).start(() => setAudienceModalVisible(false));
+  };
+
+  const handleSelectAudience = (value: 'public' | 'verified_only') => {
+    if (value === 'verified_only') {
+      const isVerified = currentUser?.verified === true || currentUser?.identityVerificationStatus === 'verified';
+      if (!isVerified) {
+        closeAudienceModal();
+        setTimeout(() => {
+          Alert.alert(
+            "Doğrulama Gerekli",
+            "Bu özelliği kullanabilmek için hesabınızı doğrulamanız gerekmektedir.",
+            [
+              { text: "İptal", style: "cancel" },
+              { text: "Hesabı Doğrula", onPress: () => router.push('/security') }
+            ]
+          );
+        }, 300);
+        return;
+      }
+    }
+    setTargetAudience(value);
+    closeAudienceModal();
+  };
+
+  const openLocationModal = () => {
+    setLocationModalVisible(true);
+    Animated.parallel([
+      Animated.timing(locOverlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.spring(locSlideAnim, { toValue: 0, tension: 65, friction: 10, useNativeDriver: true })
+    ]).start();
+  };
+
+  const closeLocationModal = () => {
+    Animated.parallel([
+      Animated.timing(locOverlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(locSlideAnim, { toValue: 500, duration: 200, useNativeDriver: true })
+    ]).start(() => setLocationModalVisible(false));
+  };
+
+  const openMoreOptions = () => {
+    setMoreOptionsVisible(true);
+    Animated.parallel([
+      Animated.timing(overlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 10, useNativeDriver: true })
+    ]).start();
+  };
+
+  const closeMoreOptions = () => {
+    Animated.parallel([
+      Animated.timing(overlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 500, duration: 200, useNativeDriver: true })
+    ]).start(() => setMoreOptionsVisible(false));
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ visible: true, message, type });
@@ -77,7 +262,8 @@ export default function CreateListingScreen() {
               title, city, district, neighborhood, description, aboutHome: description, guestStayDuration,
               isTimedListing: Boolean(isTimedListing),
               listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
-              expiresAt: finalExpiresAt
+              expiresAt: finalExpiresAt,
+              targetAudience
             };
             
             const response = await fetch(`${API_BASE_URL}/posts/${editId}`, {
@@ -137,6 +323,7 @@ export default function CreateListingScreen() {
           isTimedListing: Boolean(isTimedListing),
           listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
           expiresAt: finalExpiresAt,
+          targetAudience,
           createdAt: now.toISOString()
         };
 
@@ -207,83 +394,203 @@ export default function CreateListingScreen() {
           value={title}
           onChangeText={setTitle}
         />
-        
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Şehir</Text>
-          <CityPicker 
-            selectedCity={city}
-            onSelectCity={setCity}
-            placeholder="Şehir seçin..."
-            showAllOption={false}
+
+        <TouchableOpacity style={styles.locationSelector} onPress={openLocationModal}>
+          <View style={styles.locationSelectorIcon}>
+            <Ionicons name="location" size={24} color={Colors.primary} />
+          </View>
+          <View style={styles.locationSelectorContent}>
+            <Text style={styles.locationSelectorLabel}>Konum</Text>
+            {isDetectingLocation ? (
+              <Text style={styles.locationSelectorValue} numberOfLines={1}>
+                📍 Konumunuz algılanıyor...
+              </Text>
+            ) : city || district || neighborhood ? (
+              <Text style={styles.locationSelectorValue} numberOfLines={1}>
+                📍 {[city, district, neighborhood].filter(Boolean).join(' / ')}
+              </Text>
+            ) : (
+              <Text style={styles.locationSelectorPlaceholder}>📍 Konum Seç</Text>
+            )}
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        <View style={styles.groupedSection}>
+          <Text style={styles.groupLabel}>Eviniz veya Kurallarınız Hakkında</Text>
+          <TextInput
+            style={[styles.groupInput, styles.multilineInput]}
+            placeholder="Örn: Metroya 5 dk yürüme mesafesinde. Wi-fi, sıcak su mevcut..."
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            placeholderTextColor={Colors.textLight}
           />
-        </View>
+          
+          <View style={styles.groupDivider} />
 
-        <Input
-          label="İlçe"
-          placeholder="Örn: Kadıköy, Çankaya..."
-          value={district}
-          onChangeText={setDistrict}
-        />
-
-        <Input
-          label="Mahalle"
-          placeholder="Örn: Moda, Bahçelievler..."
-          value={neighborhood}
-          onChangeText={setNeighborhood}
-        />
-
-        <Input
-          label="Kaç Gün Misafir Edebilirsin?"
-          placeholder="Örn: 1-3 gün"
-          value={guestStayDuration}
-          onChangeText={setGuestStayDuration}
-        />
-
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>Süreli ilan oluştur</Text>
-          <Switch
-            value={isTimedListing}
-            onValueChange={setIsTimedListing}
-            trackColor={{ false: '#E0E0E0', true: Colors.primary }}
-          />
-        </View>
-
-        {isTimedListing && (
-          <View style={styles.durationContainer}>
-            <Text style={styles.inputLabel}>İlan kaç gün yayında kalsın?</Text>
-            <View style={styles.chipRow}>
-              {[1, 2, 3, 5, 7].map(days => (
-                <TouchableOpacity
-                  key={days}
-                  style={[styles.chip, listingDurationDays === days && styles.chipSelected]}
-                  onPress={() => setListingDurationDays(days)}
-                >
-                  <Text style={[styles.chipText, listingDurationDays === days && styles.chipTextSelected]}>
-                    {days} gün
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          <View style={styles.rowInputs}>
+            <View style={styles.flexHalf}>
+              <Text style={styles.groupLabel}>Kaç Gün Misafir Edebilirsin?</Text>
+              <TextInput
+                style={styles.groupInput}
+                placeholder="Örn: 1-3 gün"
+                value={guestStayDuration}
+                onChangeText={(text) => setGuestStayDuration(text.replace(/[^0-9]/g, ''))}
+                keyboardType="numeric"
+                placeholderTextColor={Colors.textLight}
+              />
+            </View>
+            <View style={styles.flexDivider} />
+            <View style={styles.flexHalf}>
+              <Text style={styles.groupLabel}>🎯 Hedef Kitle</Text>
+              <TouchableOpacity style={styles.targetAudienceSelector} onPress={openAudienceModal}>
+                <Text style={styles.targetAudienceText} numberOfLines={1}>
+                  {targetAudience === 'verified_only' ? 'Doğrulanmış Kişiler' : 'Herkese Açık'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={Colors.textLight} />
+              </TouchableOpacity>
             </View>
           </View>
-        )}
+        </View>
 
-        <Input
-          label="Evinizden ve sunduğunuz imkanlardan bahsedin"
-          placeholder="Örn: Metroya 5 dk yürüme mesafesinde. Wi-fi, sıcak su mevcut..."
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-        />
-
-        <View style={styles.buttonContainer}>
-          <Button 
-            title={isSubmitting ? "Kaydediliyor..." : (editId ? "İlanı Güncelle" : "İlanı Yayınla")} 
-            onPress={handleSubmit} 
+        <View style={styles.bottomRow}>
+          <View style={{ flex: 1 }}>
+            <Button 
+              title={isSubmitting ? "Kaydediliyor..." : (editId ? "İlanı Güncelle" : "İlanı Yayınla")} 
+              onPress={handleSubmit} 
+              disabled={isSubmitting || !title || !city || !description || !guestStayDuration}
+            />
+          </View>
+          <TouchableOpacity 
+            style={[
+              styles.plusButton, 
+              (isSubmitting || !title || !city || !description || !guestStayDuration) && { opacity: 0.5 }
+            ]} 
+            onPress={openMoreOptions}
             disabled={isSubmitting || !title || !city || !description || !guestStayDuration}
-          />
+          >
+            <Ionicons name="add" size={28} color="#FFF" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal visible={isLocationModalVisible} transparent={true} animationType="none" onRequestClose={closeLocationModal}>
+        <TouchableWithoutFeedback onPress={closeLocationModal}>
+          <Animated.View style={[styles.bottomSheetOverlay, { opacity: locOverlayAnim }]} />
+        </TouchableWithoutFeedback>
+        <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: locSlideAnim }] }]}>
+          <View style={styles.bottomSheetHandle} />
+          <Text style={styles.bottomSheetTitle}>Konum Seçimi</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Şehir</Text>
+            <CityPicker 
+              selectedCity={city}
+              onSelectCity={setCity}
+              placeholder="Şehir seçin..."
+              showAllOption={false}
+            />
+          </View>
+
+          <Input
+            label="İlçe"
+            placeholder="Örn: Kadıköy, Çankaya..."
+            value={district}
+            onChangeText={setDistrict}
+          />
+
+          <Input
+            label="Mahalle"
+            placeholder="Örn: Moda, Bahçelievler..."
+            value={neighborhood}
+            onChangeText={setNeighborhood}
+          />
+
+          <View style={{ marginTop: 8 }}>
+            <Button 
+              title="Tamam" 
+              onPress={closeLocationModal} 
+            />
+          </View>
+        </Animated.View>
+      </Modal>
+
+      <Modal visible={isMoreOptionsVisible} transparent={true} animationType="none" onRequestClose={closeMoreOptions}>
+        <TouchableWithoutFeedback onPress={closeMoreOptions}>
+          <Animated.View style={[styles.bottomSheetOverlay, { opacity: overlayAnim }]} />
+        </TouchableWithoutFeedback>
+        <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: slideAnim }] }]}>
+          <View style={styles.bottomSheetHandle} />
+          <Text style={styles.bottomSheetTitle}>Ek Seçenekler</Text>
+          
+          <View style={styles.switchContainer}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+              <Text style={styles.switchLabel}>Süreli İlan Oluştur</Text>
+              <Text style={styles.switchDesc}>İlanınız belirlediğiniz süre sonunda otomatik kaldırılır.</Text>
+            </View>
+            <Switch
+              value={isTimedListing}
+              onValueChange={setIsTimedListing}
+              trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+            />
+          </View>
+
+          {isTimedListing && (
+            <View style={styles.durationContainer}>
+              <Text style={styles.inputLabel}>İlan kaç gün yayında kalsın?</Text>
+              <View style={styles.chipRow}>
+                {[1, 2, 3, 5, 7].map(days => (
+                  <TouchableOpacity
+                    key={days}
+                    style={[styles.chip, listingDurationDays === days && styles.chipSelected]}
+                    onPress={() => setListingDurationDays(days)}
+                  >
+                    <Text style={[styles.chipText, listingDurationDays === days && styles.chipTextSelected]}>
+                      {days} gün
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </Animated.View>
+      </Modal>
+
+      <Modal visible={isAudienceModalVisible} transparent={true} animationType="none" onRequestClose={closeAudienceModal}>
+        <TouchableWithoutFeedback onPress={closeAudienceModal}>
+          <Animated.View style={[styles.bottomSheetOverlay, { opacity: audOverlayAnim }]} />
+        </TouchableWithoutFeedback>
+        <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: audSlideAnim }] }]}>
+          <View style={styles.bottomSheetHandle} />
+          <Text style={styles.bottomSheetTitle}>Hedef Kitle Seçimi</Text>
+          
+          <TouchableOpacity 
+            style={[styles.audienceOption, targetAudience === 'public' && styles.audienceOptionSelected]} 
+            onPress={() => handleSelectAudience('public')}
+          >
+            <Ionicons name="earth" size={24} color={targetAudience === 'public' ? Colors.primary : Colors.textLight} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.audienceOptionTitle, targetAudience === 'public' && styles.audienceOptionTitleSelected]}>Herkese Açık</Text>
+              <Text style={styles.audienceOptionDesc}>İlanınız tüm kullanıcılar tarafından görüntülenebilir.</Text>
+            </View>
+            {targetAudience === 'public' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.audienceOption, targetAudience === 'verified_only' && styles.audienceOptionSelected]} 
+            onPress={() => handleSelectAudience('verified_only')}
+          >
+            <Ionicons name="shield-checkmark" size={24} color={targetAudience === 'verified_only' ? Colors.primary : Colors.textLight} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.audienceOptionTitle, targetAudience === 'verified_only' && styles.audienceOptionTitleSelected]}>Doğrulanmış Kişiler</Text>
+              <Text style={styles.audienceOptionDesc}>İlanınız yalnızca kimliğini doğrulamış kullanıcılar tarafından görüntülenebilir.</Text>
+            </View>
+            {targetAudience === 'verified_only' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
+          </TouchableOpacity>
+        </Animated.View>
+      </Modal>
 
       {toast.visible && (
         <Animated.View style={[
@@ -410,5 +717,200 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
+  },
+  locationSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    marginBottom: 16,
+  },
+  locationSelectorIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${Colors.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  locationSelectorContent: {
+    flex: 1,
+  },
+  locationSelectorLabel: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.textLight,
+    marginBottom: 2,
+  },
+  locationSelectorValue: {
+    ...Typography.body,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  locationSelectorPlaceholder: {
+    ...Typography.body,
+    color: Colors.textLight,
+  },
+  groupedSection: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  groupLabel: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: 12,
+    marginHorizontal: 16,
+    marginBottom: 4,
+  },
+  groupInput: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingTop: 8,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  multilineInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  groupDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: 16,
+  },
+  rowInputs: {
+    flexDirection: 'row',
+  },
+  flexHalf: {
+    flex: 1,
+  },
+  flexDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+  },
+  targetAudienceSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingTop: 8,
+  },
+  targetAudienceText: {
+    fontSize: 16,
+    color: Colors.text,
+  },
+  audienceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 12,
+  },
+  audienceOptionSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: `${Colors.primary}08`,
+  },
+  audienceOptionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  audienceOptionTitleSelected: {
+    color: Colors.primary,
+  },
+  audienceOptionDesc: {
+    fontSize: 13,
+    color: Colors.textLight,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+    gap: 12,
+  },
+  plusButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  fullModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: '#FFF',
+  },
+  fullModalTitle: {
+    ...Typography.title,
+    fontSize: 18,
+  },
+  fullModalContent: {
+    padding: 16,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  bottomSheetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  bottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  bottomSheetTitle: {
+    ...Typography.title,
+    fontSize: 18,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  switchDesc: {
+    ...Typography.caption,
+    color: Colors.textLight,
+    marginTop: 4,
   }
 });

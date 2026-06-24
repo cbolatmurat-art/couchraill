@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Plat
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { useAppContext } from '../../context/AppContext';
@@ -35,7 +35,12 @@ export default function ChatScreen() {
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
   const [longPressedMessage, setLongPressedMessage] = useState<Message | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-  const [localOtherUserStatus, setLocalOtherUserStatus] = useState<{ isOnline: boolean, lastSeen: string | null }>({ isOnline: false, lastSeen: null });
+  const [localOtherUserStatus, setLocalOtherUserStatus] = useState<{ isOnline: boolean, lastSeen: string | null }>(() => {
+    const conv = conversations.find(c => c.id === id);
+    return { isOnline: conv?.otherUserStatus?.isOnline || false, lastSeen: conv?.otherUserStatus?.lastSeen || null };
+  });
+  const [currentOtherUserIdentityVerified, setCurrentOtherUserIdentityVerified] = useState<boolean | undefined>(undefined);
+  const [otherUserVerificationLoaded, setOtherUserVerificationLoaded] = useState(false);
   
   const insets = useSafeAreaInsets();
   
@@ -58,7 +63,7 @@ export default function ChatScreen() {
     if (Platform.OS === 'android') {
       const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
         setKeyboardHeight(e.endCoordinates.height);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
       });
       const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
         setKeyboardHeight(0);
@@ -130,32 +135,48 @@ export default function ChatScreen() {
   useEffect(() => {
     if (conversation?.otherUserStatus) {
       setLocalOtherUserStatus(prev => ({
+        ...prev,
         isOnline: conversation.otherUserStatus.isOnline !== undefined ? conversation.otherUserStatus.isOnline : prev.isOnline,
         lastSeen: conversation.otherUserStatus.lastSeen || prev.lastSeen
       }));
     }
   }, [conversation?.otherUserStatus]);
 
-  useEffect(() => {
-    if (!id || !currentUser || !otherUserId) return;
-    const fetchOtherUserStatus = async () => {
-      const res = await getPublicProfile(otherUserId);
-      if (res && res.success && res.profile) {
-        setLocalOtherUserStatus(prev => ({
-          isOnline: res.profile.isOnline !== undefined ? res.profile.isOnline : prev.isOnline,
-          lastSeen: res.profile.lastSeen || prev.lastSeen
-        }));
-      }
-    };
-    
-    // Initial fetch
-    fetchOtherUserStatus();
-    
-    const interval = setInterval(fetchOtherUserStatus, 10000);
-    return () => clearInterval(interval);
-  }, [id, currentUser, otherUserId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!id || !currentUser || !otherUserId) return;
+      let isActive = true;
+
+      const fetchOtherUserStatus = async () => {
+        const res = await getPublicProfile(otherUserId);
+        if (isActive) {
+          if (res && res.success && res.profile) {
+            setLocalOtherUserStatus(prev => ({
+              ...prev,
+              isOnline: res.profile.isOnline !== undefined ? res.profile.isOnline : prev.isOnline,
+              lastSeen: res.profile.lastSeen || prev.lastSeen
+            }));
+            setCurrentOtherUserIdentityVerified(res.profile.identityVerified === true);
+          }
+          setOtherUserVerificationLoaded(true);
+        }
+      };
+      
+      fetchOtherUserStatus();
+      const interval = setInterval(fetchOtherUserStatus, 10000);
+      
+      return () => {
+        isActive = false;
+        clearInterval(interval);
+      };
+    }, [id, currentUser, otherUserId])
+  );
 
   const messages = getMessagesForConversation(id);
+  
+  const reversedMessages = useMemo(() => {
+    return [...messages].reverse();
+  }, [messages]);
 
   const handleTextChange = (val: string) => {
     setText(val);
@@ -196,7 +217,7 @@ export default function ChatScreen() {
       setText('');
       setReplyingToMessage(null);
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     } catch (e: any) {
       if (e.code === 'BLOCKED_CONVERSATION' || e.message === 'Bu kullanıcıyla mesajlaşamazsınız.') {
@@ -223,7 +244,7 @@ export default function ChatScreen() {
       const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
       await sendMessage(id, '📸 Fotoğraf', undefined, 'image', base64Image, true);
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     }
   };
@@ -273,7 +294,7 @@ export default function ChatScreen() {
   };
 
   const scrollToMessage = (messageId: string) => {
-    const index = messages.findIndex(m => m.id === messageId);
+    const index = reversedMessages.findIndex(m => m.id === messageId);
     if (index !== -1 && flatListRef.current) {
       flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
       setHighlightedMessageId(messageId);
@@ -560,7 +581,12 @@ export default function ChatScreen() {
               <Text style={styles.headerAvatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
             </View>
             <View>
-              <Text style={styles.headerName}>{otherUserName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.headerName}>{otherUserName}</Text>
+                {currentOtherUserIdentityVerified === true && (
+                  <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" style={{ marginLeft: 4 }} />
+                )}
+              </View>
               {isOtherUserTyping ? (
                 <Text style={styles.typingStatus}>Yazıyor...</Text>
               ) : localOtherUserStatus.isOnline ? (
@@ -581,16 +607,15 @@ export default function ChatScreen() {
 
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={reversedMessages}
+          inverted={true}
           keyExtractor={item => item.id}
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
           keyboardShouldPersistTaps="handled"
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
+            <View style={[styles.emptyContainer, { transform: [{ scaleY: -1 }] }]}>
               <Text style={styles.emptyText}>Henüz mesaj yok. İlk mesajı siz gönderin.</Text>
             </View>
           }
@@ -610,6 +635,13 @@ export default function ChatScreen() {
               ? keyboardHeight + insets.bottom + 8 
               : insets.bottom + 8 
           }]}>
+            {otherUserVerificationLoaded === true && currentOtherUserIdentityVerified !== true && (
+              <View style={{ backgroundColor: '#FFF3CD', paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#FFEEBA' }}>
+                <Text style={{ fontSize: 12, color: '#856404', flex: 1, fontWeight: '500' }}>
+                  ⚠️ Bu kullanıcı hesabını henüz doğrulamadı. Kişisel bilgilerinizi paylaşırken dikkatli olun.
+                </Text>
+              </View>
+            )}
             {replyingToMessage && (
             <View style={styles.replyPreviewContainer}>
               {console.log("REPLY_BAR_SELECTED:", replyingToMessage)}

@@ -520,10 +520,10 @@ export default function DiscoverScreen() {
     );
   };
 
-  const renderCommentLeftActions = (comment: any, progress: any, dragX: any) => {
+  const renderReportRightAction = (comment: any, progress: any, dragX: any) => {
     const trans = dragX.interpolate({
-      inputRange: [0, 70],
-      outputRange: [0, -70], // When open (70), shifts left to counteract slide and remain stationary.
+      inputRange: [-70, 0],
+      outputRange: [0, -70], 
       extrapolate: 'clamp',
     });
 
@@ -577,7 +577,15 @@ export default function DiscoverScreen() {
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <Swipeable enabled={true} friction={2} rightThreshold={40} leftThreshold={40} renderRightActions={item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown') ? (progress, dragX) => renderCommentRightActions(item, progress, dragX) : undefined} renderLeftActions={!(item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')) ? (progress, dragX) => renderCommentLeftActions(item, progress, dragX) : undefined}>
+        <Swipeable 
+          enabled={true} 
+          friction={2} 
+          rightThreshold={40} 
+          renderRightActions={(progress, dragX) => {
+            const isMine = item.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown');
+            return isMine ? renderCommentRightActions(item, progress, dragX) : renderReportRightAction(item, progress, dragX);
+          }}
+        >
 
         <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
           <TouchableOpacity onPress={() => {
@@ -626,7 +634,16 @@ export default function DiscoverScreen() {
               const rUser = reply.user || {};
               const rDateStr = getRelTime(reply.createdAt) || dateStr;
               return (
-                <Swipeable key={'reply-' + reply.id} enabled={reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown')} friction={2} rightThreshold={40} renderRightActions={(progress, dragX) => renderCommentRightActions(reply, progress, dragX)}>
+                <Swipeable 
+                  key={'reply-' + reply.id} 
+                  enabled={true} 
+                  friction={2} 
+                  rightThreshold={40} 
+                  renderRightActions={(progress, dragX) => {
+                    const isMine = reply.userId === (currentUser?.id || currentUser?.userId || currentUser?._id || currentUser?.email || 'unknown');
+                    return isMine ? renderCommentRightActions(reply, progress, dragX) : renderReportRightAction(reply, progress, dragX);
+                  }}
+                >
 
                 <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
                   <TouchableOpacity onPress={() => { closeComments(); handleNavigateToProfile(rUser.id); }}>

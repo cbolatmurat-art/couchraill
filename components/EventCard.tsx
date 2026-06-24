@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert, Platform, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, FlatList, Animated, Dimensions, Alert, Platform, DeviceEventEmitter, Pressable } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -477,8 +477,26 @@ export const EventCard = React.memo(({
         )}
       </View>
 
+      {/* Overlay to close menu */}
       {openMenuId === item.id && (
-        <View style={styles.dropdownMenu}>
+        <Pressable 
+          style={{
+            position: 'absolute',
+            top: -Dimensions.get('window').height * 2,
+            bottom: -Dimensions.get('window').height * 2,
+            left: -Dimensions.get('window').width * 2,
+            right: -Dimensions.get('window').width * 2,
+            zIndex: 998,
+            elevation: 998,
+            backgroundColor: 'transparent',
+          }}
+          onPress={() => setOpenMenuId && setOpenMenuId(null)}
+          onTouchMove={() => setOpenMenuId && setOpenMenuId(null)}
+        />
+      )}
+
+      {openMenuId === item.id && (
+        <View style={[styles.dropdownMenu, { zIndex: 999, elevation: 999 }]}>
           {isJoined && (
             <TouchableOpacity style={styles.dropdownItem} onPress={() => { handleCancelJoin(); if (setOpenMenuId) setOpenMenuId(null); }}>
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Katılmaktan Vazgeç</Text>

@@ -305,6 +305,9 @@ export default function MessagesScreen() {
             <View style={styles.chatHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={[styles.userName, hasUnread && styles.boldText]}>{otherUserName}</Text>
+                {item.otherUserStatus?.identityVerified === true && (
+                  <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" style={{ marginLeft: 4 }} />
+                )}
                 {isMuted && <Ionicons name="volume-mute" size={16} color={Colors.textLight} style={{ marginLeft: 6 }} />}
               </View>
               <Text style={[styles.timeText, hasUnread && styles.boldText]}>{dateString}</Text>

@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, TouchableWithoutFeedback, Animated, Dimensions } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, TouchableWithoutFeedback, Animated, Dimensions, Pressable } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,6 +65,12 @@ export const PostCard = React.memo(({
   const lastTap = useRef<number>(0);
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
+
+  const handleOpenMenu = () => {
+    if (setOpenMenuId) {
+      setOpenMenuId(openMenuId === item.id ? null : item.id);
+    }
+  };
 
   const postOwner = item.author || item.owner || {};
   const isLikedByMe = item.likedByCurrentUser !== undefined ? item.likedByCurrentUser : item.isLikedByMe;
@@ -170,7 +176,7 @@ export const PostCard = React.memo(({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 style={{ padding: 4 }}
-                onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+                onPress={handleOpenMenu}
               >
                 <Ionicons name="ellipsis-vertical" size={20} color={Colors.textLight} />
               </TouchableOpacity>
@@ -218,16 +224,34 @@ export const PostCard = React.memo(({
         )}
       </View>
 
+      {/* Overlay to close menu */}
+      {openMenuId === item.id && (
+        <Pressable 
+          style={{
+            position: 'absolute',
+            top: -Dimensions.get('window').height * 2,
+            bottom: -Dimensions.get('window').height * 2,
+            left: -Dimensions.get('window').width * 2,
+            right: -Dimensions.get('window').width * 2,
+            zIndex: 998,
+            elevation: 998,
+            backgroundColor: 'transparent',
+          }}
+          onPress={() => setOpenMenuId && setOpenMenuId(null)}
+          onTouchMove={() => setOpenMenuId && setOpenMenuId(null)}
+        />
+      )}
+
       {/* Dropdown menu */}
       {openMenuId === item.id && (
-        <View style={styles.dropdownMenu}>
+        <View style={[styles.dropdownMenu, { zIndex: 999, elevation: 999 }]}>
           {isOwner && (
-            <TouchableOpacity style={styles.dropdownItem} onPress={() => onDeleteConfirm(item)}>
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onDeleteConfirm(item); }}>
               <Text style={[styles.dropdownItemText, { color: Colors.danger }]}>Sil</Text>
             </TouchableOpacity>
           )}
           {!isOwner && onReportConfirm && (
-            <TouchableOpacity style={styles.dropdownItem} onPress={() => onReportConfirm(item)}>
+            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onReportConfirm(item); }}>
               <Text style={styles.dropdownItemText}>Şikayet Et</Text>
             </TouchableOpacity>
           )}

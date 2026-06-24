@@ -6,3 +6,18 @@ yorumlarda görüldü
 etkinliğe katılan kişilere limit 24 saatte 1 defa 
 
 
+
+
+
+OTA UPDATE
+
+eas.json içinde preview build profiline channel tanımı ekle:
+
+"channel": "preview"
+
+Sonra yeni APK al:
+
+eas build --profile preview --platform android
+
+Bu yeni APK yüklendikten sonra sonraki güncellemeler OTA ile gelir.
+
