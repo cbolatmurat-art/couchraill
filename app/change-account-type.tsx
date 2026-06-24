@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { useAppContext } from '../context/AppContext';
@@ -51,15 +52,27 @@ export default function ChangeAccountTypeScreen() {
   if (!currentUser) return null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} disabled={loading}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Hesap Türü Değiştir</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <Stack.Screen 
+        options={{
+          title: 'Hesap Türü Değiştir',
+          headerLeft: () => (
+            <Pressable 
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/');
+                }
+              }} 
+              style={{ marginLeft: 8 }}
+              disabled={loading}
+            >
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </Pressable>
+          )
+        }} 
+      />
 
       <View style={styles.content}>
         <View style={styles.infoBox}>
