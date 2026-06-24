@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, DeviceEventEmitter, TextInput, Modal, Animated, Alert, TouchableOpacity, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, FlatList, Pressable, DeviceEventEmitter, TextInput, Modal, Animated, Alert, TouchableOpacity, RefreshControl, Dimensions } from 'react-native';
+import { useRouter, useNavigation } from 'expo-router';
+import NotificationBell from '../../components/NotificationBell';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { useAppContext } from '../../context/AppContext';
@@ -11,7 +12,44 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 export default function MessagesScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { currentUser, getConversationsForCurrentUser, messages, typingStatuses, refreshData, muteConversation, unmuteConversation, hideConversationForCurrentUser } = useAppContext();
+  
+  const [filterType, setFilterType] = React.useState<'all' | 'verified' | 'unverified'>('all');
+  const [filterModalVisible, setFilterModalVisible] = React.useState(false);
+  const filterSlideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  const openFilterModal = () => {
+    setFilterModalVisible(true);
+    Animated.timing(filterSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeFilterModal = () => {
+    Animated.timing(filterSlideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setFilterModalVisible(false);
+    });
+  };
+
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+          <TouchableOpacity onPress={openFilterModal} style={{ marginRight: 16 }}>
+            <Ionicons name="filter" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <NotificationBell size={24} />
+        </View>
+      ),
+    });
+  }, [navigation]);
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
@@ -67,8 +105,16 @@ export default function MessagesScreen() {
   }, [baseConversations, debouncedQuery, currentUser?.id]);
 
   const finalConversations = React.useMemo(() => {
-    return searchedConversations.filter(c => !hiddenConversationIds.includes(c.id));
-  }, [searchedConversations, hiddenConversationIds]);
+    let convs = searchedConversations.filter(c => !hiddenConversationIds.includes(c.id));
+    
+    if (filterType === 'verified') {
+      convs = convs.filter(c => c.otherUserStatus?.identityVerified === true);
+    } else if (filterType === 'unverified') {
+      convs = convs.filter(c => c.otherUserStatus?.identityVerified !== true);
+    }
+    
+    return convs;
+  }, [searchedConversations, hiddenConversationIds, filterType]);
 
   // RENDER LOGS
   console.log("RENDER_SOURCE_COUNT:", baseConversations.length);
@@ -331,6 +377,51 @@ export default function MessagesScreen() {
         }
       />
 
+      <Modal
+        visible={filterModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeFilterModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeFilterModal}>
+          <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: filterSlideAnim }] }]} onStartShouldSetResponder={() => true}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetHandle} />
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => { setFilterType('all'); closeFilterModal(); }}
+            >
+              <Ionicons name="list" size={22} color={filterType === 'all' ? Colors.primary : Colors.textLight} style={styles.menuIcon} />
+              <Text style={[styles.menuItemText, filterType === 'all' && { color: Colors.primary, fontWeight: '700' }]}>Tüm Kişiler</Text>
+              {filterType === 'all' && <Ionicons name="checkmark" size={22} color={Colors.primary} style={{ marginLeft: 'auto' }} />}
+            </TouchableOpacity>
+            
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => { setFilterType('verified'); closeFilterModal(); }}
+            >
+              <Ionicons name="checkmark-circle" size={22} color={filterType === 'verified' ? Colors.primary : Colors.textLight} style={styles.menuIcon} />
+              <Text style={[styles.menuItemText, filterType === 'verified' && { color: Colors.primary, fontWeight: '700' }]}>Doğrulanmış Kişiler</Text>
+              {filterType === 'verified' && <Ionicons name="checkmark" size={22} color={Colors.primary} style={{ marginLeft: 'auto' }} />}
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => { setFilterType('unverified'); closeFilterModal(); }}
+            >
+              <Ionicons name="help-circle" size={22} color={filterType === 'unverified' ? Colors.primary : Colors.textLight} style={styles.menuIcon} />
+              <Text style={[styles.menuItemText, filterType === 'unverified' && { color: Colors.primary, fontWeight: '700' }]}>Doğrulanmamış Kişiler</Text>
+              {filterType === 'unverified' && <Ionicons name="checkmark" size={22} color={Colors.primary} style={{ marginLeft: 'auto' }} />}
+            </TouchableOpacity>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

@@ -2495,7 +2495,7 @@ app.post('/api/admin/verification-requests/:id/approve', checkAdminAuth, async (
     const vrRes = await pool.query('UPDATE verification_requests SET status = $1, "reviewedAt" = $2 WHERE id = $3 RETURNING "userId"', ['approved', new Date(), id]);
     if (vrRes.rows.length > 0) {
       userId = vrRes.rows[0].userId;
-      await pool.query('UPDATE users SET "identityVerificationStatus" = $1, verified = true WHERE id = $2', ['verified', userId]);
+      await pool.query('UPDATE users SET "identityVerificationStatus" = $1, verified = true, "identityVerified" = true WHERE id = $2', ['verified', userId]);
     }
   } catch (err) {
     console.error('PG approve VR err:', err);
@@ -2510,6 +2510,7 @@ app.post('/api/admin/verification-requests/:id/approve', checkAdminAuth, async (
     if (userIndex > -1) {
       db.users[userIndex].identityVerificationStatus = 'verified';
       db.users[userIndex].verified = true;
+      db.users[userIndex].identityVerified = true;
     }
     writeDB(db);
   }
@@ -2546,7 +2547,7 @@ app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, async (r
     const vrRes = await pool.query('UPDATE verification_requests SET status = $1, "reviewedAt" = $2, "reviewerNotes" = $3 WHERE id = $4 RETURNING "userId"', ['rejected', new Date(), rejectionReason, id]);
     if (vrRes.rows.length > 0) {
       userId = vrRes.rows[0].userId;
-      await pool.query('UPDATE users SET "identityVerificationStatus" = $1, verified = false WHERE id = $2', ['rejected', userId]);
+      await pool.query('UPDATE users SET "identityVerificationStatus" = $1, verified = false, "identityVerified" = false WHERE id = $2', ['rejected', userId]);
     }
   } catch (err) {
     console.error('PG reject VR err:', err);
@@ -2562,6 +2563,7 @@ app.post('/api/admin/verification-requests/:id/reject', checkAdminAuth, async (r
     if (userIndex > -1) {
       db.users[userIndex].identityVerificationStatus = 'rejected';
       db.users[userIndex].verified = false;
+      db.users[userIndex].identityVerified = false;
     }
     writeDB(db);
   }
@@ -2779,7 +2781,7 @@ app.get('/api/conversations/:userId', async (req, res) => {
       let currentUserInfo = null;
       
       if (otherUserId) {
-        const { rows: otherUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar, "isOnline", "lastSeen" FROM users WHERE id = $1', [otherUserId]);
+        const { rows: otherUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar, "isOnline", "lastSeen", verified, "identityVerified" FROM users WHERE id = $1', [otherUserId]);
         if (otherUserRows.length > 0) otherUser = otherUserRows[0];
       }
       
@@ -2803,8 +2805,10 @@ app.get('/api/conversations/:userId', async (req, res) => {
         lastMessageAt: c.lastMessageObj ? c.lastMessageObj.createdAt : c.lastMessageAt,
         otherUserStatus: otherUser ? {
           isOnline: otherUser.isOnline || false,
-          lastSeen: otherUser.lastSeen || null
-        } : { isOnline: false, lastSeen: null }
+          lastSeen: otherUser.lastSeen || null,
+          verified: otherUser.verified || false,
+          identityVerified: otherUser.identityVerified || otherUser.verified || false
+        } : { isOnline: false, lastSeen: null, verified: false, identityVerified: false }
       };
     }));
       

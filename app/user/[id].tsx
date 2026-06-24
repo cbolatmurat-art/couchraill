@@ -329,10 +329,7 @@ export default function PublicProfileScreen() {
 
   const isFullyVerified = (user: any) => {
     if (!user) return false;
-    const isIdVerified = user.identityVerified === true || user.identityVerificationStatus === 'verified' || user.verified === true;
-    const isEmailVerified = user.emailVerified === true;
-    const isPhoneVerified = user.phoneVerified === true;
-    return isIdVerified && isEmailVerified && isPhoneVerified;
+    return user.identityVerified === true;
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────

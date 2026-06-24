@@ -96,7 +96,7 @@ export default function CompleteProfileScreen() {
     </View>
   );
 
-  const isFullyVerified = currentUser?.identityVerificationStatus === 'verified' || currentUser?.identityVerified === true || currentUser?.verified === true;
+  const isFullyVerified = currentUser?.identityVerified === true;
   const isEmailVerified = currentUser?.emailVerified === true;
   const isPhoneVerified = currentUser?.phoneVerified === true;
   // İlk etkinlik/gönderi vb. kontrolü şimdilik backend'den ayrı gelmediği için varsayılan false yapıyoruz.

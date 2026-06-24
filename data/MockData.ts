@@ -108,6 +108,7 @@ export interface Conversation {
   lastMessageAt?: string;
   mutedBy?: string[];
   deletedBy?: string[];
+  otherUserStatus?: { identityVerified?: boolean; verified?: boolean; isOnline?: boolean; lastSeen?: string | null };
 }
 
 export interface AppNotification {
