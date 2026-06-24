@@ -15,7 +15,7 @@ export default function MessagesScreen() {
   const navigation = useNavigation();
   const { currentUser, getConversationsForCurrentUser, messages, typingStatuses, refreshData, muteConversation, unmuteConversation, hideConversationForCurrentUser } = useAppContext();
   
-  const [filterType, setFilterType] = React.useState<'all' | 'verified' | 'unverified'>('all');
+  const [filterType, setFilterType] = React.useState<'all' | 'verified' | 'unverified' | 'unread'>('all');
   const [filterModalVisible, setFilterModalVisible] = React.useState(false);
   const filterSlideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
@@ -111,10 +111,15 @@ export default function MessagesScreen() {
       convs = convs.filter(c => c.otherUserStatus?.identityVerified === true);
     } else if (filterType === 'unverified') {
       convs = convs.filter(c => c.otherUserStatus?.identityVerified !== true);
+    } else if (filterType === 'unread') {
+      convs = convs.filter(c => {
+        const unreadCount = messages.filter(m => m.conversationId === c.id && m.receiverId === currentUser?.id && m.read === false).length;
+        return unreadCount > 0;
+      });
     }
     
     return convs;
-  }, [searchedConversations, hiddenConversationIds, filterType]);
+  }, [searchedConversations, hiddenConversationIds, filterType, messages, currentUser?.id]);
 
   // RENDER LOGS
   console.log("RENDER_SOURCE_COUNT:", baseConversations.length);
@@ -421,6 +426,17 @@ export default function MessagesScreen() {
               <Ionicons name="help-circle" size={22} color={filterType === 'unverified' ? Colors.primary : Colors.textLight} style={styles.menuIcon} />
               <Text style={[styles.menuItemText, filterType === 'unverified' && { color: Colors.primary, fontWeight: '700' }]}>Doğrulanmamış Kişiler</Text>
               {filterType === 'unverified' && <Ionicons name="checkmark" size={22} color={Colors.primary} style={{ marginLeft: 'auto' }} />}
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => { setFilterType('unread'); closeFilterModal(); }}
+            >
+              <Ionicons name="mail-unread" size={22} color={filterType === 'unread' ? Colors.primary : Colors.textLight} style={styles.menuIcon} />
+              <Text style={[styles.menuItemText, filterType === 'unread' && { color: Colors.primary, fontWeight: '700' }]}>Okunmamış Mesajlar</Text>
+              {filterType === 'unread' && <Ionicons name="checkmark" size={22} color={Colors.primary} style={{ marginLeft: 'auto' }} />}
             </TouchableOpacity>
           </Animated.View>
         </Pressable>
