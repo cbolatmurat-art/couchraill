@@ -529,10 +529,6 @@ export default function ProfileScreen() {
     }
     
     let parts = [];
-    if (currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum') {
-      const genderSymbol = currentUser.gender === 'Erkek' ? '♂' : (currentUser.gender === 'Kadın' ? '♀' : currentUser.gender);
-      parts.push(genderSymbol);
-    }
     if (currentUser.city) {
       parts.push(currentUser.city);
     }
@@ -608,11 +604,28 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          {getJoinDateText() ? (
-            <Text style={{ marginTop: 8, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
-              {getJoinDateText()}
-            </Text>
-          ) : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+            {currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum' && (
+              <View style={[
+                { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+                currentUser.gender === 'Erkek' ? { backgroundColor: '#E1F5FE' } : { backgroundColor: '#FCE4EC' }
+              ]}>
+                <Text style={{ 
+                  color: currentUser.gender === 'Erkek' ? '#03A9F4' : '#E91E63', 
+                  fontSize: 14, 
+                  fontWeight: 'bold',
+                  marginTop: -2
+                }}>
+                  {currentUser.gender === 'Erkek' ? '♂' : '♀'}
+                </Text>
+              </View>
+            )}
+            {getJoinDateText() ? (
+              <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
+                {getJoinDateText()}
+              </Text>
+            ) : null}
+          </View>
 
           <Text style={{ marginTop: 4, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
             {(currentUser.ratingCount && currentUser.ratingCount > 0)
