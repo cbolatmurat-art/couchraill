@@ -4,7 +4,7 @@ import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { useAppContext } from '../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { API_BASE_URL } from '../constants/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -52,6 +52,7 @@ export default function ChangeAccountTypeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} disabled={loading}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
