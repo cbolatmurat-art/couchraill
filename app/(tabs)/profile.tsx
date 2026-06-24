@@ -774,6 +774,16 @@ export default function ProfileScreen() {
                   <Text style={styles.menuItemText}>Hakkında</Text>
                   <Text style={styles.menuArrow}>»</Text>
                 </Pressable>
+
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push('/change-account-type'); }}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Hesap Türü Değiştir</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
                 
                 <Pressable 
                   style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 

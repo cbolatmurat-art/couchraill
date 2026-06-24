@@ -1020,6 +1020,30 @@ app.get("/api/users/search", async (req, res) => {
   }
 });
 
+app.put('/api/users/change-type', async (req, res) => {
+  try {
+    const { userId, newType } = req.body;
+    if (!userId || !newType) {
+      return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
+    }
+    
+    await query('UPDATE users SET "userType" = $1 WHERE id = $2', [newType, userId]);
+    
+    if (newType === 'guest') {
+      await query(`
+        UPDATE listings 
+        SET status = 'passive', active = false 
+        WHERE ("ownerId" = $1 OR "hostId" = $1)
+      `, [userId]);
+    }
+    
+    res.json({ success: true, message: 'Hesap türü başarıyla güncellendi.' });
+  } catch (err) {
+    console.error("Change type error:", err);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
 app.put('/api/users/profile', async (req, res) => {
   try {
     const { userId, updates, currentPassword } = req.body;
