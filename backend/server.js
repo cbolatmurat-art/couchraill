@@ -5820,7 +5820,7 @@ app.post('/api/events/:eventId/like', async (req, res) => {
       return res.json({ success: true, message: 'Zaten beğenildi' });
     }
 
-    const newLikeId = \`el\${Date.now()}\`;
+    const newLikeId = `el${Date.now()}`;
     await query('INSERT INTO event_likes (id, "eventId", "userId") VALUES ($1, $2, $3)', [newLikeId, eventId, userId]);
 
     if (ownerId && String(ownerId) !== String(userId)) {
@@ -5835,11 +5835,11 @@ app.post('/api/events/:eventId/like', async (req, res) => {
       if (recentNotifs.length === 0) {
         const { rows: likers } = await query('SELECT name FROM users WHERE id = $1', [userId]);
         const likerName = likers[0] ? likers[0].name : 'Birisi';
-        const notifId = \`n\${Date.now()}_\${Math.random()}\`;
+        const notifId = `n${Date.now()}_${Math.random()}`;
         await query(`
           INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
           VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [notifId, ownerId, 'event_like', 'Etkinliğin beğenildi', \`\${likerName} etkinliğini beğendi.\`, eventId, 'event']);
+        `, [notifId, ownerId, 'event_like', 'Etkinliğin beğenildi', `${likerName} etkinliğini beğendi.`, eventId, 'event']);
       }
     }
 
