@@ -39,7 +39,8 @@ export const EventCard = React.memo(({
   const [participantsModalVisible, setParticipantsModalVisible] = useState(false);
   
   const [isLikedByMe, setIsLikedByMe] = useState(item.isLikedByMe || false);
-  const [likeCount, setLikeCount] = useState(item.likesCount || item.likeCount || 0);
+  const [likeCount, setLikeCount] = useState(item.likeCount || 0);
+  const [isLikeLoading, setIsLikeLoading] = useState(false);
   
   const slideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
   const shareSlideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
@@ -77,8 +78,8 @@ export const EventCard = React.memo(({
     setIsWaitlisted(item.isWaitlisted || false);
     setParticipantCount(item.participantCount || item.participants?.length || 0);
     setIsLikedByMe(item.isLikedByMe || false);
-    setLikeCount(item.likesCount || item.likeCount || 0);
-  }, [item.isJoined, item.isWaitlisted, item.participantCount, item.participants, item.isLikedByMe, item.likesCount, item.likeCount]);
+    setLikeCount(item.likeCount || 0);
+  }, [item.isJoined, item.isWaitlisted, item.participantCount, item.participants, item.isLikedByMe, item.likeCount]);
 
   // Global state sync
   useEffect(() => {
@@ -140,7 +141,8 @@ export const EventCard = React.memo(({
   };
 
   const handleLikeToggle = async () => {
-    if (!currentUser) return;
+    if (!currentUser || isLikeLoading) return;
+    setIsLikeLoading(true);
     
     const previousIsLiked = isLikedByMe;
     const previousCount = likeCount;
@@ -168,6 +170,16 @@ export const EventCard = React.memo(({
       if (!data.success && data.message !== 'Zaten beğenildi') {
         throw new Error(data.error || 'İşlem başarısız');
       }
+
+      if (data.success && data.likeCount !== undefined) {
+        setIsLikedByMe(data.isLikedByMe);
+        setLikeCount(data.likeCount);
+        DeviceEventEmitter.emit('global_event_update', { 
+          eventId: item.id, 
+          isLikedByMe: data.isLikedByMe, 
+          likeCount: data.likeCount 
+        });
+      }
     } catch (error) {
       setIsLikedByMe(previousIsLiked);
       setLikeCount(previousCount);
@@ -177,6 +189,8 @@ export const EventCard = React.memo(({
         likeCount: previousCount 
       });
       Alert.alert('Hata', 'Beğeni işlemi gerçekleştirilemedi.');
+    } finally {
+      setIsLikeLoading(false);
     }
   };
 
@@ -508,17 +522,21 @@ export const EventCard = React.memo(({
       <View style={styles.divider} />
 
       <View style={styles.bottomSection}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={[styles.sendButton, { marginRight: 12 }]} onPress={handleLikeToggle}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity 
+            style={[styles.actionIconButton, isLikedByMe && { borderColor: 'rgba(244, 67, 54, 0.2)', backgroundColor: 'rgba(244, 67, 54, 0.05)' }]} 
+            onPress={handleLikeToggle}
+          >
             <Ionicons name={isLikedByMe ? "heart" : "heart-outline"} size={22} color={isLikedByMe ? Colors.danger : Colors.primary} />
-            <Text style={[styles.sendButtonText, isLikedByMe && { color: Colors.danger }]}>
-              {likeCount > 0 ? likeCount : 'Beğen'}
-            </Text>
+            {likeCount > 0 && (
+              <Text style={[styles.actionIconText, isLikedByMe && { color: Colors.danger }]}>
+                {likeCount}
+              </Text>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.sendButton} onPress={openShareModal}>
-            <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
-            <Text style={styles.sendButtonText}>Davet Et</Text>
+          <TouchableOpacity style={styles.actionIconButton} onPress={openShareModal}>
+            <Ionicons name="paper-plane-outline" size={20} color={Colors.primary} style={{ marginLeft: 2 }} />
           </TouchableOpacity>
         </View>
 
@@ -916,17 +934,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sendButton: {
+  actionIconButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(232, 93, 4, 0.2)',
     borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    height: 40,
+    minWidth: 40,
+    paddingHorizontal: 12,
   },
-  sendButtonText: {
-    fontSize: 13,
+  actionIconText: {
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.primary,
     marginLeft: 6,

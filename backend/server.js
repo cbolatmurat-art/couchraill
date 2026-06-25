@@ -108,8 +108,8 @@ const normalizeEvent = (e, currentUserId) => ({
     username: e.owner_username || e.username,
     profileImage: e.owner_profileImage || e.profileImage || e.avatar
   },
-  likesCount: parseInt(e.likesCount || e.likeCount || 0),
-  likedByCurrentUser: e.likedByCurrentUser === true || e.isLikedByMe === true,
+  likeCount: parseInt(e.likesCount || e.likeCount || 0),
+  isLikedByMe: e.likedByCurrentUser === true || e.isLikedByMe === true,
   commentsCount: parseInt(e.commentsCount || e.commentCount || 0),
   participantCount: parseInt(e.participantCount || 0),
   participantLimit: e.participantLimit ? parseInt(e.participantLimit) : null,
@@ -122,6 +122,16 @@ const normalizeEvent = (e, currentUserId) => ({
 // Root and health routes — MUST be before all middleware for Railway
 app.get("/", (req, res) => {
   res.status(200).send("Couchraill backend is running");
+});
+
+app.get("/api/dev/clear-event-likes", async (req, res) => {
+  try {
+    const { query } = require('./db');
+    await query('DELETE FROM event_likes');
+    res.json({ success: true, message: 'event_likes table cleared' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 app.get("/api/health", (req, res) => {
@@ -5843,7 +5853,11 @@ app.post('/api/events/:eventId/like', async (req, res) => {
       }
     }
 
-    res.json({ success: true });
+    res.json({ 
+      success: true,
+      likeCount: parseInt(event.likeCount || event.likesCount || 0) + (existingLikes.length > 0 ? 0 : 1),
+      isLikedByMe: true
+    });
   } catch (error) {
     console.error('[EVENT_LIKE_ERROR]', error);
     res.status(500).json({ success: false, error: 'Sunucu hatası' });
@@ -5855,8 +5869,18 @@ app.delete('/api/events/:eventId/like', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+    
     await query('DELETE FROM event_likes WHERE "eventId" = $1 AND "userId" = $2', [eventId, userId]);
-    res.json({ success: true });
+    
+    const { rows: events } = await query('SELECT * FROM posts WHERE id = $1 AND type = \'event\'', [eventId]);
+    const event = events[0] || {};
+    const currentLikeCount = parseInt(event.likeCount || event.likesCount || 0);
+    
+    res.json({ 
+      success: true,
+      likeCount: Math.max(0, currentLikeCount - 1),
+      isLikedByMe: false
+    });
   } catch (error) {
     console.error('[EVENT_UNLIKE_ERROR]', error);
     res.status(500).json({ success: false, error: 'Sunucu hatası' });
