@@ -1455,6 +1455,14 @@ app.get('/api/posts/feed', async (req, res) => {
     `, [userId, blockedArr]);
 
     const normalizedPosts = posts.map(p => normalizePost(p, userId));
+    if (normalizedPosts.length > 0) {
+      console.log("[POSTS_FEED_DEBUG] Sample post location info:", {
+        id: normalizedPosts[0].id,
+        city: normalizedPosts[0].city,
+        locationCity: normalizedPosts[0].locationCity,
+        location: normalizedPosts[0].location
+      });
+    }
     res.json({ success: true, items: normalizedPosts });
   } catch (err) {
     console.error('[POSTS_FEED_ERROR]', err);
@@ -5812,6 +5820,12 @@ app.post('/api/posts', async (req, res) => {
   const location = req.body.location || null;
   const city = req.body.locationCity || (location ? location.city : null) || null;
   const createdAt = new Date().toISOString();
+
+  console.log("[POST_CREATE_DEBUG] Incoming Location payload:", {
+    locationCity: req.body.locationCity,
+    location: req.body.location,
+    extractedCity: city
+  });
 
   const newPost = {
     id: newPostId,

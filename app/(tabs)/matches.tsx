@@ -744,6 +744,18 @@ export default function DiscoverScreen() {
       if (!itemCity && postContent && normalizeCity(postContent).includes(normalizedQuery)) {
         matchesContent = true;
       }
+      
+      console.log(`[MAP_FILTER_DEBUG] Post ID: ${item.id}`, {
+        selectedMapCity,
+        normalizedQuery,
+        itemLocationCity: item.locationCity,
+        itemCityField: item.city,
+        locStr,
+        finalItemCity: itemCity,
+        normalizedItemCity: normalizeCity(itemCity),
+        matchesContent,
+        willMatch: matchesContent || normalizeCity(itemCity) === normalizedQuery
+      });
     } else if (item.type === 'listing' || item.isListing) {
       if (activeMapContentTab !== 'listings') return false;
       itemCity = item.city || item.location || item.ownerCity || (item.owner && item.owner.city) || '';
