@@ -107,6 +107,7 @@ export default function NotificationsScreen() {
       case 'moderation':
         router.push('/(tabs)/profile');
         break;
+      case 'event_like':
       case 'system':
         if (item.relatedType === 'event' && item.relatedId) {
           router.push(`/event-details/${item.relatedId}`);
@@ -155,6 +156,7 @@ export default function NotificationsScreen() {
       case 'poke': return 'hand-right-outline';
       case 'friend_request': return 'people-outline';
       case 'friend_request_accepted': return 'people-circle-outline';
+      case 'event_like': return 'heart';
       case 'system': return 'megaphone-outline';
       case 'moderation': return 'shield-checkmark';
       default: return 'notifications';
@@ -182,6 +184,7 @@ export default function NotificationsScreen() {
       case 'poke': return '#FF9800';
       case 'friend_request': return '#2196F3';
       case 'friend_request_accepted': return '#4CAF50';
+      case 'event_like': return Colors.danger;
       case 'system': return '#6366F1';
       case 'moderation': return Colors.danger;
       default: return Colors.primary;

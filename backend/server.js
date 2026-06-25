@@ -1481,16 +1481,17 @@ app.get('/api/events', async (req, res) => {
 
     const { rows: events } = await query(`
       SELECT p.*,
-        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(el.like_count, 0) as "likesCount",
         COALESCE(pc.comment_count, 0) as "commentsCount",
-        false as "likedByCurrentUser",
+        CASE WHEN mel."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
         COALESCE(ei.participant_count, 0) as "participantCount",
         CASE WHEN mei."userId" IS NOT NULL THEN true ELSE false END as "isJoined",
         u.name as "owner_name", u."fullName", u.username as "owner_username", u.username,
         u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
       FROM posts p
       LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
-      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "eventId", COUNT(*) as like_count FROM event_likes GROUP BY "eventId") el ON el."eventId" = p.id
+      LEFT JOIN event_likes mel ON mel."eventId" = p.id AND mel."userId" = $1
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
       LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
@@ -1521,9 +1522,9 @@ app.get('/api/events/feed', async (req, res) => {
 
     const { rows: events } = await query(`
       SELECT p.*,
-        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(el.like_count, 0) as "likesCount",
         COALESCE(pc.comment_count, 0) as "commentsCount",
-        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        CASE WHEN mel."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
         COALESCE(ei.participant_count, 0) as "participantCount",
         CASE WHEN mei."userId" IS NOT NULL THEN true ELSE false END as "isJoined",
         CASE WHEN ewl."userId" IS NOT NULL THEN true ELSE false END as "isWaitlisted",
@@ -1531,9 +1532,9 @@ app.get('/api/events/feed', async (req, res) => {
         u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
       FROM posts p
       LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
-      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "eventId", COUNT(*) as like_count FROM event_likes GROUP BY "eventId") el ON el."eventId" = p.id
+      LEFT JOIN event_likes mel ON mel."eventId" = p.id AND mel."userId" = $1
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
-      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $1
       LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $1 AND mei.type = 'join'
       LEFT JOIN event_waitlists ewl ON ewl."eventId" = p.id AND ewl."userId" = $1
@@ -5765,9 +5766,9 @@ app.get('/api/events/user/:userId', async (req, res) => {
 
     const { rows: events } = await query(`
       SELECT p.*,
-        COALESCE(pl.like_count, 0) as "likesCount",
+        COALESCE(el.like_count, 0) as "likesCount",
         COALESCE(pc.comment_count, 0) as "commentsCount",
-        CASE WHEN mpl."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
+        CASE WHEN mel."userId" IS NOT NULL THEN true ELSE false END as "likedByCurrentUser",
         COALESCE(ei.participant_count, 0) as "participantCount",
         CASE WHEN mei."userId" IS NOT NULL THEN true ELSE false END as "isJoined",
         CASE WHEN ewl."userId" IS NOT NULL THEN true ELSE false END as "isWaitlisted",
@@ -5775,9 +5776,9 @@ app.get('/api/events/user/:userId', async (req, res) => {
         u."profileImage" as "owner_profileImage", u."profileImage", u.avatar
       FROM posts p
       LEFT JOIN users u ON p."userId" = u.id OR p."authorId" = u.id
-      LEFT JOIN (SELECT "postId", COUNT(*) as like_count FROM post_likes GROUP BY "postId") pl ON pl."postId" = p.id
+      LEFT JOIN (SELECT "eventId", COUNT(*) as like_count FROM event_likes GROUP BY "eventId") el ON el."eventId" = p.id
+      LEFT JOIN event_likes mel ON mel."eventId" = p.id AND mel."userId" = $2
       LEFT JOIN (SELECT "postId", COUNT(*) as comment_count FROM post_comments GROUP BY "postId") pc ON pc."postId" = p.id
-      LEFT JOIN post_likes mpl ON mpl."postId" = p.id AND mpl."userId" = $2
       LEFT JOIN (SELECT ei."eventId", COUNT(DISTINCT ei."userId") as participant_count FROM event_interactions ei JOIN posts p2 ON p2.id = ei."eventId" WHERE ei.type = 'join' AND ei."userId" != p2."userId" AND (p2."coOrganizers" IS NULL OR jsonb_typeof(p2."coOrganizers") != 'array' OR NOT (p2."coOrganizers" @> jsonb_build_array(ei."userId"::text))) GROUP BY ei."eventId") ei ON ei."eventId" = p.id
       LEFT JOIN event_interactions mei ON mei."eventId" = p.id AND mei."userId" = $2 AND mei.type = 'join'
       LEFT JOIN event_waitlists ewl ON ewl."eventId" = p.id AND ewl."userId" = $2
@@ -5792,6 +5793,76 @@ app.get('/api/events/user/:userId', async (req, res) => {
     res.status(500).json({ success: false, error: 'Etkinlikler yüklenemedi.', events: [], details: error.message });
   }
 });
+
+// ---- EVENT LIKES ----
+app.post('/api/events/:eventId/like', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+
+    const { rows: events } = await query('SELECT * FROM posts WHERE id = $1 AND type = \'event\'', [eventId]);
+    if (events.length === 0) return res.status(404).json({ success: false, error: 'Etkinlik bulunamadı.' });
+    const event = events[0];
+    const ownerId = event.userId || event.authorId;
+
+    const { rows: blocks } = await query(`
+      SELECT 1 FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [userId, ownerId]);
+    
+    if (blocks.length > 0) {
+      return res.status(403).json({ success: false, error: 'Bu kullanıcıyla etkileşim kuramazsınız.' });
+    }
+
+    const { rows: existingLikes } = await query('SELECT 1 FROM event_likes WHERE "eventId" = $1 AND "userId" = $2', [eventId, userId]);
+    if (existingLikes.length > 0) {
+      return res.json({ success: true, message: 'Zaten beğenildi' });
+    }
+
+    const newLikeId = \`el\${Date.now()}\`;
+    await query('INSERT INTO event_likes (id, "eventId", "userId") VALUES ($1, $2, $3)', [newLikeId, eventId, userId]);
+
+    if (ownerId && String(ownerId) !== String(userId)) {
+      // Spam protection: check if a like notification was sent in the last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { rows: recentNotifs } = await query(`
+        SELECT 1 FROM notifications
+        WHERE "userId" = $1 AND type = 'event_like' AND "relatedId" = $2
+        AND message LIKE $3 AND "createdAt" > $4
+      `, [ownerId, eventId, '%etkinliğini beğendi.%', twentyFourHoursAgo]);
+
+      if (recentNotifs.length === 0) {
+        const { rows: likers } = await query('SELECT name FROM users WHERE id = $1', [userId]);
+        const likerName = likers[0] ? likers[0].name : 'Birisi';
+        const notifId = \`n\${Date.now()}_\${Math.random()}\`;
+        await query(`
+          INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [notifId, ownerId, 'event_like', 'Etkinliğin beğenildi', \`\${likerName} etkinliğini beğendi.\`, eventId, 'event']);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[EVENT_LIKE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
+});
+
+app.delete('/api/events/:eventId/like', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'UserId eksik.' });
+    await query('DELETE FROM event_likes WHERE "eventId" = $1 AND "userId" = $2', [eventId, userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[EVENT_UNLIKE_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
+});
+
 
 app.post('/api/posts', async (req, res) => {
   const { userId, text } = req.body;

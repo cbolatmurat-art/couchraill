@@ -38,6 +38,9 @@ export const EventCard = React.memo(({
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [participantsModalVisible, setParticipantsModalVisible] = useState(false);
   
+  const [isLikedByMe, setIsLikedByMe] = useState(item.isLikedByMe || false);
+  const [likeCount, setLikeCount] = useState(item.likesCount || item.likeCount || 0);
+  
   const slideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
   const shareSlideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
@@ -73,7 +76,9 @@ export const EventCard = React.memo(({
     setIsJoined(item.isJoined || false);
     setIsWaitlisted(item.isWaitlisted || false);
     setParticipantCount(item.participantCount || item.participants?.length || 0);
-  }, [item.isJoined, item.isWaitlisted, item.participantCount, item.participants]);
+    setIsLikedByMe(item.isLikedByMe || false);
+    setLikeCount(item.likesCount || item.likeCount || 0);
+  }, [item.isJoined, item.isWaitlisted, item.participantCount, item.participants, item.isLikedByMe, item.likesCount, item.likeCount]);
 
   // Global state sync
   useEffect(() => {
@@ -82,6 +87,8 @@ export const EventCard = React.memo(({
         if (data.isJoined !== undefined) setIsJoined(data.isJoined);
         if (data.participantCount !== undefined) setParticipantCount(data.participantCount);
         if (data.isWaitlisted !== undefined) setIsWaitlisted(data.isWaitlisted);
+        if (data.isLikedByMe !== undefined) setIsLikedByMe(data.isLikedByMe);
+        if (data.likeCount !== undefined) setLikeCount(data.likeCount);
       }
     });
     return () => sub.remove();
@@ -130,6 +137,47 @@ export const EventCard = React.memo(({
     }).start(() => {
       setParticipantsModalVisible(false);
     });
+  };
+
+  const handleLikeToggle = async () => {
+    if (!currentUser) return;
+    
+    const previousIsLiked = isLikedByMe;
+    const previousCount = likeCount;
+
+    const newIsLiked = !previousIsLiked;
+    const newCount = previousIsLiked ? Math.max(0, previousCount - 1) : previousCount + 1;
+
+    setIsLikedByMe(newIsLiked);
+    setLikeCount(newCount);
+    
+    DeviceEventEmitter.emit('global_event_update', { 
+      eventId: item.id, 
+      isLikedByMe: newIsLiked, 
+      likeCount: newCount 
+    });
+
+    try {
+      const method = previousIsLiked ? 'DELETE' : 'POST';
+      const response = await fetch(`${API_BASE_URL}/events/${item.id}/like`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id || currentUser._id })
+      });
+      const data = await response.json();
+      if (!data.success && data.message !== 'Zaten beğenildi') {
+        throw new Error(data.error || 'İşlem başarısız');
+      }
+    } catch (error) {
+      setIsLikedByMe(previousIsLiked);
+      setLikeCount(previousCount);
+      DeviceEventEmitter.emit('global_event_update', { 
+        eventId: item.id, 
+        isLikedByMe: previousIsLiked, 
+        likeCount: previousCount 
+      });
+      Alert.alert('Hata', 'Beğeni işlemi gerçekleştirilemedi.');
+    }
   };
 
   const handleJoin = async () => {
@@ -355,16 +403,44 @@ export const EventCard = React.memo(({
               </View>
             )}
 
-            {setOpenMenuId && (
-              <View style={{ position: 'relative', zIndex: 100 }}>
-                <TouchableOpacity 
-                  style={styles.menuIcon}
-                  onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-                >
-                  <Ionicons name="ellipsis-vertical" size={20} color="#757575" />
-                </TouchableOpacity>
-              </View>
-            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 100 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (onProfilePress && ownerId) {
+                    onProfilePress(ownerId);
+                  } else if (ownerId) {
+                    router.push(`/user/${ownerId}`);
+                  }
+                }}
+                style={{ marginRight: setOpenMenuId ? 10 : 0 }}
+              >
+                {owner.profileImage ? (
+                  <Image source={{ uri: owner.profileImage }} style={{ width: 30, height: 30, borderRadius: 15 }} />
+                ) : (
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#FFF', fontSize: 14, fontWeight: 'bold' }}>
+                      {(owner.name || owner.username || '?').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                {(owner.isFullyVerified || item.isFullyVerified) && (
+                  <View style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: '#FFF', borderRadius: 8, padding: 1 }}>
+                    <Ionicons name="checkmark-circle" size={14} color="#1DA1F2" />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {setOpenMenuId && (
+                <View style={{ position: 'relative' }}>
+                  <TouchableOpacity 
+                    style={styles.menuIcon}
+                    onPress={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+                  >
+                    <Ionicons name="ellipsis-vertical" size={20} color="#757575" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
 
           <Text style={styles.descriptionText} numberOfLines={2}>{item.description}</Text>
@@ -432,10 +508,19 @@ export const EventCard = React.memo(({
       <View style={styles.divider} />
 
       <View style={styles.bottomSection}>
-        <TouchableOpacity style={styles.sendButton} onPress={openShareModal}>
-          <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
-          <Text style={styles.sendButtonText}>Davet Et</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={[styles.sendButton, { marginRight: 12 }]} onPress={handleLikeToggle}>
+            <Ionicons name={isLikedByMe ? "heart" : "heart-outline"} size={22} color={isLikedByMe ? Colors.danger : Colors.primary} />
+            <Text style={[styles.sendButtonText, isLikedByMe && { color: Colors.danger }]}>
+              {likeCount > 0 ? likeCount : 'Beğen'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.sendButton} onPress={openShareModal}>
+            <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
+            <Text style={styles.sendButtonText}>Davet Et</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.spacer} />
 
