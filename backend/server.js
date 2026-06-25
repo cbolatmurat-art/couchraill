@@ -64,6 +64,8 @@ const normalizePost = (p, currentUserId, comments = []) => {
     content: p.content || p.text,
     createdAt: p.createdAt,
     type: 'post',
+    city: p.city || null,
+    locationCity: p.city || null,
     location: locationParsed || null,
     taggedFriends: (() => {
       const raw = p.taggedFriends;
@@ -2806,11 +2808,11 @@ app.get('/api/conversations/:userId', async (req, res) => {
       let currentUserInfo = null;
       
       if (otherUserId) {
-        const { rows: otherUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar, "isOnline", "lastSeen", verified, "identityVerified" FROM users WHERE id = $1', [otherUserId]);
+        const { rows: otherUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar, "isOnline", "lastSeen", verified, "identityVerified", gender FROM users WHERE id = $1', [otherUserId]);
         if (otherUserRows.length > 0) otherUser = otherUserRows[0];
       }
       
-      const { rows: currentUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar FROM users WHERE id = $1', [userId]);
+      const { rows: currentUserRows } = await query('SELECT name, "fullName", username, "profileImage", avatar, gender FROM users WHERE id = $1', [userId]);
       if (currentUserRows.length > 0) currentUserInfo = currentUserRows[0];
       
       return {
@@ -2832,8 +2834,9 @@ app.get('/api/conversations/:userId', async (req, res) => {
           isOnline: otherUser.isOnline || false,
           lastSeen: otherUser.lastSeen || null,
           verified: otherUser.verified || false,
-          identityVerified: otherUser.identityVerified || otherUser.verified || false
-        } : { isOnline: false, lastSeen: null, verified: false, identityVerified: false }
+          identityVerified: otherUser.identityVerified || otherUser.verified || false,
+          gender: otherUser.gender || null
+        } : { isOnline: false, lastSeen: null, verified: false, identityVerified: false, gender: null }
       };
     }));
       
@@ -5807,6 +5810,7 @@ app.post('/api/posts', async (req, res) => {
   const newPostId = `post_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
   const taggedFriends = req.body.taggedFriends || req.body.taggedUsers || [];
   const location = req.body.location || null;
+  const city = req.body.locationCity || (location ? location.city : null) || null;
   const createdAt = new Date().toISOString();
 
   const newPost = {
@@ -5816,6 +5820,7 @@ app.post('/api/posts', async (req, res) => {
     type: 'post',
     taggedFriends,
     location,
+    city,
     createdAt,
     updatedAt: createdAt,
     isActive: true,
@@ -5834,8 +5839,8 @@ app.post('/api/posts', async (req, res) => {
   // Insert into Postgres
   try {
     await query(`
-      INSERT INTO posts (id, "userId", text, type, "taggedFriends", location, "createdAt", "updatedAt", "isActive", "isTest")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO posts (id, "userId", text, type, "taggedFriends", location, city, "createdAt", "updatedAt", "isActive", "isTest")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `, [
       newPost.id, 
       newPost.userId, 
@@ -5843,6 +5848,7 @@ app.post('/api/posts', async (req, res) => {
       newPost.type, 
       JSON.stringify(newPost.taggedFriends), 
       newPost.location ? JSON.stringify(newPost.location) : null, 
+      newPost.city,
       newPost.createdAt, 
       newPost.updatedAt, 
       newPost.isActive,

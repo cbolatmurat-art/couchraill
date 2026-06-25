@@ -288,7 +288,8 @@ export default function CreatePostScreen() {
       userId: currentUser.id, 
       text: text.trim(), 
       taggedFriends: taggedPayload,
-      location: selectedLocation
+      location: selectedLocation,
+      locationCity: selectedLocation?.city || ''
     };
 
     console.log("POST_CREATE_REQUEST", payload);
@@ -315,6 +316,7 @@ export default function CreatePostScreen() {
 
         import('react-native').then(({ DeviceEventEmitter }) => {
           DeviceEventEmitter.emit('refresh_request_index');
+          DeviceEventEmitter.emit('refresh_request_matches');
           DeviceEventEmitter.emit('refresh_user_posts');
         }).catch(() => {});
         

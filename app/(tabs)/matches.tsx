@@ -728,10 +728,20 @@ export default function DiscoverScreen() {
     if (item.type === 'event') {
       if (activeMapContentTab !== 'events') return false;
       itemCity = item.city || '';
-    } else if (item.type === 'post') {
+    } else if (item.type === 'post' || item.isPost) {
       if (activeMapContentTab !== 'posts') return false;
-      itemCity = item.location || item.city || '';
-      if (!itemCity && item.content && normalizeCity(item.content).includes(normalizedQuery)) {
+      
+      // Extract from possible location fields
+      let locStr = '';
+      if (item.location) {
+        if (typeof item.location === 'string') locStr = item.location;
+        else if (typeof item.location === 'object') locStr = item.location.city || item.location.name || item.location.address || '';
+      }
+      itemCity = item.locationCity || item.city || locStr || item.locationName || item.place || '';
+      
+      // Fallback: check text/content
+      const postContent = item.content || item.text || '';
+      if (!itemCity && postContent && normalizeCity(postContent).includes(normalizedQuery)) {
         matchesContent = true;
       }
     } else if (item.type === 'listing' || item.isListing) {
