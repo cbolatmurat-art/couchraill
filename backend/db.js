@@ -100,6 +100,24 @@ const initDB = async () => {
     console.warn('[DB WARNING] Force alters failed:', e.message);
   }
 
+  // CREATE EVENT_LIKES OUTSIDE TRANSACTION TO PREVENT ROLLBACK
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS event_likes (
+        id VARCHAR(255) PRIMARY KEY,
+        "eventId" VARCHAR(255),
+        "userId" VARCHAR(255),
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE("eventId", "userId")
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ev_likes_event ON event_likes("eventId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ev_likes_user ON event_likes("userId")`);
+    console.log('[DB] event_likes table ensured.');
+  } catch(e) {
+    console.warn('[DB WARNING] event_likes creation failed:', e.message);
+  }
+
   try {
     await client.query('BEGIN');
 
@@ -331,17 +349,6 @@ const initDB = async () => {
         "userId" VARCHAR(255),
         type VARCHAR(50),
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Event Likes
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS event_likes (
-        id VARCHAR(255) PRIMARY KEY,
-        "eventId" VARCHAR(255),
-        "userId" VARCHAR(255),
-        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE("eventId", "userId")
       )
     `);
 
@@ -590,8 +597,6 @@ const initDB = async () => {
       `CREATE INDEX IF NOT EXISTS idx_posts_created ON posts("createdAt")`,
       `CREATE INDEX IF NOT EXISTS idx_ev_inter_event ON event_interactions("eventId")`,
       `CREATE INDEX IF NOT EXISTS idx_ev_inter_user ON event_interactions("userId")`,
-      `CREATE INDEX IF NOT EXISTS idx_ev_likes_event ON event_likes("eventId")`,
-      `CREATE INDEX IF NOT EXISTS idx_ev_likes_user ON event_likes("userId")`,
       `CREATE INDEX IF NOT EXISTS idx_ev_wait_event ON event_waitlists("eventId")`,
       `CREATE INDEX IF NOT EXISTS idx_ev_wait_user ON event_waitlists("userId")`,
       `CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages("conversationId")`,
