@@ -228,10 +228,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0);
 
-  const fetchListingsAndRequests = async () => {
+  const fetchListingsAndRequests = async (forceUserId?: string) => {
     try {
+      const uid = forceUserId || (currentUser ? currentUser.id : null);
+      const qs = uid ? `?userId=${uid}` : '';
       const [listRes, reqRes] = await Promise.all([
-        safeFetch(`${API_BASE_URL}/listings`),
+        safeFetch(`${API_BASE_URL}/listings${qs}`),
         safeFetch(`${API_BASE_URL}/requests`)
       ]);
       
@@ -318,7 +320,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (authLoading) return;
     try {
       setAuthLoading(true);
-      await fetchListingsAndRequests();
+      await fetchListingsAndRequests(currentUser ? currentUser.id : undefined);
       if (currentUser) {
         const apiUser = await safeFetch(`${API_BASE_URL}/auth/me?userId=${currentUser.id}`);
         if (apiUser && apiUser.user) {
@@ -432,6 +434,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               setCurrentUser(apiUserResult.user);
               // Kullanıcıya ait verileri arka planda yükle, splash'ı bekletme
               fetchUserData(sessionData.userId).catch(e => console.warn('Background user data fetch error:', e));
+              fetchListingsAndRequests(sessionData.userId).catch(e => console.warn('Background listings fetch error:', e));
             } else if (!forceLogout) {
               // Local fallback (offline support or timeout)
               const localUser = await AsyncStorage.getItem('currentUser');
@@ -439,6 +442,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 try {
                   setCurrentUser(JSON.parse(localUser));
                   fetchUserData(sessionData.userId).catch(e => console.warn('Background user data fetch error:', e));
+                  fetchListingsAndRequests(sessionData.userId).catch(e => console.warn('Background listings fetch error:', e));
                 } catch(e) {}
               }
             }
@@ -1749,7 +1753,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const getPublicProfile = async (userId: string) => {
     try {
-      const res = await safeFetch(`${API_BASE_URL}/users/${userId}/public`);
+      const qs = currentUser ? `?requesterId=${currentUser.id}` : '';
+      const res = await safeFetch(`${API_BASE_URL}/users/${userId}/public${qs}`);
       return res;
     } catch (error: any) {
       return { success: false, error: error.message || 'Profil yüklenemedi.' };

@@ -38,6 +38,8 @@ initDB()
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`);
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`);
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "coOrganizers" JSONB DEFAULT '[]'`);
+      await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "targetAudience" VARCHAR(50) DEFAULT 'public'`);
+      try { await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS "targetAudience" VARCHAR(50) DEFAULT 'public'`); } catch(e){}
       console.log('[STARTUP] Verified DB columns exist in posts table.');
     } catch (colErr) {
       console.error('[STARTUP] Could not verify/add DB columns:', colErr.message);
@@ -1333,8 +1335,22 @@ const isRealItem = (db, item, type) => {
 
 app.get('/api/listings', async (req, res) => {
   try {
-    const { rows } = await query(`SELECT * FROM listings WHERE active = true AND "isTest" = false AND "deletedAt" IS NULL`);
-    res.json(rows);
+    const { userId } = req.query;
+    let listingsQuery = `SELECT * FROM listings WHERE active = true AND "isTest" = false AND "deletedAt" IS NULL`;
+    
+    if (userId) {
+      listingsQuery += ` AND (
+        "targetAudience" IS NULL OR "targetAudience" = 'public' 
+        OR "ownerId" = $1 OR "hostId" = $1
+        OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+      )`;
+      const { rows } = await query(listingsQuery, [userId]);
+      res.json(rows);
+    } else {
+      listingsQuery += ` AND ("targetAudience" IS NULL OR "targetAudience" = 'public')`;
+      const { rows } = await query(listingsQuery);
+      res.json(rows);
+    }
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -1380,6 +1396,11 @@ app.get('/api/feed', async (req, res) => {
       WHERE l.active = true AND l."deletedAt" IS NULL AND l."isTest" = false
       AND (l.status IS NULL OR l.status != 'removed')
       AND (u.id IS NULL OR NOT (u.id = ANY($2::text[])))
+      AND (
+        l."targetAudience" IS NULL OR l."targetAudience" = 'public' 
+        OR l."ownerId" = $1 OR l."hostId" = $1
+        OR (l."targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+      )
     `, [userId, blockedArr]);
 
     let allFeedItems = [...listings];
@@ -1757,8 +1778,22 @@ app.get('/api/debug/all-listings', (req, res) => {
 
 app.get('/api/listings', async (req, res) => {
   try {
-    const { rows } = await query('SELECT * FROM listings WHERE active = true AND "deletedAt" IS NULL');
-    res.json(rows);
+    const { userId } = req.query;
+    let listingsQuery = `SELECT * FROM listings WHERE active = true AND "deletedAt" IS NULL`;
+    
+    if (userId) {
+      listingsQuery += ` AND (
+        "targetAudience" IS NULL OR "targetAudience" = 'public' 
+        OR "ownerId" = $1 OR "hostId" = $1
+        OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+      )`;
+      const { rows } = await query(listingsQuery, [userId]);
+      res.json(rows);
+    } else {
+      listingsQuery += ` AND ("targetAudience" IS NULL OR "targetAudience" = 'public')`;
+      const { rows } = await query(listingsQuery);
+      res.json(rows);
+    }
   } catch (error) {
     console.error('[GET_ALL_LISTINGS_ERROR]', error);
     res.status(500).json({ error: 'Server error' });
@@ -1767,7 +1802,7 @@ app.get('/api/listings', async (req, res) => {
 
 app.post('/api/listings', async (req, res) => {
   try {
-    const { hostId, userId, userName, userEmail, userPhone, city, district, neighborhood, location, title, description, price, availableFrom, availableTo, images, guestStayDuration, isTimedListing, listingDurationDays, expiresAt, type } = req.body;
+    const { hostId, userId, userName, userEmail, userPhone, city, district, neighborhood, location, title, description, price, availableFrom, availableTo, images, guestStayDuration, isTimedListing, listingDurationDays, expiresAt, type, targetAudience } = req.body;
     
     console.log("CREATE_LISTING_BODY", req.body);
     
@@ -1780,21 +1815,22 @@ app.post('/api/listings', async (req, res) => {
     const now = new Date().toISOString();
     const finalExpiresAt = isTimedListing && expiresAt ? expiresAt : null;
     const finalType = type || 'host_listing';
+    const finalTargetAudience = targetAudience || 'public';
     
     const { rows } = await query(`
       INSERT INTO listings (
         id, "hostId", "ownerId", type, title, description, city, district, neighborhood, location,
         images, "guestStayDuration", "isTimedListing", "listingDurationDays", "expiresAt",
-        "createdAt", active, status, "ownerName", "userName"
+        "createdAt", active, status, "ownerName", "userName", "targetAudience"
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20
+        $16, $17, $18, $19, $20, $21
       ) RETURNING *
     `, [
       newListingId, ownerId, ownerId, finalType, title, description, city, district, neighborhood || '', location || district || '',
       JSON.stringify(images || []), guestStayDuration || '', Boolean(isTimedListing), isTimedListing ? Number(listingDurationDays) : null, finalExpiresAt,
-      now, true, 'active', userName || null, userName || null
+      now, true, 'active', userName || null, userName || null, finalTargetAudience
     ]);
 
     const newListing = rows[0];
@@ -4185,6 +4221,7 @@ async function findUserByAnyIdentifier(identifier, db) {
 
 app.get('/api/users/:id/public', async (req, res) => {
   const { id } = req.params;
+  const { requesterId } = req.query;
   try {
     const db = readDB();
     const user = await findUserByAnyIdentifier(id, db);
@@ -4198,11 +4235,25 @@ app.get('/api/users/:id/public', async (req, res) => {
     // Aktif ilanları al (Önce PG, sonra db.json)
     let activeListings = [];
     try {
-      const { rows } = await query(`
+      let listQuery = `
         SELECT * FROM listings 
         WHERE "hostId" = $1 AND active = true AND status != 'removed' AND "deletedAt" IS NULL
-      `, [targetId]);
-      activeListings = rows;
+      `;
+      if (requesterId && requesterId !== targetId) {
+        listQuery += ` AND (
+          "targetAudience" IS NULL OR "targetAudience" = 'public' 
+          OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $2 AND "identityVerified" = true))
+        )`;
+        const { rows } = await query(listQuery, [targetId, requesterId]);
+        activeListings = rows;
+      } else if (requesterId === targetId) {
+        const { rows } = await query(listQuery, [targetId]);
+        activeListings = rows;
+      } else {
+        listQuery += ` AND ("targetAudience" IS NULL OR "targetAudience" = 'public')`;
+        const { rows } = await query(listQuery, [targetId]);
+        activeListings = rows;
+      }
     } catch (e) {
       console.warn('[PUBLIC_PROFILE] PG listings sorgusu hatası:', e.message);
     }
