@@ -1975,18 +1975,26 @@ app.get('/api/migrate-db', async (req, res) => {
   const { query } = require('./db');
   try {
     await query(`
-      ALTER TABLE listings 
-      ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS location VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false,
-      ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER,
-      ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS text TEXT;
+      CREATE TABLE IF NOT EXISTS accommodation_requests (
+        id TEXT PRIMARY KEY,
+        listing_id TEXT NOT NULL,
+        host_id TEXT NOT NULL,
+        requester_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(listing_id, requester_id)
+      );
     `);
-    res.json({ success: true, message: 'Migration applied' });
+
+    const { rows: tableExists } = await query(`SELECT to_regclass('public.accommodation_requests') as exists`);
+    const { rows: cols } = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'accommodation_requests'
+    `);
+
+    res.json({ success: true, message: 'Migration applied', exists: tableExists[0].exists, columns: cols.map(c => c.column_name) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message, stack: err.stack });
   }
