@@ -663,18 +663,17 @@ export default function ChatScreen() {
 
         <View style={[styles.chatContainer, { backgroundColor: Colors.background }]}>
           <View style={{ 
-            backgroundColor: '#FFF9E6', 
-            paddingVertical: 6, 
-            paddingHorizontal: 16, 
-            marginHorizontal: 16, 
-            marginTop: 8, 
-            marginBottom: 8, 
-            borderRadius: 12, 
+            backgroundColor: '#FDFBF7', 
+            paddingVertical: 8, 
+            paddingHorizontal: 20, 
+            width: '100%',
             alignItems: 'center',
-            alignSelf: 'center',
-            zIndex: 1
+            justifyContent: 'center',
+            zIndex: 1,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: '#EAE6DF'
           }}>
-            <Text style={{ fontSize: 11, color: '#8A8A8E', textAlign: 'center' }}>
+            <Text style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center', lineHeight: 16 }}>
               🛡️ Güvenliğiniz için bilinmeyen bağlantılara tıklamayın.
             </Text>
           </View>
@@ -712,7 +711,7 @@ export default function ChatScreen() {
             
             {currentUser.userType === 'host' ? (
               <TouchableOpacity 
-                style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 8, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
+                style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 12, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
                 onPress={() => {
                   let parsed = [];
                   try { parsed = typeof (currentUser as any).house_rules === 'string' ? JSON.parse((currentUser as any).house_rules) : ((currentUser as any).house_rules || []); } catch (e) {}
@@ -733,7 +732,7 @@ export default function ChatScreen() {
               </TouchableOpacity>
             ) : (otherUserHouseRules && otherUserHouseRules.length > 0) || (otherUserHouseRulesNote && otherUserHouseRulesNote.length > 0) ? (
               <TouchableOpacity 
-                style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 8, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
+                style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 12, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
                 onPress={() => {
                   setSelectedRules(otherUserHouseRules);
                   setRulesNote(otherUserHouseRulesNote);
