@@ -714,10 +714,15 @@ export default function ChatScreen() {
                 }}
               >
                 <Text style={{ fontSize: 12, color: '#E65100', fontWeight: '600' }}>
-                  {((currentUser as any).house_rules && (currentUser as any).house_rules.length > 0) ? "📋 Ev Kurallarını Görüntüle" : "📋 Ev Kurallarınız mı var? Ekleyin, alıcı görüntülesin."}
+                  {(() => {
+                    let parsed = [];
+                    try { parsed = typeof (currentUser as any).house_rules === 'string' ? JSON.parse((currentUser as any).house_rules) : ((currentUser as any).house_rules || []); } catch (e) {}
+                    const note = (currentUser as any).house_rules_note || '';
+                    return (parsed.length > 0 || note.length > 0) ? "📋 Ev Kurallarını Görüntüle" : "📋 Ev Kurallarınız mı var? Ekleyin, alıcı görüntülesin.";
+                  })()}
                 </Text>
               </TouchableOpacity>
-            ) : otherUserHouseRules && otherUserHouseRules.length > 0 ? (
+            ) : (otherUserHouseRules && otherUserHouseRules.length > 0) || (otherUserHouseRulesNote && otherUserHouseRulesNote.length > 0) ? (
               <TouchableOpacity 
                 style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 8, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
                 onPress={() => {
