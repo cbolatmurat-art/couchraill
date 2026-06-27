@@ -223,13 +223,14 @@ const initDB = async () => {
     // Accommodation Requests
     await client.query(`
       CREATE TABLE IF NOT EXISTS accommodation_requests (
-        id VARCHAR(255) PRIMARY KEY,
-        "listingId" VARCHAR(255) NOT NULL,
-        "hostId" VARCHAR(255) NOT NULL,
-        "requesterId" VARCHAR(255) NOT NULL,
-        status VARCHAR(50) DEFAULT 'pending',
-        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        id TEXT PRIMARY KEY,
+        listing_id TEXT NOT NULL,
+        host_id TEXT NOT NULL,
+        requester_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(listing_id, requester_id)
       )
     `);
 

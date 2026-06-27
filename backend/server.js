@@ -1872,12 +1872,12 @@ app.post('/api/listings/:listingId/requests', async (req, res) => {
     const hostId = listings[0].hostId || listings[0].ownerId;
     if (hostId === userId) return res.status(400).json({ success: false, error: 'Kendi ilanınıza istek gönderemezsiniz.' });
 
-    const { rows: existing } = await query('SELECT id FROM accommodation_requests WHERE "listingId" = $1 AND "requesterId" = $2 AND status = $3', [listingId, userId, 'pending']);
+    const { rows: existing } = await query('SELECT id FROM accommodation_requests WHERE listing_id = $1 AND requester_id = $2 AND status = $3', [listingId, userId, 'pending']);
     if (existing.length > 0) return res.status(400).json({ success: false, error: 'Zaten beklemede olan bir isteğiniz var.' });
 
     const newId = `ar${Date.now()}`;
     await query(`
-      INSERT INTO accommodation_requests (id, "listingId", "hostId", "requesterId", status)
+      INSERT INTO accommodation_requests (id, listing_id, host_id, requester_id, status)
       VALUES ($1, $2, $3, $4, $5)
     `, [newId, listingId, hostId, userId, 'pending']);
 
@@ -1910,9 +1910,9 @@ app.get('/api/listings/:listingId/requests', async (req, res) => {
     const { rows: requests } = await query(`
       SELECT ar.*, u.id as "userId", u.name, u.username, u."profileImage", u.verified, u."identityVerified", u.gender
       FROM accommodation_requests ar
-      JOIN users u ON ar."requesterId" = u.id
-      WHERE ar."listingId" = $1
-      ORDER BY ar."createdAt" DESC
+      JOIN users u ON ar.requester_id = u.id
+      WHERE ar.listing_id = $1
+      ORDER BY ar.created_at DESC
     `, [String(listingId)]);
     
     res.json({ success: true, requests });
@@ -1930,8 +1930,8 @@ app.get('/api/listings/:listingId/my-request', async (req, res) => {
 
     const { rows: requests } = await query(`
       SELECT * FROM accommodation_requests
-      WHERE "listingId" = $1 AND "requesterId" = $2
-      ORDER BY "createdAt" DESC
+      WHERE listing_id = $1 AND requester_id = $2
+      ORDER BY created_at DESC
       LIMIT 1
     `, [listingId, userId]);
 
@@ -1953,16 +1953,16 @@ app.patch('/api/listings/:listingId/requests/:requestId/status', async (req, res
     if (requests.length === 0) return res.status(404).json({ success: false, error: 'İstek bulunamadı.' });
     
     const request = requests[0];
-    if (request.hostId !== hostId) return res.status(403).json({ success: false, error: 'Yetkisiz işlem.' });
+    if (request.host_id !== hostId) return res.status(403).json({ success: false, error: 'Yetkisiz işlem.' });
 
-    await query('UPDATE accommodation_requests SET status = $1, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $2', [status, requestId]);
+    await query('UPDATE accommodation_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [status, requestId]);
 
     const statusText = status === 'accepted' ? 'kabul edildi' : 'reddedildi';
     const notifId = `n${Date.now()}_${Math.random()}`;
     await query(`
       INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [notifId, request.requesterId, 'accommodation_request', 'Konaklama İsteği', `Konaklama isteğiniz ${statusText}.`, request.listingId, 'listing']);
+    `, [notifId, request.requester_id, 'accommodation_request', 'Konaklama İsteği', `Konaklama isteğiniz ${statusText}.`, request.listing_id, 'listing']);
 
     res.json({ success: true });
   } catch (error) {

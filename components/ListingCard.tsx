@@ -5,7 +5,7 @@ import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '../constants/config';
-import { Modal, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { Modal, FlatList, ActivityIndicator, Alert, Animated } from 'react-native';
 
 interface ListingCardProps {
   item: any;
@@ -77,6 +77,19 @@ export const ListingCard = React.memo(({
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [loadingRequestsList, setLoadingRequestsList] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const slideAnim = React.useRef(new Animated.Value(500)).current;
+
+  useEffect(() => {
+    if (showRequestsModal) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0
+      }).start();
+    } else {
+      slideAnim.setValue(500);
+    }
+  }, [showRequestsModal]);
 
   const ownerId = item.userId || item.authorId || item.ownerId || item.hostId || (owner && owner.id) || item._id || item.uid;
   const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
@@ -103,7 +116,7 @@ export const ListingCard = React.memo(({
         return;
       }
       if (!response.ok) {
-        console.error('fetchMyRequest api error:', data);
+        // Silently return on error
         return;
       }
       if (data && data.success && data.request) {
@@ -114,8 +127,9 @@ export const ListingCard = React.memo(({
 
   const fetchRequestsList = async () => {
     try {
+      if (!isOwner || !currentUserId) return;
       setLoadingRequestsList(true);
-      const url = `${API_BASE_URL}/listings/${item.id}/requests`;
+      const url = `${API_BASE_URL}/listings/${item.id}/requests?userId=${currentUserId}`;
       const response = await fetch(url);
       const text = await response.text();
       let data = null;
@@ -126,7 +140,7 @@ export const ListingCard = React.memo(({
         return;
       }
       if (!response.ok) {
-        console.error('fetchRequestsList api error:', data);
+        // Silently return on 401/403 to prevent LogBox spam
         return;
       }
       if (data && data.success && data.requests) {
@@ -425,9 +439,10 @@ export const ListingCard = React.memo(({
       </View>
 
       {/* Requests Modal for Owner */}
-      <Modal visible={showRequestsModal} animationType="slide" transparent={true}>
+      <Modal visible={showRequestsModal} animationType="fade" transparent={true} onRequestClose={() => setShowRequestsModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowRequestsModal(false)} />
+          <Animated.View style={[styles.modalContainer, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Konaklama İstekleri</Text>
               <TouchableOpacity onPress={() => setShowRequestsModal(false)}>
@@ -445,7 +460,7 @@ export const ListingCard = React.memo(({
                 keyExtractor={(r) => r.id}
                 renderItem={({ item: req }) => (
                   <View style={styles.requestRow}>
-                    <TouchableOpacity onPress={() => { setShowRequestsModal(false); onProfilePress(req.requesterId); }} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <TouchableOpacity onPress={() => { setShowRequestsModal(false); onProfilePress(req.requester_id); }} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                       {req.profileImage ? (
                         <Image source={{ uri: req.profileImage }} style={styles.reqAvatar} />
                       ) : (
@@ -486,7 +501,7 @@ export const ListingCard = React.memo(({
                 )}
               />
             )}
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
