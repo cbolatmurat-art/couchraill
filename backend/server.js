@@ -1282,13 +1282,16 @@ app.put('/api/users/profile', async (req, res) => {
       travel_style: 'travel_style',
       smoking_preference: 'smoking_preference',
       pet_preference: 'pet_preference',
-      profile_completion: 'profile_completion'
+      profile_completion: 'profile_completion',
+      house_rules: '"house_rules"',
+      house_rules_note: '"house_rules_note"',
+      house_rules_updated_at: '"house_rules_updated_at"'
     };
 
     for (const [key, value] of Object.entries(updates)) {
       if (pgKeyMap[key]) {
         let val = value;
-        if (key === 'interests' || key === 'spoken_languages') {
+        if (key === 'interests' || key === 'spoken_languages' || key === 'house_rules') {
           val = typeof val === 'string' ? val : JSON.stringify(val || []);
         }
         setKeys.push(`${pgKeyMap[key]} = $${paramIndex}`);
@@ -4447,7 +4450,9 @@ app.get('/api/users/:id/public', async (req, res) => {
       spoken_languages: user.spoken_languages || null,
       travel_style: user.travel_style || null,
       smoking_preference: user.smoking_preference || null,
-      pet_preference: user.pet_preference || null
+      pet_preference: user.pet_preference || null,
+      house_rules: user.house_rules || null,
+      house_rules_note: user.house_rules_note || null
     };
 
     res.json({ success: true, profile: publicProfile });

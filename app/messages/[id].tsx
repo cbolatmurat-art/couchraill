@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard, Image, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -27,7 +27,8 @@ export default function ChatScreen() {
     getBlockStatus,
     addMessageReaction,
     getPublicProfile,
-    markMessageViewedOnce
+    markMessageViewedOnce,
+    updateProfile
   } = useAppContext();
   
   const [text, setText] = useState(initialMessage || '');
@@ -43,6 +44,45 @@ export default function ChatScreen() {
   const [currentOtherUserGender, setCurrentOtherUserGender] = useState<string | undefined>(undefined);
   const [currentOtherUserImage, setCurrentOtherUserImage] = useState<string | null>(null);
   const [otherUserVerificationLoaded, setOtherUserVerificationLoaded] = useState(false);
+  const [otherUserHouseRules, setOtherUserHouseRules] = useState<string[]>([]);
+  const [otherUserHouseRulesNote, setOtherUserHouseRulesNote] = useState<string>('');
+  const [showHouseRulesModal, setShowHouseRulesModal] = useState(false);
+  const [selectedRules, setSelectedRules] = useState<string[]>([]);
+  const [rulesNote, setRulesNote] = useState('');
+  const [saveAsDefault, setSaveAsDefault] = useState(true);
+  
+  const [modalVisible, setModalVisible] = useState(false);
+  const sheetAnim = useRef(new Animated.Value(600)).current;
+
+  useEffect(() => {
+    if (showHouseRulesModal) {
+      setModalVisible(true);
+      Animated.spring(sheetAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 12
+      }).start();
+    } else {
+      Animated.timing(sheetAnim, {
+        toValue: 600,
+        duration: 250,
+        useNativeDriver: true
+      }).start(() => setModalVisible(false));
+    }
+  }, [showHouseRulesModal]);
+
+  const HOUSE_RULES_OPTIONS = [
+    "Sigara kullanılmaz",
+    "Evcil hayvan getirilemez",
+    "Sadece doğrulanmış hesaplar",
+    "Sessiz ortam tercih edilir",
+    "Gece geç giriş uygun değil",
+    "Ortak alanlar temiz bırakılmalı",
+    "Misafir getirmek uygun değil",
+    "Alkol kullanılmaz",
+    "Kimlik doğrulaması olan kullanıcılar tercih edilir"
+  ];
   
   const insets = useSafeAreaInsets();
   
@@ -162,6 +202,12 @@ export default function ChatScreen() {
             setCurrentOtherUserGender(res.profile.gender);
             if (res.profile.profileImage) {
               setCurrentOtherUserImage(res.profile.profileImage);
+            }
+            if (res.profile.house_rules) {
+              try {
+                setOtherUserHouseRules(typeof res.profile.house_rules === 'string' ? JSON.parse(res.profile.house_rules) : res.profile.house_rules);
+                setOtherUserHouseRulesNote(res.profile.house_rules_note || '');
+              } catch (e) {}
             }
           }
           setOtherUserVerificationLoaded(true);
@@ -654,6 +700,39 @@ export default function ChatScreen() {
                 </Text>
               </View>
             )}
+            
+            {currentUser.userType === 'host' ? (
+              <TouchableOpacity 
+                style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 8, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
+                onPress={() => {
+                  let parsed = [];
+                  try { parsed = typeof (currentUser as any).house_rules === 'string' ? JSON.parse((currentUser as any).house_rules) : ((currentUser as any).house_rules || []); } catch (e) {}
+                  setSelectedRules(parsed);
+                  setRulesNote((currentUser as any).house_rules_note || '');
+                  setSaveAsDefault(true);
+                  setShowHouseRulesModal(true);
+                }}
+              >
+                <Text style={{ fontSize: 12, color: '#E65100', fontWeight: '600' }}>
+                  {((currentUser as any).house_rules && (currentUser as any).house_rules.length > 0) ? "📋 Ev Kurallarını Görüntüle" : "📋 Ev Kurallarınız mı var? Ekleyin, alıcı görüntülesin."}
+                </Text>
+              </TouchableOpacity>
+            ) : otherUserHouseRules && otherUserHouseRules.length > 0 ? (
+              <TouchableOpacity 
+                style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 8, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
+                onPress={() => {
+                  setSelectedRules(otherUserHouseRules);
+                  setRulesNote(otherUserHouseRulesNote);
+                  setSaveAsDefault(false);
+                  setShowHouseRulesModal(true);
+                }}
+              >
+                <Text style={{ fontSize: 12, color: '#E65100', fontWeight: '600' }}>
+                  📋 Bu evin kuralları var • Görüntüle
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
             {replyingToMessage && (
             <View style={styles.replyPreviewContainer}>
               {console.log("REPLY_BAR_SELECTED:", replyingToMessage)}
@@ -780,6 +859,99 @@ export default function ChatScreen() {
               )}
             </View>
           </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowHouseRulesModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowHouseRulesModal(false)} />
+          <Animated.View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: insets.bottom + 20, maxHeight: '80%', transform: [{ translateY: sheetAnim }] }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text }}>Ev Kuralları</Text>
+              <TouchableOpacity onPress={() => setShowHouseRulesModal(false)}>
+                <Ionicons name="close-circle" size={28} color="#999" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {HOUSE_RULES_OPTIONS.map(rule => {
+                const isSelected = selectedRules.includes(rule);
+                const isHost = currentUser.userType === 'host';
+                return (
+                  <TouchableOpacity 
+                    key={rule}
+                    disabled={!isHost}
+                    onPress={() => {
+                      if (isSelected) {
+                        setSelectedRules(selectedRules.filter(r => r !== rule));
+                      } else {
+                        setSelectedRules([...selectedRules, rule]);
+                      }
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}
+                  >
+                    <Ionicons 
+                      name={isSelected ? "checkbox" : "square-outline"} 
+                      size={24} 
+                      color={isSelected ? Colors.primary : '#CCC'} 
+                    />
+                    <Text style={{ marginLeft: 12, fontSize: 15, color: Colors.text, flex: 1 }}>{rule}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              <View style={{ marginTop: 20 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 }}>📝 Ek Not (isteğe bağlı)</Text>
+                <TextInput
+                  style={{ backgroundColor: '#F9F9F9', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 12, height: 80, textAlignVertical: 'top', color: Colors.text }}
+                  placeholder="Eklemek istediğiniz başka kurallar var mı?"
+                  value={rulesNote}
+                  onChangeText={setRulesNote}
+                  maxLength={150}
+                  multiline
+                  editable={currentUser.userType === 'host'}
+                />
+                <Text style={{ textAlign: 'right', fontSize: 10, color: '#999', marginTop: 4 }}>{rulesNote.length}/150</Text>
+              </View>
+
+              {currentUser.userType === 'host' && (
+                <View style={{ marginTop: 20 }}>
+                  <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center' }}
+                    onPress={() => setSaveAsDefault(!saveAsDefault)}
+                  >
+                    <Ionicons 
+                      name={saveAsDefault ? "checkbox" : "square-outline"} 
+                      size={24} 
+                      color={saveAsDefault ? Colors.primary : '#CCC'} 
+                    />
+                    <Text style={{ marginLeft: 12, fontSize: 14, color: Colors.text }}>Gelecekteki sohbetler için varsayılan kaydet</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={{ backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 }}
+                    onPress={async () => {
+                      if (saveAsDefault && updateProfile) {
+                        await updateProfile({
+                          house_rules: selectedRules,
+                          house_rules_note: rulesNote,
+                          house_rules_updated_at: new Date().toISOString()
+                        });
+                      }
+                      setShowHouseRulesModal(false);
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Kaydet ve Kapat</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </Animated.View>
         </View>
       </Modal>
     </SafeAreaView>
