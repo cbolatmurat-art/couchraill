@@ -662,6 +662,22 @@ export default function ChatScreen() {
         </View>
 
         <View style={[styles.chatContainer, { backgroundColor: Colors.background }]}>
+          <View style={{ 
+            backgroundColor: '#FFF9E6', 
+            paddingVertical: 6, 
+            paddingHorizontal: 16, 
+            marginHorizontal: 16, 
+            marginTop: 8, 
+            marginBottom: 8, 
+            borderRadius: 12, 
+            alignItems: 'center',
+            alignSelf: 'center',
+            zIndex: 1
+          }}>
+            <Text style={{ fontSize: 11, color: '#8A8A8E', textAlign: 'center' }}>
+              🛡️ Güvenliğiniz için bilinmeyen bağlantılara tıklamayın.
+            </Text>
+          </View>
 
         <FlatList
           ref={flatListRef}
@@ -675,24 +691,6 @@ export default function ChatScreen() {
           ListEmptyComponent={
             <View style={[styles.emptyContainer, { transform: [{ scaleY: -1 }] }]}>
               <Text style={styles.emptyText}>Henüz mesaj yok. İlk mesajı siz gönderin.</Text>
-            </View>
-          }
-          ListFooterComponent={
-            <View style={{ 
-              backgroundColor: '#FFF9E6', 
-              paddingVertical: 6, 
-              paddingHorizontal: 16, 
-              marginHorizontal: 16, 
-              marginTop: 16, 
-              marginBottom: 16, 
-              borderRadius: 12, 
-              alignItems: 'center',
-              alignSelf: 'center',
-              transform: [{ scaleY: -1 }] 
-            }}>
-              <Text style={{ fontSize: 11, color: '#8A8A8E', textAlign: 'center' }}>
-                🛡️ Güvenliğiniz için bilinmeyen bağlantılara tıklamayın.
-              </Text>
             </View>
           }
         />
