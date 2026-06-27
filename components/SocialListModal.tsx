@@ -14,6 +14,7 @@ import {
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { GenderBadge } from './GenderBadge';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -22,6 +23,7 @@ interface SocialUser {
   name: string;
   profileImage: string | null;
   userType: 'host' | 'seeker';
+  gender?: string;
 }
 
 interface SocialListModalProps {
@@ -78,13 +80,16 @@ export const SocialListModal: React.FC<SocialListModalProps> = ({
     return (
       <View style={styles.userRow}>
         <View style={styles.avatarContainer}>
-          {item.profileImage ? (
-            <Image source={{ uri: item.profileImage }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: item.userType === 'host' ? Colors.primary : Colors.secondary }]}>
-              <Text style={styles.avatarPlaceholderText}>{getInitials(item.name)}</Text>
-            </View>
-          )}
+          <View style={{ position: 'relative' }}>
+            <GenderBadge gender={item.gender} size={20} />
+            {item.profileImage ? (
+              <Image source={{ uri: item.profileImage }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: item.userType === 'host' ? Colors.primary : Colors.secondary }]}>
+                <Text style={styles.avatarPlaceholderText}>{getInitials(item.name)}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.userInfo}>

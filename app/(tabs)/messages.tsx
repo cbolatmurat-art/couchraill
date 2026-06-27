@@ -301,8 +301,10 @@ export default function MessagesScreen() {
           onPress={() => router.push(`/messages/${item.id}`)}
         >
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
+            <View style={{ position: 'relative' }}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
+              </View>
             </View>
             <View style={[styles.onlineBadge, { backgroundColor: badgeColor }]} />
           </View>

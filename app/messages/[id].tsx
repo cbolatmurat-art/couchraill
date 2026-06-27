@@ -40,6 +40,8 @@ export default function ChatScreen() {
     return { isOnline: conv?.otherUserStatus?.isOnline || false, lastSeen: conv?.otherUserStatus?.lastSeen || null };
   });
   const [currentOtherUserIdentityVerified, setCurrentOtherUserIdentityVerified] = useState<boolean | undefined>(undefined);
+  const [currentOtherUserGender, setCurrentOtherUserGender] = useState<string | undefined>(undefined);
+  const [currentOtherUserImage, setCurrentOtherUserImage] = useState<string | null>(null);
   const [otherUserVerificationLoaded, setOtherUserVerificationLoaded] = useState(false);
   
   const insets = useSafeAreaInsets();
@@ -157,6 +159,10 @@ export default function ChatScreen() {
               lastSeen: res.profile.lastSeen || prev.lastSeen
             }));
             setCurrentOtherUserIdentityVerified(res.profile.identityVerified === true);
+            setCurrentOtherUserGender(res.profile.gender);
+            if (res.profile.profileImage) {
+              setCurrentOtherUserImage(res.profile.profileImage);
+            }
           }
           setOtherUserVerificationLoaded(true);
         }
@@ -577,8 +583,14 @@ export default function ChatScreen() {
             style={styles.headerInfo}
             onPress={() => router.push(`/user/${otherUserId}`)}
           >
-            <View style={styles.headerAvatar}>
-              <Text style={styles.headerAvatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
+            <View style={{ position: 'relative', marginRight: 10 }}>
+              {currentOtherUserImage ? (
+                <Image source={{ uri: currentOtherUserImage }} style={[styles.headerAvatar, { marginRight: 0 }]} />
+              ) : (
+                <View style={[styles.headerAvatar, { marginRight: 0 }]}>
+                  <Text style={styles.headerAvatarText}>{otherUserName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
             </View>
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>

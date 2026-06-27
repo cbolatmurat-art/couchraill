@@ -1943,11 +1943,11 @@ app.patch('/api/listings/:listingId/requests/:requestId/status', async (req, res
     await query('UPDATE accommodation_requests SET status = $1, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $2', [status, requestId]);
 
     const statusText = status === 'accepted' ? 'kabul edildi' : 'reddedildi';
-    const notifId = \`n\${Date.now()}_\${Math.random()}\`;
-    await query(\`
+    const notifId = `n${Date.now()}_${Math.random()}`;
+    await query(`
       INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-    \`, [notifId, request.requesterId, 'accommodation_request', 'Konaklama İsteği', \`Konaklama isteğiniz \${statusText}.\`, request.listingId, 'listing']);
+    `, [notifId, request.requesterId, 'accommodation_request', 'Konaklama İsteği', `Konaklama isteğiniz ${statusText}.`, request.listingId, 'listing']);
 
     res.json({ success: true });
   } catch (error) {

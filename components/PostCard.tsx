@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, TouchableWithoutFeedba
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
+import { GenderBadge } from './GenderBadge';
 
 interface PostCardProps {
   item: any;
@@ -120,14 +121,16 @@ export const PostCard = React.memo(({
       {/* HEADER */}
       <View style={styles.cardHeader}>
         <TouchableOpacity onPress={() => onProfilePress(postOwner.id)} style={styles.ownerInfo}>
-          {/* Avatar — no online dot */}
-          {postOwner.profileImage ? (
-            <Image source={{ uri: postOwner.profileImage }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{ownerName?.charAt(0)?.toUpperCase() || '?'}</Text>
-            </View>
-          )}
+          <View style={{ position: 'relative', marginRight: 12 }}>
+            <GenderBadge gender={postOwner.gender} size={20} />
+            {postOwner.profileImage ? (
+              <Image source={{ uri: postOwner.profileImage }} style={[styles.avatar, { marginRight: 0 }]} />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { marginRight: 0 }]}>
+                <Text style={styles.avatarText}>{ownerName?.charAt(0)?.toUpperCase() || '?'}</Text>
+              </View>
+            )}
+          </View>
 
           <View style={styles.ownerText}>
             {/* Name row with verification badge + optional tags */}

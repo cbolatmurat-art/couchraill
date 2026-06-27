@@ -28,68 +28,16 @@ export default function FeedScreen() {
   const [isFollowingAnyone, setIsFollowingAnyone] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'hosts' | 'community' | 'events'>('hosts');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'events' | 'listings'>('all');
+  const [dropdownVisible, setDropdownVisible] = useState(false);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     if (!currentUser) return;
     setRefreshing(true);
-    try {
-      if (activeTab === 'hosts') {
-        const feedRes = await fetch(`${API_BASE_URL}/feed?userId=${currentUser.id}`);
-        const text = await feedRes.text();
-        const feedData = JSON.parse(text);
-        if (feedData.success && feedData.items) {
-          setFeed(prev => {
-            const others = prev.filter((item: any) => {
-              const itemType = String(item.type || item.contentType || "").toLowerCase();
-              return !(itemType === "listing" || itemType === "host_listing" || item.isListing === true);
-            });
-            const newCombined = [...others, ...feedData.items];
-            newCombined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            return newCombined;
-          });
-        }
-      } else if (activeTab === 'community') {
-        const postsRes = await fetch(`${API_BASE_URL}/posts/feed?userId=${currentUser.id}`);
-        const text = await postsRes.text();
-        const postsData = JSON.parse(text);
-        if (postsData.success && postsData.items) {
-          setFeed(prev => {
-            const others = prev.filter((item: any) => {
-              const itemType = String(item.type || item.contentType || "").toLowerCase();
-              const isListing = itemType === "listing" || itemType === "host_listing" || item.isListing === true;
-              const isEvent = itemType === "event" || item.isEvent === true;
-              const isPost = itemType === "post" || item.isPost === true || (!isListing && !isEvent);
-              return !isPost;
-            });
-            const newCombined = [...others, ...postsData.items];
-            newCombined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            return newCombined;
-          });
-        }
-      } else if (activeTab === 'events') {
-        const eventsRes = await fetch(`${API_BASE_URL}/events/feed?userId=${currentUser.id}`);
-        const text = await eventsRes.text();
-        const eventsData = JSON.parse(text);
-        if (eventsData.success && eventsData.items) {
-          setFeed(prev => {
-            const others = prev.filter((item: any) => {
-              const itemType = String(item.type || item.contentType || "").toLowerCase();
-              return !(itemType === "event" || item.isEvent === true);
-            });
-            const newCombined = [...others, ...eventsData.items];
-            newCombined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            return newCombined;
-          });
-        }
-      }
-    } catch (err) {
-      Alert.alert('', 'Yenileme başarısız oldu.');
-    } finally {
-      setRefreshing(false);
-    }
+    await fetchFeed();
+    setRefreshing(false);
   };
 
   // Post Menu State
@@ -244,8 +192,10 @@ export default function FeedScreen() {
   }, [currentUser, getSocialList, followingIds.length]);
 
   useEffect(() => {
-    if (tab && (tab === 'hosts' || tab === 'community' || tab === 'events')) {
-      setActiveTab(tab as any);
+    if (tab) {
+      if (tab === 'hosts') setActiveFilter('listings');
+      else if (tab === 'events') setActiveFilter('events');
+      else if (tab === 'community') setActiveFilter('all');
     }
     if (openPostComments) {
       setTimeout(() => {
@@ -257,23 +207,8 @@ export default function FeedScreen() {
   useEffect(() => {
     if (currentUser) {
       fetchFeed();
-      
-      // If host, ensure we don't start on 'hosts' tab
-      const normalizedUserType = String(currentUser?.userType || "").toLowerCase().trim();
-      const isGuestUser = 
-        normalizedUserType === "ev arayan" ||
-        normalizedUserType === "ev arıyorum" ||
-        normalizedUserType === "misafir" ||
-        normalizedUserType === "ev_arayan" ||
-        normalizedUserType === "ev_ariyorum" ||
-        normalizedUserType === "seeker" ||
-        normalizedUserType === "guest";
-        
-      if (!isGuestUser && activeTab === 'hosts') {
-        setActiveTab('community');
-      }
     }
-  }, [currentUser, fetchFeed, activeTab]);
+  }, [currentUser, fetchFeed]);
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('refresh_request_index', async () => {
       console.log("TAB REFRESH ÇALIŞTI (INDEX)");
@@ -287,12 +222,17 @@ export default function FeedScreen() {
       }
     });
     
+    const dropdownSub = DeviceEventEmitter.addListener('toggle_home_dropdown', () => {
+      setDropdownVisible(prev => !prev);
+    });
+    
     const delSub = DeviceEventEmitter.addListener('item_deleted', (deletedId: string) => {
       setFeed(prev => prev.filter(p => String(p._id || p.id || p.postId || p.eventId) !== String(deletedId)));
     });
 
     return () => {
       sub.remove();
+      dropdownSub.remove();
       delSub.remove();
     };
   }, [fetchFeed]);
@@ -510,16 +450,6 @@ export default function FeedScreen() {
   const renderEmptyState = () => {
     if (loading) return null;
 
-    if (activeTab === 'events') {
-      return (
-        <View style={styles.emptyState}>
-          <Ionicons name="calendar-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Henüz etkinlik paylaşılmamış.</Text>
-          <Text style={styles.emptyText}>Yeni etkinlikler paylaşıldığında burada görünecek.</Text>
-        </View>
-      );
-    }
-
     if (errorMsg) {
       return (
         <View style={styles.emptyState}>
@@ -530,31 +460,31 @@ export default function FeedScreen() {
       );
     }
 
-    if (activeTab === 'hosts') {
+    if (activeFilter === 'events') {
       return (
         <View style={styles.emptyState}>
-          <Ionicons name="home-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Henüz ev sahibi ilanı yok.</Text>
-          <Text style={styles.emptyText}>Ev sahipleri misafir kabul durumunu paylaştığında burada görünecek.</Text>
+          <Ionicons name="calendar-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Henüz etkinlik paylaşılmamış.</Text>
+          <Text style={styles.emptyText}>Yeni etkinlikler paylaşıldığında burada görünecek.</Text>
         </View>
       );
     }
 
-    if (!isFollowingAnyone && activeTab === 'community') {
+    if (activeFilter === 'listings') {
       return (
         <View style={styles.emptyState}>
-          <Ionicons name="people-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Henüz kimseyi takip etmiyorsun.</Text>
-          <Text style={styles.emptyText}>Kullanıcıları takip ettiğinde paylaşımları burada görünecek.</Text>
+          <Ionicons name="home-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Henüz ev ilanı yok.</Text>
+          <Text style={styles.emptyText}>Ev ilanları paylaşıldığında burada görünecek.</Text>
         </View>
       );
     }
 
     return (
       <View style={styles.emptyState}>
-        <Ionicons name="search-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+        <Ionicons name="newspaper-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
         <Text style={styles.emptyTitle}>Henüz akışta bir içerik yok.</Text>
-        <Text style={styles.emptyText}>Gönderiler ve takip ettiğiniz kişilerin ilanları burada görünür.</Text>
+        <Text style={styles.emptyText}>Gönderiler, ilanlar ve etkinlikler burada görünür.</Text>
       </View>
     );
   };
@@ -779,162 +709,71 @@ export default function FeedScreen() {
     );
   };
 
-  const displayFeed = isGuest ? feed.filter((item: any) => {
-    if (item.type !== 'listing' && item.contentType !== 'listing' && item.type !== 'host_listing') return false;
+  const displayFeed = feed.filter((item: any) => {
+    const itemType = String(item.type || item.contentType || "").toLowerCase();
+    const isListing = itemType === "listing" || itemType === "host_listing" || item.isListing === true;
+    const isEvent = itemType === "event" || item.isEvent === true;
+    const isPost = itemType === "post" || item.isPost === true || (!isListing && !isEvent);
     
-    const owner = item.owner || item.user || {};
-    const ownerType = String(owner.userType || "").toLowerCase().trim();
-    const ownerIsGuest = 
-      ownerType === "ev arayan" ||
-      ownerType === "ev arıyorum" ||
-      ownerType === "misafir" ||
-      ownerType === "ev_arayan" ||
-      ownerType === "ev_ariyorum" ||
-      ownerType === "seeker" ||
-      ownerType === "guest";
-      
-    return !ownerIsGuest;
-  }) : feed;
+    // Apply guest restriction for listings (guests shouldn't see other guests' listings)
+    if (isGuest && isListing) {
+      const owner = item.owner || item.user || {};
+      const ownerType = String(owner.userType || "").toLowerCase().trim();
+      const ownerIsGuest = 
+        ownerType === "ev arayan" ||
+        ownerType === "ev arıyorum" ||
+        ownerType === "misafir" ||
+        ownerType === "ev_arayan" ||
+        ownerType === "ev_ariyorum" ||
+        ownerType === "seeker" ||
+        ownerType === "guest";
+        
+      if (ownerIsGuest) return false;
+    }
+    
+    if (activeFilter === 'events') return isEvent;
+    if (activeFilter === 'listings') return isListing;
+    
+    // 'all' filter shows everything
+    return true;
+  });
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabContainer}>
-        {isGuest && (
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'hosts' && styles.activeTabButton]}
-            onPress={() => setActiveTab('hosts')}
-          >
-            <View style={styles.tabContent}>
-              <Ionicons name="home-outline" size={16} color={activeTab === 'hosts' ? '#FFF' : Colors.textLight} />
-              <Text numberOfLines={1} style={[styles.tabText, activeTab === 'hosts' && styles.activeTabText]}>Ev Sahipleri</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'community' && styles.activeTabButton]}
-          onPress={() => setActiveTab('community')}
-        >
-          <View style={styles.tabContent}>
-            <Ionicons name="newspaper-outline" size={16} color={activeTab === 'community' ? '#FFF' : Colors.textLight} />
-            <Text numberOfLines={1} style={[styles.tabText, activeTab === 'community' && styles.activeTabText]}>Akış</Text>
+      <Modal visible={dropdownVisible} transparent animationType="fade" onRequestClose={() => setDropdownVisible(false)}>
+        <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={() => setDropdownVisible(false)}>
+          <View style={styles.dropdownMenuContainer}>
+            <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('all'); setDropdownVisible(false); }}>
+              <Text style={styles.dropdownMenuItemIcon}>☰</Text>
+              <Text style={[styles.dropdownMenuItemText, activeFilter === 'all' && styles.dropdownMenuItemTextActive]}>Akış</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('events'); setDropdownVisible(false); }}>
+              <Text style={styles.dropdownMenuItemIcon}>🎉</Text>
+              <Text style={[styles.dropdownMenuItemText, activeFilter === 'events' && styles.dropdownMenuItemTextActive]}>Etkinlikler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('listings'); setDropdownVisible(false); }}>
+              <Text style={styles.dropdownMenuItemIcon}>🏠</Text>
+              <Text style={[styles.dropdownMenuItemText, activeFilter === 'listings' && styles.dropdownMenuItemTextActive]}>İlanlar</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'events' && styles.activeTabButton]}
-          onPress={() => setActiveTab('events')}
-        >
-          <View style={styles.tabContent}>
-            <Ionicons name="calendar-outline" size={16} color={activeTab === 'events' ? '#FFF' : Colors.textLight} />
-            <Text numberOfLines={1} style={[styles.tabText, activeTab === 'events' && styles.activeTabText]}>Etkinlikler</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+      </Modal>
 
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : activeTab === 'community' ? (() => {
-        const communityFeed = feed.filter((item: any) => {
-          const itemType = String(item.type || item.contentType || "").toLowerCase();
-          
-          const isListing =
-            itemType === "listing" ||
-            itemType === "host_listing" ||
-            item.isListing === true;
-
-          const isEvent =
-            itemType === "event" ||
-            item.isEvent === true;
-
-          const isPost =
-            itemType === "post" ||
-            item.isPost === true ||
-            (!isListing && !isEvent);
-
-          return isPost && !isListing && !isEvent;
-        });
-
-        console.log("AKIS RAW ITEMS:", feed.length);
-        console.log("AKIS FILTERED POSTS:", communityFeed.length);
-        if (feed.length > 0) {
-          console.log("AKIS SAMPLE ITEM:", feed[0]);
-        }
-        
-        return (
-          <FlatList
-            data={communityFeed}
-            keyExtractor={(_item, index) => String(_item.id || index)}
-            renderItem={({ item }) => (
-              <PostCard 
-                item={item}
-                currentUserId={currentUser?.id}
-                openMenuId={openMenuPostId}
-                setOpenMenuId={setOpenMenuPostId}
-                onProfilePress={handleNavigateToProfile}
-                onLikeToggle={(id, isLikedByMe) => handleLikeToggle(id, isLikedByMe, 'post')}
-                onOpenComments={(id) => openComments(id, 'post')}
-                onDeleteConfirm={confirmDeleteItem}
-                onReportConfirm={handleReportConfirm}
-              />
-            )}
-            contentContainerStyle={communityFeed.length === 0 ? styles.listEmpty : styles.listContent}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="newspaper-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
-                <Text style={styles.emptyTitle}>Henüz paylaşım yok.</Text>
-                <Text style={styles.emptyText}>Ev arayan kullanıcıların paylaşımları burada görünecek.</Text>
-              </View>
-            }
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[Colors.primary]}
-                tintColor={Colors.primary}
-              />
-            }
-          />
-        );
-      })() : activeTab === 'events' ? (
-        <FlatList
-          data={feed.filter((item: any) => item.type === 'event' || item.isEvent)}
-          keyExtractor={(_item, index) => String(_item.id || index)}
-          renderItem={({ item }) => (
-            <EventCard 
-              item={item}
-              currentUserId={currentUser?.id}
-              openMenuId={openMenuPostId}
-              setOpenMenuId={setOpenMenuPostId}
-              onProfilePress={handleNavigateToProfile}
-              onDeleteConfirm={confirmDeleteItem}
-              onReportConfirm={handleReportConfirm}
-            />
-          )}
-          contentContainerStyle={feed.filter((item: any) => item.type === 'event' || item.isEvent).length === 0 ? styles.listEmpty : styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="calendar-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
-              <Text style={styles.emptyTitle}>Henüz etkinlik paylaşılmamış.</Text>
-              <Text style={styles.emptyText}>Yeni etkinlikler paylaşıldığında burada görünecek.</Text>
-            </View>
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
-            />
-          }
-        />
       ) : (
         <FlatList
           data={displayFeed}
-          keyExtractor={item => item.id}
+          keyExtractor={(_item, index) => String(_item.id || _item._id || index)}
           renderItem={({ item }) => {
-            if (item.type === 'post') {
+            const itemType = String(item.type || item.contentType || "").toLowerCase();
+            const isListing = itemType === "listing" || itemType === "host_listing" || item.isListing === true;
+            const isEvent = itemType === "event" || item.isEvent === true;
+            const isPost = itemType === "post" || item.isPost === true || (!isListing && !isEvent);
+
+            if (isPost) {
               return (
                 <PostCard 
                   item={item}
@@ -948,7 +787,7 @@ export default function FeedScreen() {
                   onReportConfirm={handleReportConfirm}
                 />
               );
-            } else if (item.type === 'listing' || item.type === 'host_listing' || item.isListing) {
+            } else if (isListing) {
               return (
                 <ListingCard 
                   item={item}
@@ -960,7 +799,7 @@ export default function FeedScreen() {
                   onReportConfirm={handleReportConfirm}
                 />
               );
-            } else if (item.type === 'event' || item.isEvent) {
+            } else if (isEvent) {
               return (
                 <EventCard 
                   item={item}
@@ -973,7 +812,6 @@ export default function FeedScreen() {
                 />
               );
             }
-            
             return null;
           }}
           contentContainerStyle={displayFeed.length === 0 ? styles.listEmpty : styles.listContent}
@@ -1112,41 +950,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabContainer: {
-    flexDirection: 'row',
-    width: '100%',
-    paddingHorizontal: 12,
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  tabButton: {
+  dropdownOverlay: {
     flex: 1,
-    minWidth: 0,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: '#F0F2F5',
+    backgroundColor: 'transparent',
+    alignItems: 'flex-start',
   },
-  tabContent: {
+  dropdownMenuContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 100 : 80, // Adjust according to native header position
+    left: 16,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    paddingVertical: 8,
+    width: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  dropdownMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
   },
-  activeTabButton: {
-    backgroundColor: Colors.primary,
-  },
-  tabText: {
-    fontSize: 13,
+  dropdownMenuItemIcon: {
+    fontSize: 20,
+    marginRight: 14,
+    width: 24,
     textAlign: 'center',
-    fontWeight: '600',
-    color: Colors.textLight,
   },
-  activeTabText: {
-    color: '#FFF',
+  dropdownMenuItemText: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  dropdownMenuItemTextActive: {
+    fontWeight: '700',
+    color: Colors.primary,
   },
   listContent: {
     flexGrow: 1,

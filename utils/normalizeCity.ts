@@ -1,5 +1,7 @@
-export function normalizeCity(city: string = ""): string {
-  return city
+export function normalizeCity(city: any): string {
+  if (!city) return "";
+  const strCity = String(city);
+  return strCity
     .trim()
     .replace(/İ/g, "i")
     .replace(/I/g, "i")

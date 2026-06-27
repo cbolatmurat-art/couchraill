@@ -12,6 +12,7 @@ import { API_BASE_URL } from '../../constants/config';
 import NotificationBell from '../../components/NotificationBell';
 import { SocialListModal } from '../../components/SocialListModal';
 import { UserPosts } from '../../components/UserPosts';
+import { GenderBadge } from '../../components/GenderBadge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Dimensions } from 'react-native';
@@ -568,13 +569,16 @@ export default function ProfileScreen() {
           <Pressable onPress={openMenu} style={styles.headerMenuIcon}>
             <Ionicons name="menu" size={26} color={Colors.textLight} />
           </Pressable>
-        {currentUser.profileImage ? (
-          <Image source={{ uri: currentUser.profileImage }} style={styles.avatarImage} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{currentUser.name.charAt(0)}</Text>
-          </View>
-        )}
+        <View style={{ position: 'relative', marginRight: 16 }}>
+          <GenderBadge gender={currentUser.gender} size={24} />
+          {currentUser.profileImage ? (
+            <Image source={{ uri: currentUser.profileImage }} style={[styles.avatarImage, { marginRight: 0 }]} />
+          ) : (
+            <View style={[styles.avatarPlaceholder, { marginRight: 0 }]}>
+              <Text style={styles.avatarText}>{currentUser.name.charAt(0)}</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.profileInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
             <Text style={[styles.nameText, { marginBottom: 0 }]} numberOfLines={1}>{currentUser.name}</Text>
@@ -605,21 +609,6 @@ export default function ProfileScreen() {
           ) : null}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-            {currentUser.gender && currentUser.gender !== 'Söylemek istemiyorum' && (
-              <View style={[
-                { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
-                currentUser.gender === 'Erkek' ? { backgroundColor: '#E1F5FE' } : { backgroundColor: '#FCE4EC' }
-              ]}>
-                <Text style={{ 
-                  color: currentUser.gender === 'Erkek' ? '#03A9F4' : '#E91E63', 
-                  fontSize: 14, 
-                  fontWeight: 'bold',
-                  marginTop: -2
-                }}>
-                  {currentUser.gender === 'Erkek' ? '♂' : '♀'}
-                </Text>
-              </View>
-            )}
             {getJoinDateText() ? (
               <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
                 {getJoinDateText()}
@@ -775,15 +764,7 @@ export default function ProfileScreen() {
                   <Text style={styles.menuArrow}>»</Text>
                 </Pressable>
 
-                <Pressable 
-                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
-                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
-                  onPress={() => { closeMenu(); router.push('/change-account-type'); }}
-                >
-                  <Ionicons name="swap-horizontal-outline" size={22} color={Colors.text} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Hesap Türü Değiştir</Text>
-                  <Text style={styles.menuArrow}>»</Text>
-                </Pressable>
+
                 
                 <Pressable 
                   style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 

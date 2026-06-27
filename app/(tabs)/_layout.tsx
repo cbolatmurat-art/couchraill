@@ -140,7 +140,16 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Ana Sayfa',
-          headerTitle: 'Couchraill',
+          headerTitle: () => (
+            <TouchableOpacity 
+              activeOpacity={0.7} 
+              onPress={() => DeviceEventEmitter.emit('toggle_home_dropdown')}
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.text }}>Couchraill</Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.text} style={{ marginLeft: 4, marginTop: 2 }} />
+            </TouchableOpacity>
+          ),
           tabBarIcon: ({ color }) => refreshingTab === 'index' ? <ActivityIndicator size="small" color={Colors.primary} /> : <Ionicons name="home" size={24} color={color} />,
         }}
         listeners={({ navigation }) => ({

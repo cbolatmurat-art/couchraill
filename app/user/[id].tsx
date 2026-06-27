@@ -13,6 +13,7 @@ import { Card } from '../../components/Card';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SocialListModal } from '../../components/SocialListModal';
 import { UserPosts } from '../../components/UserPosts';
+import { GenderBadge } from '../../components/GenderBadge';
 
 interface BlockStatus {
   isBlockedByMe: boolean;
@@ -464,13 +465,16 @@ export default function PublicProfileScreen() {
 
         {/* ── Profile Header ── */}
         <View style={styles.profileHeader}>
-          {profile.profileImage ? (
-            <Image source={{ uri: profile.profileImage }} style={styles.avatarImage} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{profile.name.charAt(0).toUpperCase()}</Text>
-            </View>
-          )}
+          <View style={{ position: 'relative', marginRight: 16 }}>
+            <GenderBadge gender={profile?.gender} size={24} />
+            {profile.profileImage ? (
+              <Image source={{ uri: profile.profileImage }} style={[styles.avatarImage, { marginRight: 0 }]} />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { marginRight: 0 }]}>
+                <Text style={styles.avatarText}>{profile.name.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+          </View>
 
           <View style={styles.profileInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
@@ -481,21 +485,6 @@ export default function PublicProfileScreen() {
             </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-            {profile?.gender && profile.gender !== 'Söylemek istemiyorum' && (
-              <View style={[
-                { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
-                profile.gender === 'Erkek' ? { backgroundColor: '#E1F5FE' } : { backgroundColor: '#FCE4EC' }
-              ]}>
-                <Text style={{ 
-                  color: profile.gender === 'Erkek' ? '#03A9F4' : '#E91E63', 
-                  fontSize: 14, 
-                  fontWeight: 'bold',
-                  marginTop: -2
-                }}>
-                  {profile.gender === 'Erkek' ? '♂' : '♀'}
-                </Text>
-              </View>
-            )}
             {getJoinDateText(profile) ? (
               <Text style={{ fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
                 {getJoinDateText(profile)}

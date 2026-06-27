@@ -744,6 +744,17 @@ export default function DiscoverScreen() {
       if (!itemCity && postContent && normalizeCity(postContent).includes(normalizedQuery)) {
         matchesContent = true;
       }
+
+      const normalizedItemCity = normalizeCity(itemCity);
+      const isCityMatch = normalizedItemCity !== '' && (
+        normalizedItemCity === normalizedQuery || 
+        normalizedItemCity.includes(normalizedQuery) || 
+        normalizedQuery.includes(normalizedItemCity)
+      );
+
+      if (isCityMatch) {
+        matchesContent = true;
+      }
       
       console.log(`[MAP_FILTER_DEBUG] Post ID: ${item.id}`, {
         selectedMapCity,
@@ -752,9 +763,9 @@ export default function DiscoverScreen() {
         itemCityField: item.city,
         locStr,
         finalItemCity: itemCity,
-        normalizedItemCity: normalizeCity(itemCity),
+        normalizedItemCity,
         matchesContent,
-        willMatch: matchesContent || normalizeCity(itemCity) === normalizedQuery
+        willMatch: matchesContent || normalizedItemCity === normalizedQuery
       });
     } else if (item.type === 'listing' || item.isListing) {
       if (activeMapContentTab !== 'listings') return false;
@@ -968,6 +979,7 @@ export default function DiscoverScreen() {
                     onChangeText={text => { setMapCityQuery(text); setShowCitySuggestions(true); }}
                     onSubmitEditing={() => handleSelectMapCity(mapCityQuery)}
                     returnKeyType="search"
+                    autoFocus={true}
                   />
                   {mapCityQuery.length > 0 && (
                     <TouchableOpacity onPress={() => { setMapCityQuery(''); handleSelectMapCity(''); }}>
@@ -1010,54 +1022,25 @@ export default function DiscoverScreen() {
             </View>
           ) : (
             <>
-              <View style={{ padding: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: Colors.border, zIndex: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, elevation: 2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', borderRadius: 24, paddingHorizontal: 16, height: 48 }}>
-                  <Ionicons name="location-outline" size={20} color={Colors.textLight} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={{ flex: 1, fontSize: 15, color: Colors.text, fontFamily: 'Outfit-Regular' }}
-                    placeholder="Şehir adı girin"
-                    placeholderTextColor={Colors.textLight}
-                    value={mapCityQuery}
-                    onChangeText={text => { setMapCityQuery(text); setShowCitySuggestions(true); }}
-                    onSubmitEditing={() => handleSelectMapCity(mapCityQuery)}
-                    returnKeyType="search"
-                  />
-                  {mapCityQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => { setMapCityQuery(''); handleSelectMapCity(''); }}>
-                      <Ionicons name="close-circle" size={20} color={Colors.textLight} />
-                    </TouchableOpacity>
-                  )}
+              <View style={{ padding: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: Colors.border, zIndex: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, elevation: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <Ionicons name="location" size={24} color={Colors.primary} style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text }} numberOfLines={1}>{selectedMapCity}</Text>
                 </View>
-
-                {showCitySuggestions && mapCityQuery.trim().length > 0 && (
-                  <View style={{ maxHeight: 200, backgroundColor: '#F9FAFB', borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
-                    {citySuggestions.length > 0 ? (
-                      <FlatList
-                        data={citySuggestions}
-                        keyExtractor={item => item}
-                        keyboardShouldPersistTaps="handled"
-                        renderItem={({ item }) => (
-                          <TouchableOpacity 
-                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: Colors.border }}
-                            onPress={() => handleSelectMapCity(item)}
-                          >
-                            <Text style={{ fontSize: 15, color: Colors.text }}>{item}</Text>
-                          </TouchableOpacity>
-                        )}
-                      />
-                    ) : (
-                      <View style={{ padding: 14 }}>
-                        <Text style={{ fontSize: 15, color: Colors.textLight, textAlign: 'center' }}>Şehir bulunamadı.</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-
                 <TouchableOpacity 
-                  style={{ marginTop: 12, backgroundColor: Colors.primary, borderRadius: 24, height: 44, justifyContent: 'center', alignItems: 'center' }}
-                  onPress={() => handleSelectMapCity(mapCityQuery)}
+                  style={{ backgroundColor: '#F0F2F5', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginLeft: 12 }}
+                  onPress={() => {
+                    LayoutAnimation.configureNext({
+                      duration: 250,
+                      create: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+                      update: { type: LayoutAnimation.Types.easeOut },
+                      delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+                    });
+                    setSelectedMapCity('');
+                    setMapCityQuery('');
+                  }}
                 >
-                  <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 15 }}>Farklı Bir Şehir Ara</Text>
+                  <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600' }}>Farklı Şehir Ara</Text>
                 </TouchableOpacity>
               </View>
 

@@ -235,20 +235,24 @@ export default function LoginScreen() {
               />
             </View>
 
-            <View style={styles.registerCard}>
-              <Text style={styles.registerCardTitle}>Üye değil misiniz?</Text>
-              <Text style={styles.registerCardDesc}>
-                Hemen ücretsiz hesap oluşturup konaklama ilanlarını keşfedin veya misafir kabul etmeye başlayın.
-              </Text>
-              <TouchableOpacity
-                style={styles.registerButton}
-                onPress={() => router.push('/(auth)/register')}
-              >
-                <Text style={styles.registerButtonText}>Üye Ol</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </ScrollView>
+        <View style={styles.bottomCardWrapper}>
+          <View style={styles.registerCard}>
+            <View style={styles.registerTextContainer}>
+              <Text style={styles.registerCardTitle}>Üye değil misiniz?</Text>
+              <Text style={styles.registerCardDesc}>
+                Ücretsiz hesap oluşturun.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => router.push('/(auth)/register')}
+            >
+              <Text style={styles.registerButtonText}>Üye Ol</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -335,45 +339,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  bottomCardWrapper: {
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 20,
+    paddingTop: 10,
+    backgroundColor: Colors.background,
+  },
   registerCard: {
-    marginTop: 32,
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: Colors.primary,
     borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  registerTextContainer: {
+    flex: 1,
+    paddingRight: 12,
   },
   registerCardTitle: {
-    ...Typography.subtitle,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: Colors.text,
+    marginBottom: 4,
+    color: '#FFF',
   },
   registerCardDesc: {
-    ...Typography.body,
-    color: Colors.textLight,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 18,
   },
   registerButton: {
-    backgroundColor: Colors.secondary,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
+    backgroundColor: '#FFF',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
   },
   registerButtonText: {
-    color: '#FFF',
+    color: Colors.primary,
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 15,
   },
   forgotLink: {
     alignSelf: 'flex-end',
