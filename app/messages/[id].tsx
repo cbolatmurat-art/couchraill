@@ -677,6 +677,24 @@ export default function ChatScreen() {
               <Text style={styles.emptyText}>Henüz mesaj yok. İlk mesajı siz gönderin.</Text>
             </View>
           }
+          ListFooterComponent={
+            <View style={{ 
+              backgroundColor: '#FFF9E6', 
+              paddingVertical: 6, 
+              paddingHorizontal: 16, 
+              marginHorizontal: 16, 
+              marginTop: 16, 
+              marginBottom: 16, 
+              borderRadius: 12, 
+              alignItems: 'center',
+              alignSelf: 'center',
+              transform: [{ scaleY: -1 }] 
+            }}>
+              <Text style={{ fontSize: 11, color: '#8A8A8E', textAlign: 'center' }}>
+                🛡️ Güvenliğiniz için bilinmeyen bağlantılara tıklamayın.
+              </Text>
+            </View>
+          }
         />
 
         {isBlocked ? (
@@ -693,13 +711,6 @@ export default function ChatScreen() {
               ? keyboardHeight + insets.bottom + 8 
               : insets.bottom + 8 
           }]}>
-            {otherUserVerificationLoaded === true && currentOtherUserIdentityVerified !== true && (
-              <View style={{ backgroundColor: '#FFF3CD', paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#FFEEBA' }}>
-                <Text style={{ fontSize: 12, color: '#856404', flex: 1, fontWeight: '500' }}>
-                  ⚠️ Bu kullanıcı hesabını henüz doğrulamadı. Kişisel bilgilerinizi paylaşırken dikkatli olun.
-                </Text>
-              </View>
-            )}
             
             {currentUser.userType === 'host' ? (
               <TouchableOpacity 
