@@ -546,70 +546,8 @@ const initDB = async () => {
     }
 
     
-    // Safety ALTER TABLE for existing DB (Outside transaction)
-    const alters = [
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255)`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS location VARCHAR(255)`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255)`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255)`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
-      `ALTER TABLE listings ADD COLUMN IF NOT EXISTS text TEXT`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "taggedFriends" JSONB`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS location JSONB`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS text TEXT`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS title VARCHAR(255)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS city VARCHAR(255)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS district VARCHAR(255)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS date VARCHAR(50)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS time VARCHAR(50)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "authorId" VARCHAR(255)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventDate" VARCHAR(50)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventTime" VARCHAR(50)`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`,
-      `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "coOrganizers" JSONB DEFAULT '[]'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
-      `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAccepted" BOOLEAN DEFAULT false`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "about_text" TEXT`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "interests" JSONB DEFAULT '[]'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "spoken_languages" JSONB DEFAULT '[]'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "travel_style" VARCHAR(255)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "smoking_preference" VARCHAR(255)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "pet_preference" VARCHAR(255)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "profile_completion" INTEGER DEFAULT 0`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "idFrontImageUrl" TEXT`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "idBackImageUrl" TEXT`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "selfieImageUrl" TEXT`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userEmail" VARCHAR(255)`,
-      `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userPhone" VARCHAR(255)`,
-      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "mediaUrl" TEXT`,
-      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "messageType" VARCHAR(50) DEFAULT 'text'`,
-      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "isViewOnce" BOOLEAN DEFAULT false`,
-      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedOnceAt" TIMESTAMP`,
-      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedBy" JSONB DEFAULT '{}'`,
-      `ALTER TABLE post_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`,
-      `ALTER TABLE listing_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules" JSONB DEFAULT '[]'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules_note" VARCHAR(150)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules_updated_at" TIMESTAMP`
     ];
-    for (const alt of alters) {
-      try {
-        await client.query(alt);
-      } catch (e) {
-        console.warn(`[DB WARNING] Could not execute: ${alt}`, e.message);
-      }
-    }
+    // Safety ALTER TABLE for existing DB moved outside main try-catch
 
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
@@ -666,6 +604,71 @@ const initDB = async () => {
     console.error('[DB] Error initializing PostgreSQL tables:', e);
   } finally {
     client.release();
+  }
+
+  // Safety ALTER TABLE for existing DB (Outside transaction AND main try-catch)
+  const alters = [
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255)`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS location VARCHAR(255)`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "guestStayDuration" VARCHAR(255)`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "isTimedListing" BOOLEAN DEFAULT false`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "listingDurationDays" INTEGER`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "ownerName" VARCHAR(255)`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
+    `ALTER TABLE listings ADD COLUMN IF NOT EXISTS text TEXT`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "taggedFriends" JSONB`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS location JSONB`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS text TEXT`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS title VARCHAR(255)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS city VARCHAR(255)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS district VARCHAR(255)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(255)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS date VARCHAR(50)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS time VARCHAR(50)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "authorId" VARCHAR(255)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventDate" VARCHAR(50)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "eventTime" VARCHAR(50)`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS description TEXT`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "participantLimit" INTEGER`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "priceType" VARCHAR(50) DEFAULT 'free'`,
+    `ALTER TABLE posts ADD COLUMN IF NOT EXISTS "coOrganizers" JSONB DEFAULT '[]'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastSeen" TIMESTAMP`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT false`,
+    `ALTER TABLE reports ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAccepted" BOOLEAN DEFAULT false`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "about_text" TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "interests" JSONB DEFAULT '[]'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "spoken_languages" JSONB DEFAULT '[]'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "travel_style" VARCHAR(255)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "smoking_preference" VARCHAR(255)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "pet_preference" VARCHAR(255)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "profile_completion" INTEGER DEFAULT 0`,
+    `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "idFrontImageUrl" TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "idBackImageUrl" TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "selfieImageUrl" TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userName" VARCHAR(255)`,
+    `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userEmail" VARCHAR(255)`,
+    `ALTER TABLE verification_requests ADD COLUMN IF NOT EXISTS "userPhone" VARCHAR(255)`,
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "mediaUrl" TEXT`,
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "messageType" VARCHAR(50) DEFAULT 'text'`,
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "isViewOnce" BOOLEAN DEFAULT false`,
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedOnceAt" TIMESTAMP`,
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS "viewedBy" JSONB DEFAULT '{}'`,
+    `ALTER TABLE post_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`,
+    `ALTER TABLE listing_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules" JSONB DEFAULT '[]'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules_note" VARCHAR(150)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules_updated_at" TIMESTAMP`
+  ];
+  for (const alt of alters) {
+    try {
+      if (pool) await pool.query(alt);
+    } catch (e) {
+      console.warn(`[DB WARNING] Could not execute: ${alt}`, e.message);
+    }
   }
 };
 
