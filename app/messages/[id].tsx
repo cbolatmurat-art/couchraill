@@ -663,17 +663,18 @@ export default function ChatScreen() {
 
         <View style={[styles.chatContainer, { backgroundColor: Colors.background }]}>
           <View style={{ 
-            backgroundColor: '#FDFBF7', 
-            paddingVertical: 8, 
+            backgroundColor: '#FFFBEA', 
+            paddingVertical: 10, 
             paddingHorizontal: 20, 
             width: '100%',
+            minHeight: 38,
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: '#EAE6DF'
+            borderBottomWidth: 1,
+            borderBottomColor: '#E0DCD3'
           }}>
-            <Text style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center', lineHeight: 16 }}>
+            <Text style={{ fontSize: 12, color: '#555555', textAlign: 'center', flexShrink: 1 }}>
               🛡️ Güvenliğiniz için bilinmeyen bağlantılara tıklamayın.
             </Text>
           </View>
