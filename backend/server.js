@@ -1859,6 +1859,103 @@ app.post('/api/listings', async (req, res) => {
   }
 });
 
+// --- Accommodation Requests ---
+app.post('/api/listings/:listingId/requests', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'userId gerekli.' });
+
+    const { rows: listings } = await query('SELECT "hostId", "ownerId" FROM listings WHERE id = $1', [listingId]);
+    if (listings.length === 0) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    
+    const hostId = listings[0].hostId || listings[0].ownerId;
+    if (hostId === userId) return res.status(400).json({ success: false, error: 'Kendi ilanınıza istek gönderemezsiniz.' });
+
+    const { rows: existing } = await query('SELECT id FROM accommodation_requests WHERE "listingId" = $1 AND "requesterId" = $2 AND status = $3', [listingId, userId, 'pending']);
+    if (existing.length > 0) return res.status(400).json({ success: false, error: 'Zaten beklemede olan bir isteğiniz var.' });
+
+    const newId = `ar${Date.now()}`;
+    await query(`
+      INSERT INTO accommodation_requests (id, "listingId", "hostId", "requesterId", status)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [newId, listingId, hostId, userId, 'pending']);
+
+    res.json({ success: true, message: 'İstek gönderildi.' });
+  } catch (error) {
+    console.error('[ACCOMMODATION_REQUEST_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
+app.get('/api/listings/:listingId/requests', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    
+    const { rows: requests } = await query(`
+      SELECT ar.*, u.name, u.username, u."profileImage", u.verified, u."identityVerified"
+      FROM accommodation_requests ar
+      JOIN users u ON ar."requesterId" = u.id
+      WHERE ar."listingId" = $1
+      ORDER BY ar."createdAt" DESC
+    `, [listingId]);
+    
+    res.json({ success: true, requests });
+  } catch (error) {
+    console.error('[ACCOMMODATION_REQUEST_GET_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
+app.get('/api/listings/:listingId/my-request', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: 'userId gerekli.' });
+
+    const { rows: requests } = await query(`
+      SELECT * FROM accommodation_requests
+      WHERE "listingId" = $1 AND "requesterId" = $2
+      ORDER BY "createdAt" DESC
+      LIMIT 1
+    `, [listingId, userId]);
+
+    res.json({ success: true, request: requests[0] || null });
+  } catch (error) {
+    console.error('[ACCOMMODATION_REQUEST_MY_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
+app.patch('/api/listings/:listingId/requests/:requestId/status', async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { status, hostId } = req.body; 
+    
+    if (!['accepted', 'rejected'].includes(status)) return res.status(400).json({ success: false, error: 'Geçersiz durum.' });
+
+    const { rows: requests } = await query('SELECT * FROM accommodation_requests WHERE id = $1', [requestId]);
+    if (requests.length === 0) return res.status(404).json({ success: false, error: 'İstek bulunamadı.' });
+    
+    const request = requests[0];
+    if (request.hostId !== hostId) return res.status(403).json({ success: false, error: 'Yetkisiz işlem.' });
+
+    await query('UPDATE accommodation_requests SET status = $1, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $2', [status, requestId]);
+
+    const statusText = status === 'accepted' ? 'kabul edildi' : 'reddedildi';
+    const notifId = \`n\${Date.now()}_\${Math.random()}\`;
+    await query(\`
+      INSERT INTO notifications (id, "userId", type, title, message, "relatedId", "relatedType")
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    \`, [notifId, request.requesterId, 'accommodation_request', 'Konaklama İsteği', \`Konaklama isteğiniz \${statusText}.\`, request.listingId, 'listing']);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ACCOMMODATION_REQUEST_PATCH_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+  }
+});
+
 app.get('/api/migrate-db', async (req, res) => {
   const { query } = require('./db');
   try {
@@ -6927,6 +7024,11 @@ setInterval(async () => {
     console.error('[PENDING_NOTIF_WORKER_ERROR]', e.message);
   }
 }, 60000); // 1 minute
+
+// Global 404 handler for API routes
+app.use('/api', (req, res) => {
+  res.status(404).json({ success: false, error: 'API endpoint bulunamadı.' });
+});
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend server running on port ${PORT}`);

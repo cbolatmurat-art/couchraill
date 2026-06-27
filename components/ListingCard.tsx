@@ -4,6 +4,8 @@ import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { API_BASE_URL } from '../constants/config';
+import { Modal, FlatList, ActivityIndicator, Alert } from 'react-native';
 
 interface ListingCardProps {
   item: any;
@@ -69,6 +71,138 @@ export const ListingCard = React.memo(({
   const isTimedListing = item.isTimedListing === true || item.isTimedListing === 'true' || Boolean(rawExpiresAt);
   const expiresAt = rawExpiresAt ? new Date(rawExpiresAt).getTime() : null;
 
+  const [requestStatus, setRequestStatus] = useState<string | null>(null);
+  const [loadingRequest, setLoadingRequest] = useState(false);
+  const [requestsList, setRequestsList] = useState<any[]>([]);
+  const [showRequestsModal, setShowRequestsModal] = useState(false);
+  const [loadingRequestsList, setLoadingRequestsList] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const ownerId = item.userId || item.authorId || item.ownerId || item.hostId || (owner && owner.id) || item._id || item.uid;
+  const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
+
+  useEffect(() => {
+    if (!item.id || !currentUserId) return;
+    if (isOwner) {
+      fetchRequestsList();
+    } else {
+      fetchMyRequest();
+    }
+  }, [item.id, currentUserId, isOwner]);
+
+  const fetchMyRequest = async () => {
+    try {
+      const url = `${API_BASE_URL}/listings/${item.id}/my-request?userId=${currentUserId}`;
+      const response = await fetch(url);
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        console.error('fetchMyRequest non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
+        return;
+      }
+      if (!response.ok) {
+        console.error('fetchMyRequest api error:', data);
+        return;
+      }
+      if (data && data.success && data.request) {
+        setRequestStatus(data.request.status);
+      }
+    } catch(e) { console.error('fetchMyRequest network error:', e); }
+  };
+
+  const fetchRequestsList = async () => {
+    try {
+      setLoadingRequestsList(true);
+      const url = `${API_BASE_URL}/listings/${item.id}/requests`;
+      const response = await fetch(url);
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        console.error('fetchRequestsList non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
+        return;
+      }
+      if (!response.ok) {
+        console.error('fetchRequestsList api error:', data);
+        return;
+      }
+      if (data && data.success && data.requests) {
+        setRequestsList(data.requests);
+        setPendingCount(data.requests.filter((r: any) => r.status === 'pending').length);
+      }
+    } catch(e) { console.error('fetchRequestsList network error:', e); } finally { setLoadingRequestsList(false); }
+  };
+
+  const handleApply = async () => {
+    if (loadingRequest) return;
+    setLoadingRequest(true);
+    try {
+      const url = `${API_BASE_URL}/listings/${item.id}/requests`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId })
+      });
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        console.error('handleApply non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
+        Alert.alert("Hata", "Sunucudan geçersiz bir cevap alındı.");
+        return;
+      }
+      if (!response.ok) {
+        Alert.alert("Hata", data?.error || "İstek gönderilemedi.");
+        return;
+      }
+      if (data && data.success) {
+        Alert.alert("Başarılı", "Konaklama isteği gönderildi.");
+        setRequestStatus('pending');
+      } else {
+        Alert.alert("Hata", data?.error || "İstek gönderilemedi.");
+      }
+    } catch(e) {
+      Alert.alert("Hata", "Bağlantı hatası.");
+    } finally {
+      setLoadingRequest(false);
+    }
+  };
+
+  const handleUpdateRequest = async (requestId: string, status: string) => {
+    try {
+      const url = `${API_BASE_URL}/listings/${item.id}/requests/${requestId}/status`;
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, hostId: currentUserId })
+      });
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        console.error('handleUpdateRequest non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
+        Alert.alert("Hata", "Sunucudan geçersiz bir cevap alındı.");
+        return;
+      }
+      if (!response.ok) {
+        Alert.alert("Hata", data?.error || "İşlem başarısız.");
+        return;
+      }
+      if (data && data.success) {
+        fetchRequestsList();
+      } else {
+        Alert.alert("Hata", data?.error || "İşlem başarısız.");
+      }
+    } catch(e) {
+      Alert.alert("Hata", "Bağlantı hatası.");
+    }
+  };
+
   useEffect(() => {
     if (!isTimedListing || !expiresAt) return;
     
@@ -104,9 +238,6 @@ export const ListingCard = React.memo(({
   };
 
   const isExpired = item.expiresAt ? new Date(item.expiresAt).getTime() <= Date.now() : false;
-
-  const ownerId = item.userId || item.authorId || item.ownerId || item.hostId || (owner && owner.id) || item._id || item.uid;
-  const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
 
   console.log("LISTING_CARD_DATA", item);
 
@@ -260,6 +391,105 @@ export const ListingCard = React.memo(({
           )}
         </View>
       )}
+
+      {/* Accommodation Action Button */}
+      <View style={{ marginTop: 16 }}>
+        {isOwner ? (
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: Colors.primary }]}
+            onPress={() => setShowRequestsModal(true)}
+          >
+            <Text style={styles.actionButtonText}>İstekler {pendingCount > 0 ? `(${pendingCount})` : ''}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={[styles.actionButton, { 
+              backgroundColor: requestStatus === 'pending' ? Colors.warning : 
+                               requestStatus === 'accepted' ? Colors.success : 
+                               Colors.primary 
+            }]}
+            onPress={handleApply}
+            disabled={loadingRequest || requestStatus === 'pending' || requestStatus === 'accepted'}
+          >
+            {loadingRequest ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.actionButtonText}>
+                {requestStatus === 'pending' ? 'Beklemede' : 
+                 requestStatus === 'accepted' ? 'Kabul Edildi' : 
+                 'Uygun'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Requests Modal for Owner */}
+      <Modal visible={showRequestsModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Konaklama İstekleri</Text>
+              <TouchableOpacity onPress={() => setShowRequestsModal(false)}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            {loadingRequestsList ? (
+              <ActivityIndicator style={{ padding: 40 }} color={Colors.primary} />
+            ) : requestsList.length === 0 ? (
+              <Text style={{ textAlign: 'center', padding: 40, color: Colors.textLight }}>Henüz istek yok.</Text>
+            ) : (
+              <FlatList
+                data={requestsList}
+                keyExtractor={(r) => r.id}
+                renderItem={({ item: req }) => (
+                  <View style={styles.requestRow}>
+                    <TouchableOpacity onPress={() => { setShowRequestsModal(false); onProfilePress(req.requesterId); }} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      {req.profileImage ? (
+                        <Image source={{ uri: req.profileImage }} style={styles.reqAvatar} />
+                      ) : (
+                        <View style={styles.reqAvatarPlaceholder}>
+                          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{req.name?.charAt(0) || '?'}</Text>
+                        </View>
+                      )}
+                      <View style={{ marginLeft: 12, flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={styles.reqName} numberOfLines={1}>{req.name}</Text>
+                          {req.isFullyVerified || req.identityVerified ? <Ionicons name="checkmark-circle" size={14} color="#1DA1F2" style={{ marginLeft: 4 }} /> : null}
+                        </View>
+                        <Text style={styles.reqUsername}>@{req.username}</Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {req.status === 'pending' ? (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity 
+                          style={[styles.reqBtn, { backgroundColor: Colors.danger }]}
+                          onPress={() => handleUpdateRequest(req.id, 'rejected')}
+                        >
+                          <Text style={styles.reqBtnText}>Reddet</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.reqBtn, { backgroundColor: Colors.success }]}
+                          onPress={() => handleUpdateRequest(req.id, 'accepted')}
+                        >
+                          <Text style={styles.reqBtnText}>Kabul Et</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={{ fontWeight: '600', color: req.status === 'accepted' ? Colors.success : Colors.danger }}>
+                        {req.status === 'accepted' ? 'Kabul edildi' : 'Reddedildi'}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 });
@@ -305,5 +535,19 @@ const styles = StyleSheet.create({
   mobileInfoLabel: { fontSize: 12, color: Colors.textLight },
   dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
   dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
-  dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text }
+  dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
+  dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text },
+  actionButton: { paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContainer: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  requestRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F2F5' },
+  reqAvatar: { width: 40, height: 40, borderRadius: 20 },
+  reqAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  reqName: { fontSize: 15, fontWeight: '600', color: Colors.text },
+  reqUsername: { fontSize: 13, color: Colors.textLight },
+  reqBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  reqBtnText: { color: '#FFF', fontSize: 13, fontWeight: '600' }
 });

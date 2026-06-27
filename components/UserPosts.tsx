@@ -13,6 +13,7 @@ import { ListingCard } from './ListingCard';
 import { ReportModal, ContentType } from './ReportModal';
 import { useRouter } from 'expo-router';
 import { useAppContext } from '../context/AppContext';
+import { GenderBadge } from './GenderBadge';
 
 interface UserPostsProps {
   userId: string;
@@ -501,13 +502,16 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
               closeCommentsModal();
               handleProfilePress(user.id);
             }}>
-            {user.profileImage ? (
-              <Image source={{ uri: user.profileImage }} style={styles.commentAvatar} />
-            ) : (
-              <View style={styles.commentAvatarPlaceholder}>
-                <Text style={styles.commentAvatarText}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-              </View>
-            )}
+            <View style={{ position: 'relative' }}>
+              <GenderBadge gender={user.gender} size={20} />
+              {user.profileImage ? (
+                <Image source={{ uri: user.profileImage }} style={styles.commentAvatar} />
+              ) : (
+                <View style={styles.commentAvatarPlaceholder}>
+                  <Text style={styles.commentAvatarText}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
           <View style={styles.commentContent}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -556,13 +560,16 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
 
                 <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
-                    {rUser.profileImage ? (
-                      <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 12 }} />
-                    ) : (
-                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>{rUser.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-                      </View>
-                    )}
+                    <View style={{ position: 'relative', marginRight: 12 }}>
+                      <GenderBadge gender={rUser.gender} size={16} />
+                      {rUser.profileImage ? (
+                        <Image source={{ uri: rUser.profileImage }} style={{ width: 28, height: 28, borderRadius: 14 }} />
+                      ) : (
+                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>{rUser.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                        </View>
+                      )}
+                    </View>
                   </TouchableOpacity>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
