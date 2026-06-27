@@ -220,19 +220,7 @@ const initDB = async () => {
       )
     `);
 
-    // Accommodation Requests
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS accommodation_requests (
-        id TEXT PRIMARY KEY,
-        listing_id TEXT NOT NULL,
-        host_id TEXT NOT NULL,
-        requester_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(listing_id, requester_id)
-      )
-    `);
+
 
     // Conversations
     await client.query(`
@@ -537,6 +525,26 @@ const initDB = async () => {
 
     await client.query('COMMIT');
     console.log('[DB] PostgreSQL tables initialized successfully.');
+    
+    // Safety creation for new tables (Outside transaction to avoid aborts)
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS accommodation_requests (
+          id TEXT PRIMARY KEY,
+          listing_id TEXT NOT NULL,
+          host_id TEXT NOT NULL,
+          requester_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(listing_id, requester_id)
+        )
+      `);
+      console.log('[DB] accommodation_requests table ensured.');
+    } catch(e) {
+      console.warn('[DB WARNING] accommodation_requests creation failed:', e.message);
+    }
+
     
     // Safety ALTER TABLE for existing DB (Outside transaction)
     const alters = [
