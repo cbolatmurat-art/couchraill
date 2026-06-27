@@ -1314,7 +1314,7 @@ app.put('/api/users/profile', async (req, res) => {
     res.json({ success: true, user: updatedRows[0], message: 'Profil güncellendi.' });
   } catch (error) {
     console.error('[PROFILE_UPDATE_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Güncelleme sırasında hata oluştu.' });
+    res.status(500).json({ success: false, error: 'Güncelleme sırasında hata oluştu.', detail: error.message });
   }
 });
 
