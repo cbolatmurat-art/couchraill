@@ -1883,27 +1883,42 @@ app.post('/api/listings/:listingId/requests', async (req, res) => {
 
     res.json({ success: true, message: 'İstek gönderildi.' });
   } catch (error) {
-    console.error('[ACCOMMODATION_REQUEST_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    console.error('POST accommodation request error:', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + error.message });
   }
 });
 
 app.get('/api/listings/:listingId/requests', async (req, res) => {
   try {
     const { listingId } = req.params;
+    const userId = req.query.userId || req.headers['user-id'];
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Giriş gerekli.' });
+    }
+
+    const { rows: listings } = await query('SELECT "hostId", "ownerId" FROM listings WHERE id = $1', [String(listingId)]);
+    if (listings.length === 0) {
+      return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    }
+
+    const hostId = listings[0].hostId || listings[0].ownerId;
+    if (hostId !== userId) {
+      return res.status(403).json({ success: false, error: 'Bu ilan isteklerini sadece ilan sahibi görebilir.' });
+    }
     
     const { rows: requests } = await query(`
-      SELECT ar.*, u.name, u.username, u."profileImage", u.verified, u."identityVerified"
+      SELECT ar.*, u.id as "userId", u.name, u.username, u."profileImage", u.verified, u."identityVerified", u.gender
       FROM accommodation_requests ar
       JOIN users u ON ar."requesterId" = u.id
       WHERE ar."listingId" = $1
       ORDER BY ar."createdAt" DESC
-    `, [listingId]);
+    `, [String(listingId)]);
     
     res.json({ success: true, requests });
   } catch (error) {
-    console.error('[ACCOMMODATION_REQUEST_GET_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    console.error('GET listing requests error:', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + error.message });
   }
 });
 
@@ -1922,8 +1937,8 @@ app.get('/api/listings/:listingId/my-request', async (req, res) => {
 
     res.json({ success: true, request: requests[0] || null });
   } catch (error) {
-    console.error('[ACCOMMODATION_REQUEST_MY_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    console.error('GET my request error:', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + error.message });
   }
 });
 
@@ -1951,8 +1966,8 @@ app.patch('/api/listings/:listingId/requests/:requestId/status', async (req, res
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[ACCOMMODATION_REQUEST_PATCH_ERROR]', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası.' });
+    console.error('PATCH request status error:', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + error.message });
   }
 });
 
