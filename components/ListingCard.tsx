@@ -134,74 +134,61 @@ export const ListingCard = React.memo(({
     if (isOwner) return;
     if (isTogglingInterest) return;
 
-    // Optimistic UI Update
+    const targetUserId = owner.id || item.hostId || item.ownerId || item.userId;
+
+    if (isInterestedByMe) {
+      if (targetUserId) {
+        router.push(`/messages/${targetUserId}`);
+      }
+      return;
+    }
+
     setIsTogglingInterest(true);
-    const newIsInterested = !isInterestedByMe;
-    setIsInterestedByMe(newIsInterested);
-    setInterestCount(prev => newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+    setIsInterestedByMe(true);
+    setInterestCount(prev => prev + 1);
     
     setInterestedPreviewUsers(prev => {
-      if (newIsInterested) {
-        // Optimistic preview user for "Siz"
-        const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
-        return [newUser, ...prev].slice(0, 3);
-      } else {
-        return prev.filter(u => u.id !== currentUserId);
-      }
+      const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
+      return [newUser, ...prev].slice(0, 3);
     });
 
     try {
       const url = `${API_BASE_URL}/listings/${item.id}/interest`;
-      console.log('[INTEREST_TOGGLE] Request URL:', url);
-      
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
       });
       
-      console.log('[INTEREST_TOGGLE] Response status:', response.status);
-      
-      if (response.status === 404) {
-        console.error('[INTEREST_TOGGLE] Endpoint 404 hatası. URL:', url);
-      }
-      
       const text = await response.text();
       let data = null;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('[INTEREST_TOGGLE] JSON Parse Error. Response Text:', text.slice(0, 300));
-        throw new Error('Sunucudan geçersiz bir cevap alındı.');
-      }
+      try { data = JSON.parse(text); } catch (e) { throw new Error('Sunucudan geçersiz bir cevap alındı.'); }
       
       if (!response.ok || !data.success) {
-        // Revert optimistic update
-        setIsInterestedByMe(!newIsInterested);
-        setInterestCount(prev => !newIsInterested ? prev + 1 : Math.max(0, prev - 1));
-        setInterestedPreviewUsers(prev => {
-          if (!newIsInterested) {
-            const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
-            return [newUser, ...prev].slice(0, 3);
-          } else {
-            return prev.filter(u => u.id !== currentUserId);
-          }
-        });
+        setIsInterestedByMe(false);
+        setInterestCount(prev => Math.max(0, prev - 1));
+        setInterestedPreviewUsers(prev => prev.filter(u => u.id !== currentUserId));
         Alert.alert("Hata", data?.error || "İşlem başarısız.");
-      }
-    } catch (e) {
-      console.error('[INTEREST_TOGGLE] Fetch Error:', e);
-      // Revert optimistic update
-      setIsInterestedByMe(!newIsInterested);
-      setInterestCount(prev => !newIsInterested ? prev + 1 : Math.max(0, prev - 1));
-      setInterestedPreviewUsers(prev => {
-        if (!newIsInterested) {
-          const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
-          return [newUser, ...prev].slice(0, 3);
-        } else {
-          return prev.filter(u => u.id !== currentUserId);
+      } else {
+        if (targetUserId) {
+          const itmCity = item.city || '';
+          const itmDistrict = item.district || item.ilce || '';
+          const itmNeighborhood = item.neighborhood || item.mahalle || '';
+          const locText = [itmCity, itmDistrict, itmNeighborhood].filter(p => !!p).join(' / ');
+          const locString = locText ? `${locText} konumundaki ` : '';
+          const title = item.title || item.text || 'İlan';
+          const msg = `Merhaba 👋 ${locString}"${title}" ilanınızda misafir olarak kalmak istiyorum. Uygun olduğunuzda görüşebilir miyiz?`;
+          
+          router.push({
+            pathname: '/messages/[id]',
+            params: { id: targetUserId, initialMessage: msg }
+          });
         }
-      });
+      }
+    } catch (e: any) {
+      setIsInterestedByMe(false);
+      setInterestCount(prev => Math.max(0, prev - 1));
+      setInterestedPreviewUsers(prev => prev.filter(u => u.id !== currentUserId));
       Alert.alert("Hata", e.message || "Bağlantı hatası.");
     } finally {
       setIsTogglingInterest(false);
@@ -365,7 +352,7 @@ export const ListingCard = React.memo(({
               >
                 <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
                 <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                  {isInterestedByMe ? 'İlgilendin' : 'İlgilen'}
+                  {isInterestedByMe ? '✓ İlgileniyorsun' : 'İlgileniyorum'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -469,12 +456,12 @@ export const ListingCard = React.memo(({
           {isOwner ? (
             <TouchableOpacity onPress={openInterestsModal}>
               <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>
-                {interestCount >= 3 ? '3+ kişi ilgileniyor' : `${interestCount} kişi ilgileniyor`}
+                {interestCount >= 2 ? '2+ kişi ilgileniyor' : `${interestCount} kişi ilgileniyor`}
               </Text>
             </TouchableOpacity>
           ) : (
             <Text style={{ fontSize: 14, color: Colors.textLight, fontWeight: '500' }}>
-              {interestCount >= 3 ? '3+ kişi ilgileniyor' : `${interestCount}+ kişi ilgileniyor`}
+              {interestCount >= 2 ? '2+ kişi ilgileniyor' : `${interestCount} kişi ilgileniyor`}
             </Text>
           )}
         </View>
