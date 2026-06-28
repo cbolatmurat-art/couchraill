@@ -82,6 +82,9 @@ interface AppContextType {
   unblockUser: (userId: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   getBlockStatus: (userId: string) => Promise<{ success: boolean; isBlockedByMe: boolean; hasBlockedMe: boolean; isEitherBlocked: boolean }>;
 
+  isIdentityVerificationEnabled: boolean;
+  setIsIdentityVerificationEnabled: (enabled: boolean) => void;
+
   refreshData: () => Promise<void>;
 }
 
@@ -227,6 +230,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0);
+
+  const [isIdentityVerificationEnabled, setIsIdentityVerificationEnabled] = useState(true);
 
   const fetchListingsAndRequests = async (forceUserId?: string) => {
     try {
@@ -384,6 +389,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         
         // Verileri arka planda yüklemeye başla, splash ekranını bloke etme
         fetchListingsAndRequests().catch(e => console.warn('Background fetch error:', e));
+
+        // Global ayarları al
+        try {
+          const res = await fetch(`${API_BASE_URL}/system-settings`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.settings && typeof data.settings.identityVerificationEnabled === 'boolean') {
+              setIsIdentityVerificationEnabled(data.settings.identityVerificationEnabled);
+            }
+          }
+        } catch(e) {}
 
         console.log("SESSION_CHECK_START");
         const storedSession = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
@@ -799,11 +815,27 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           console.log('[SOCKET] App active, connecting socket...');
           newSocket.connect();
         }
+        
+        // Refresh system settings
+        fetch(`${API_BASE_URL}/system-settings`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.settings && typeof data.settings.identityVerificationEnabled === 'boolean') {
+              setIsIdentityVerificationEnabled(data.settings.identityVerificationEnabled);
+            }
+          })
+          .catch(() => {});
       } else {
         console.log('[SOCKET] App background, disconnecting socket...');
         newSocket.disconnect();
       }
     };
+    
+    newSocket.on('system_settings_updated', (data: { key: string, value: any }) => {
+      if (data.key === 'identityVerificationEnabled') {
+        setIsIdentityVerificationEnabled(data.value);
+      }
+    });
 
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
@@ -2005,6 +2037,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       getPublicProfile, submitReview,
       followUser, unfollowUser, sendFriendRequest, acceptFriendRequest, rejectFriendRequest, unfriendUser, pokeUser, getSocialStats, getSocialList,
       blockUser, unblockUser, getBlockStatus,
+      isIdentityVerificationEnabled, setIsIdentityVerificationEnabled,
       refreshData
     }}>
       {children}

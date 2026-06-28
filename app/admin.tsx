@@ -55,7 +55,7 @@ const MOCK_COMPLAINTS: any[] = [];
 
 export default function AdminScreen() {
   const router = useRouter();
-  const { refreshData } = useAppContext();
+  const { refreshData, isIdentityVerificationEnabled, setIsIdentityVerificationEnabled } = useAppContext();
 
   // Auth state
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -585,6 +585,26 @@ export default function AdminScreen() {
     }
   };
 
+  const handleToggleIdentityVerification = async (enabled: boolean) => {
+    if (isIdentityVerificationEnabled === enabled) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/system-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'identityVerificationEnabled', value: enabled })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsIdentityVerificationEnabled(enabled);
+        AlertHelper.alert('Başarılı', `Kimlik doğrulama özelliği ${enabled ? 'aktif edildi' : 'gizlendi'}.`);
+      } else {
+        AlertHelper.alert('Hata', data.error || 'Ayar güncellenemedi.');
+      }
+    } catch(e) {
+      AlertHelper.alert('Hata', 'Sunucu bağlantı hatası.');
+    }
+  };
+
   const renderSidebarItem = (id: string, title: string, icon: keyof typeof Ionicons.glyphMap) => (
     <Pressable
       style={[styles.sidebarItem, activeTab === id && styles.sidebarItemActive]}
@@ -652,6 +672,33 @@ export default function AdminScreen() {
           <Ionicons name="create-outline" size={18} color="#FFF" style={{ marginRight: 8 }} />
           <Text style={styles.broadcastBtnText}>Bildirim Oluştur</Text>
         </Pressable>
+      </View>
+
+      {/* System Settings Card */}
+      <View style={styles.broadcastCard}>
+        <View style={styles.broadcastCardHeader}>
+          <View style={[styles.metricIconBox, { backgroundColor: '#E0F2FE' }]}>
+            <Ionicons name="settings" size={24} color="#0284C7" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 16 }}>
+            <Text style={styles.broadcastCardTitle}>Kimlik Doğrulama Özelliği</Text>
+            <Text style={styles.broadcastCardDesc}>Uygulamadaki kimlik doğrulama sistemini aktif eder veya gizler.</Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+          <Pressable
+            style={[styles.outlineBtn, { flex: 1, backgroundColor: isIdentityVerificationEnabled ? '#10B981' : 'transparent', borderColor: isIdentityVerificationEnabled ? '#10B981' : '#E2E8F0' }]}
+            onPress={() => handleToggleIdentityVerification(true)}
+          >
+            <Text style={[styles.outlineBtnText, { color: isIdentityVerificationEnabled ? '#FFF' : '#64748B' }]}>Aktif Et</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.outlineBtn, { flex: 1, backgroundColor: !isIdentityVerificationEnabled ? '#EF4444' : 'transparent', borderColor: !isIdentityVerificationEnabled ? '#EF4444' : '#E2E8F0' }]}
+            onPress={() => handleToggleIdentityVerification(false)}
+          >
+            <Text style={[styles.outlineBtnText, { color: !isIdentityVerificationEnabled ? '#FFF' : '#64748B' }]}>Gizle</Text>
+          </Pressable>
+        </View>
       </View>
     </ScrollView>
   );

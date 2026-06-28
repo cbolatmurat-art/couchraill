@@ -19,7 +19,7 @@ import { API_BASE_URL } from '../constants/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SecurityScreen() {
-  const { currentUser, updateProfile, submitVerificationRequest } = useAppContext();
+  const { currentUser, updateProfile, submitVerificationRequest, isIdentityVerificationEnabled } = useAppContext();
   const router = useRouter();
 
   // Change password state
@@ -36,6 +36,7 @@ export default function SecurityScreen() {
   const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
 
   const passwordSlideAnim = useRef(new Animated.Value(600)).current;
+  const passwordFadeAnim = useRef(new Animated.Value(0)).current;
 
   const handleOpenPasswordModal = () => {
     setCurrentPassword('');
@@ -47,19 +48,33 @@ export default function SecurityScreen() {
     setShowNewPassword(false);
     setShowNewPasswordConfirm(false);
     setIsPasswordModalVisible(true);
-    Animated.timing(passwordSlideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(passwordFadeAnim, {
+        toValue: 0.25,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(passwordSlideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
   };
 
   const handleClosePasswordModal = () => {
-    Animated.timing(passwordSlideAnim, {
-      toValue: 600,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(passwordFadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(passwordSlideAnim, {
+        toValue: 600,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
       setIsPasswordModalVisible(false);
       setCurrentPassword('');
       setNewPassword('');
@@ -226,23 +241,38 @@ export default function SecurityScreen() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const devicesSlideAnim = useRef(new Animated.Value(800)).current;
+  const devicesFadeAnim = useRef(new Animated.Value(0)).current;
 
   const handleOpenDevices = async () => {
     setIsDevicesModalVisible(true);
-    Animated.timing(devicesSlideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(devicesFadeAnim, {
+        toValue: 0.25,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(devicesSlideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
     fetchDevices();
   };
 
   const handleCloseDevices = () => {
-    Animated.timing(devicesSlideAnim, {
-      toValue: 800,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(devicesFadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(devicesSlideAnim, {
+        toValue: 800,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
       setIsDevicesModalVisible(false);
     });
   };
@@ -540,39 +570,41 @@ export default function SecurityScreen() {
       </View>
 
       {/* Profil Doğrulama Card */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="id-card" size={24} color={Colors.primary} style={styles.icon} />
-          <Text style={styles.cardTitle}>Profil Doğrulama</Text>
-          <Ionicons name="checkmark-circle" size={20} color="#1DA1F2" style={{ marginLeft: 6 }} />
-        </View>
-        <Text style={styles.cardText}>
-          Misafirlerin ve ev sahiplerinin güvenini kazanmak için profilinizi doğrulayın. Kimlik doğrulama, e-posta onayı ve telefon doğrulamasını tamamlayan kullanıcıların isimlerinin yanında mavi tik rozeti görünür.
-        </Text>
-        
-        <View style={styles.statusBox}>
-          <Text style={styles.statusLabel}>Kimlik Durumu:</Text>
-          <View style={[styles.statusBadge, { backgroundColor: currentStatus === 'verified' ? '#1DA1F2' : getStatusBadgeColor(currentStatus) + '1A' }]}>
-            <Text style={[styles.statusBadgeText, { color: currentStatus === 'verified' ? '#FFFFFF' : getStatusBadgeColor(currentStatus) }]}>
-              {getStatusText(currentStatus)}
-            </Text>
+      {isIdentityVerificationEnabled && (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="id-card" size={24} color={Colors.primary} style={styles.icon} />
+            <Text style={styles.cardTitle}>Profil Doğrulama</Text>
+            <Ionicons name="checkmark-circle" size={20} color="#1DA1F2" style={{ marginLeft: 6 }} />
           </View>
-        </View>
-
-        {currentStatus === 'pending' && (
-          <View style={styles.infoAlert}>
-            <Ionicons name="information-circle" size={20} color={Colors.warning} style={{ marginRight: 8 }} />
-            <Text style={styles.infoAlertText}>Başvurunuz şu anda inceleme aşamasındadır.</Text>
+          <Text style={styles.cardText}>
+            Misafirlerin ve ev sahiplerinin güvenini kazanmak için profilinizi doğrulayın. Kimlik doğrulama, e-posta onayı ve telefon doğrulamasını tamamlayan kullanıcıların isimlerinin yanında mavi tik rozeti görünür.
+          </Text>
+          
+          <View style={styles.statusBox}>
+            <Text style={styles.statusLabel}>Kimlik Durumu:</Text>
+            <View style={[styles.statusBadge, { backgroundColor: currentStatus === 'verified' ? '#1DA1F2' : getStatusBadgeColor(currentStatus) + '1A' }]}>
+              <Text style={[styles.statusBadgeText, { color: currentStatus === 'verified' ? '#FFFFFF' : getStatusBadgeColor(currentStatus) }]}>
+                {getStatusText(currentStatus)}
+              </Text>
+            </View>
           </View>
-        )}
 
-        {currentStatus !== 'verified' && currentStatus !== 'pending' && (
-          <Button 
-            title={currentStatus === 'rejected' ? "Tekrar Başvur" : "Kimliğimi Doğrula"} 
-            onPress={handleOpenVerification} 
-          />
-        )}
-      </Card>
+          {currentStatus === 'pending' && (
+            <View style={styles.infoAlert}>
+              <Ionicons name="information-circle" size={20} color={Colors.warning} style={{ marginRight: 8 }} />
+              <Text style={styles.infoAlertText}>Başvurunuz şu anda inceleme aşamasındadır.</Text>
+            </View>
+          )}
+
+          {currentStatus !== 'verified' && currentStatus !== 'pending' && (
+            <Button 
+              title={currentStatus === 'rejected' ? "Tekrar Başvur" : "Kimliğimi Doğrula"} 
+              onPress={handleOpenVerification} 
+            />
+          )}
+        </Card>
+      )}
 
       {/* Telefon Numarası Doğrulama Card */}
       <Card style={styles.card}>
@@ -696,11 +728,13 @@ export default function SecurityScreen() {
       {/* Change Password Bottom Sheet Modal */}
       <Modal
         visible={isPasswordModalVisible}
-        animationType="fade"
+        animationType="none"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={handleClosePasswordModal}
       >
-        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: passwordFadeAnim }]} pointerEvents="none" />
+        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'transparent' }]} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={handleClosePasswordModal} />
           <KeyboardAvoidingView
             style={{ flex: 1, justifyContent: 'flex-end' }}
@@ -812,11 +846,13 @@ export default function SecurityScreen() {
       {/* Devices Bottom Sheet Modal */}
       <Modal
         visible={isDevicesModalVisible}
-        animationType="fade"
+        animationType="none"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={handleCloseDevices}
       >
-        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: devicesFadeAnim }]} pointerEvents="none" />
+        <View style={[styles.bottomSheetOverlay, { backgroundColor: 'transparent' }]} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCloseDevices} />
           <KeyboardAvoidingView
             style={{ flex: 1, justifyContent: 'flex-end' }}

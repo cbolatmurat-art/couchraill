@@ -13,7 +13,7 @@ import { DeviceEventEmitter } from 'react-native';
 import * as Location from 'expo-location';
 
 export default function CreateListingScreen() {
-  const { currentUser, refreshData, setListings, fetchListingsAndRequests } = useAppContext();
+  const { currentUser, refreshData, setListings, fetchListingsAndRequests, isIdentityVerificationEnabled } = useAppContext();
   const router = useRouter();
   const navigation = useNavigation();
 
@@ -660,17 +660,19 @@ export default function CreateListingScreen() {
             {targetAudience === 'public' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.audienceOption, targetAudience === 'verified_only' && styles.audienceOptionSelected]} 
-            onPress={() => handleSelectAudience('verified_only')}
-          >
-            <Ionicons name="shield-checkmark" size={24} color={targetAudience === 'verified_only' ? Colors.primary : Colors.textLight} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.audienceOptionTitle, targetAudience === 'verified_only' && styles.audienceOptionTitleSelected]}>Doğrulanmış Kişiler</Text>
-              <Text style={styles.audienceOptionDesc}>İlanınız yalnızca kimliğini doğrulamış kullanıcılar tarafından görüntülenebilir.</Text>
-            </View>
-            {targetAudience === 'verified_only' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
-          </TouchableOpacity>
+          {isIdentityVerificationEnabled && (
+            <TouchableOpacity 
+              style={[styles.audienceOption, targetAudience === 'verified_only' && styles.audienceOptionSelected]} 
+              onPress={() => handleSelectAudience('verified_only')}
+            >
+              <Ionicons name="shield-checkmark" size={24} color={targetAudience === 'verified_only' ? Colors.primary : Colors.textLight} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.audienceOptionTitle, targetAudience === 'verified_only' && styles.audienceOptionTitleSelected]}>Doğrulanmış Kişiler</Text>
+                <Text style={styles.audienceOptionDesc}>İlanınız yalnızca kimliğini doğrulamış kullanıcılar tarafından görüntülenebilir.</Text>
+              </View>
+              {targetAudience === 'verified_only' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity 
             style={[styles.audienceOption, targetAudience === 'friends_only' && styles.audienceOptionSelected]} 

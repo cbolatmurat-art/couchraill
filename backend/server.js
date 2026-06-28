@@ -40,6 +40,19 @@ initDB()
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "coOrganizers" JSONB DEFAULT '[]'`);
       await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "targetAudience" VARCHAR(50) DEFAULT 'public'`);
       try { await query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS "targetAudience" VARCHAR(50) DEFAULT 'public'`); } catch(e){}
+      
+      await query(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key VARCHAR(255) PRIMARY KEY,
+          value JSONB NOT NULL,
+          "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('identityVerificationEnabled', 'true'::jsonb)
+        ON CONFLICT (key) DO NOTHING
+      `);
       console.log('[STARTUP] Verified DB columns exist in posts table.');
     } catch (colErr) {
       console.error('[STARTUP] Could not verify/add DB columns:', colErr.message);
@@ -47,6 +60,51 @@ initDB()
     return migrateData();
   })
   .catch(console.error);
+
+// --- SYSTEM SETTINGS ENDPOINTS ---
+app.get('/api/system-settings', async (req, res) => {
+  try {
+    const { rows } = await query(`SELECT key, value FROM system_settings`);
+    const settings = {};
+    rows.forEach(r => { settings[r.key] = r.value; });
+    res.json({ success: true, settings });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/system-settings', async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    
+    if (key === 'identityVerificationEnabled' && value === true) {
+      // Sadece kapalıdan açığa geçerken bildirim at
+      const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
+      const isCurrentlyEnabled = rows.length > 0 && rows[0].value === true;
+      
+      if (!isCurrentlyEnabled) {
+        const nQuery = `
+          INSERT INTO notifications ("userId", type, title, message, "isRead", "createdAt")
+          SELECT id, 'system', 'Kimlik Doğrulama Yeniden Aktif', 'Hesabınızı doğrulayarak mavi tik alabilir, doğrulanmış kullanıcı filtrelerinden yararlanabilir ve daha güvenilir bir profil oluşturabilirsiniz.', false, NOW()
+          FROM users
+        `;
+        await query(nQuery);
+      }
+    }
+    
+    await query(`
+      INSERT INTO system_settings (key, value, "updatedAt")
+      VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()
+    `, [key, JSON.stringify(value)]);
+    
+    io.emit('system_settings_updated', { key, value });
+    
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
@@ -2626,6 +2684,14 @@ app.post('/api/verification/request', upload.fields([
 ]), async (req, res) => {
   if (process.env.NODE_ENV !== 'production') { console.log(`[POST /api/verification/request] req.body:`, req.body); }
   if (process.env.NODE_ENV !== 'production') { console.log(`[POST /api/verification/request] req.files keys:`, req.files ? Object.keys(req.files) : 'null'); }
+
+  try {
+    const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
+    const isEnabled = rows.length > 0 ? rows[0].value : true;
+    if (!isEnabled) {
+      return res.status(403).json({ success: false, error: 'Kimlik doğrulama özelliği şu anda kullanılamıyor.' });
+    }
+  } catch(e) {}
   
   const { userId, kvkkAccepted, consentAccepted } = req.body;
   
