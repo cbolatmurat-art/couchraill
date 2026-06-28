@@ -73,49 +73,7 @@ app.get('/api/system-settings', async (req, res) => {
   }
 });
 
-app.get('/api/admin/settings/identity-verification', checkAdminAuth, async (req, res) => {
-  try {
-    const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
-    const enabled = rows.length > 0 ? rows[0].value : true;
-    res.json({ success: true, identityVerificationEnabled: enabled });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
-app.patch('/api/admin/settings/identity-verification', checkAdminAuth, async (req, res) => {
-  try {
-    const { enabled } = req.body;
-    
-    // Sadece kapalıdan açığa geçerken bildirim at
-    if (enabled === true) {
-      const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
-      const isCurrentlyEnabled = rows.length > 0 && rows[0].value === true;
-      
-      if (!isCurrentlyEnabled) {
-        const nQuery = `
-          INSERT INTO notifications ("userId", type, title, message, "isRead", "createdAt")
-          SELECT id, 'system', 'Kimlik Doğrulama Yeniden Aktif', 'Hesabınızı doğrulayarak mavi tik alabilir, doğrulanmış kullanıcı filtrelerinden yararlanabilir ve daha güvenilir bir profil oluşturabilirsiniz.', false, NOW()
-          FROM users
-        `;
-        await query(nQuery);
-      }
-    }
-    
-    await query(`
-      INSERT INTO system_settings (key, value, "updatedAt")
-      VALUES ($1, $2::jsonb, NOW())
-      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()
-    `, ['identityVerificationEnabled', JSON.stringify(enabled)]);
-    
-    io.emit('system_settings_updated', { key: 'identityVerificationEnabled', value: enabled });
-    
-    res.json({ success: true, identityVerificationEnabled: enabled });
-  } catch (err) {
-    console.error('System settings patch error:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
@@ -2774,6 +2732,50 @@ app.post('/api/verification/request', upload.fields([
   }
 
   res.json({ success: true, user: user || { id: userId, identityVerificationStatus: 'pending' } });
+});
+
+// GET admin verification requests
+app.get('/api/admin/settings/identity-verification', checkAdminAuth, async (req, res) => {
+  try {
+    const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
+    const enabled = rows.length > 0 ? rows[0].value : true;
+    res.json({ success: true, identityVerificationEnabled: enabled });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/admin/settings/identity-verification', checkAdminAuth, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    
+    if (enabled === true) {
+      const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
+      const isCurrentlyEnabled = rows.length > 0 && rows[0].value === true;
+      
+      if (!isCurrentlyEnabled) {
+        const nQuery = `
+          INSERT INTO notifications ("userId", type, title, message, "isRead", "createdAt")
+          SELECT id, 'system', 'Kimlik Doğrulama Yeniden Aktif', 'Hesabınızı doğrulayarak mavi tik alabilir, doğrulanmış kullanıcı filtrelerinden yararlanabilir ve daha güvenilir bir profil oluşturabilirsiniz.', false, NOW()
+          FROM users
+        `;
+        await query(nQuery);
+      }
+    }
+    
+    await query(`
+      INSERT INTO system_settings (key, value, "updatedAt")
+      VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()
+    `, ['identityVerificationEnabled', JSON.stringify(enabled)]);
+    
+    io.emit('system_settings_updated', { key: 'identityVerificationEnabled', value: enabled });
+    
+    res.json({ success: true, identityVerificationEnabled: enabled });
+  } catch (err) {
+    console.error('System settings patch error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // GET admin verification requests
