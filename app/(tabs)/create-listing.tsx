@@ -540,164 +540,170 @@ export default function CreateListingScreen() {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
             
             {/* Süreli İlan Oluştur */}
-            <View style={styles.inlineOptionRow}>
-              <View style={styles.inlineOptionLeft}>
-                <Text style={styles.inlineOptionTitle}>Süreli İlan Oluştur</Text>
+            <View style={{ zIndex: 3000 }}>
+              <View style={styles.inlineOptionRow}>
+                <View style={styles.inlineOptionLeft}>
+                  <Text style={styles.inlineOptionTitle}>Süreli İlan Oluştur</Text>
+                </View>
+                <View style={styles.inlineOptionRight}>
+                  <TouchableOpacity 
+                    style={[styles.smallDropdownButton, !isTimedListing && styles.smallDropdownButtonDisabled]}
+                    onPress={() => {
+                      if (isTimedListing) {
+                        setTimedDropdownOpen(!timedDropdownOpen);
+                        setStayDropdownOpen(false);
+                        setGuestDropdownOpen(false);
+                      }
+                    }}
+                    disabled={!isTimedListing}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.smallDropdownText, !isTimedListing && styles.smallDropdownTextDisabled]}>
+                      {listingDurationDays} Gün
+                    </Text>
+                    <Ionicons name={timedDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={isTimedListing ? Colors.text : Colors.textLight} />
+                  </TouchableOpacity>
+                  <Switch
+                    value={isTimedListing}
+                    onValueChange={(val) => {
+                      setIsTimedListing(val);
+                      if (!val) setTimedDropdownOpen(false);
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+                    style={{ marginLeft: 8, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                  />
+                </View>
               </View>
-              <View style={styles.inlineOptionRight}>
-                <TouchableOpacity 
-                  style={[styles.smallDropdownButton, !isTimedListing && styles.smallDropdownButtonDisabled]}
-                  onPress={() => {
-                    if (isTimedListing) {
-                      setTimedDropdownOpen(!timedDropdownOpen);
-                      setStayDropdownOpen(false);
-                      setGuestDropdownOpen(false);
-                    }
-                  }}
-                  disabled={!isTimedListing}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.smallDropdownText, !isTimedListing && styles.smallDropdownTextDisabled]}>
-                    {listingDurationDays} Gün
-                  </Text>
-                  <Ionicons name={timedDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={isTimedListing ? Colors.text : Colors.textLight} />
-                </TouchableOpacity>
-                <Switch
-                  value={isTimedListing}
-                  onValueChange={(val) => {
-                    setIsTimedListing(val);
-                    if (!val) setTimedDropdownOpen(false);
-                  }}
-                  trackColor={{ false: '#E0E0E0', true: Colors.primary }}
-                  style={{ marginLeft: 8, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-              </View>
+              {timedDropdownOpen && isTimedListing && (
+                <View style={styles.smallDropdownListAbsolute}>
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 150, borderRadius: 8, overflow: 'hidden' }}>
+                    {Array.from({ length: 14 }, (_, i) => i + 1).map(days => (
+                      <TouchableOpacity
+                        key={days}
+                        style={[styles.smallDropdownItem, listingDurationDays === days && styles.smallDropdownItemSelected]}
+                        onPress={() => { setListingDurationDays(days); setTimedDropdownOpen(false); }}
+                      >
+                        <Text style={[styles.smallDropdownItemText, listingDurationDays === days && styles.smallDropdownItemTextSelected]}>
+                          {days} Gün
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
-            {timedDropdownOpen && isTimedListing && (
-              <View style={styles.smallDropdownList}>
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 150 }}>
-                  {Array.from({ length: 14 }, (_, i) => i + 1).map(days => (
-                    <TouchableOpacity
-                      key={days}
-                      style={[styles.smallDropdownItem, listingDurationDays === days && styles.smallDropdownItemSelected]}
-                      onPress={() => { setListingDurationDays(days); setTimedDropdownOpen(false); }}
-                    >
-                      <Text style={[styles.smallDropdownItemText, listingDurationDays === days && styles.smallDropdownItemTextSelected]}>
-                        {days} Gün
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             <View style={styles.inlineDivider} />
 
             {/* Maks. Konaklama Süresi */}
-            <View style={styles.inlineOptionRow}>
-              <View style={styles.inlineOptionLeft}>
-                <Text style={styles.inlineOptionTitle}>Maks. Konaklama Süresi</Text>
+            <View style={{ zIndex: 2000 }}>
+              <View style={styles.inlineOptionRow}>
+                <View style={styles.inlineOptionLeft}>
+                  <Text style={styles.inlineOptionTitle}>Maks. Konaklama Süresi</Text>
+                </View>
+                <View style={styles.inlineOptionRight}>
+                  <TouchableOpacity 
+                    style={[styles.smallDropdownButton, !maxStayDaysEnabled && styles.smallDropdownButtonDisabled]}
+                    onPress={() => {
+                      if (maxStayDaysEnabled) {
+                        setStayDropdownOpen(!stayDropdownOpen);
+                        setTimedDropdownOpen(false);
+                        setGuestDropdownOpen(false);
+                      }
+                    }}
+                    disabled={!maxStayDaysEnabled}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.smallDropdownText, !maxStayDaysEnabled && styles.smallDropdownTextDisabled]}>
+                      {maxStayDays} Gün
+                    </Text>
+                    <Ionicons name={stayDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={maxStayDaysEnabled ? Colors.text : Colors.textLight} />
+                  </TouchableOpacity>
+                  <Switch
+                    value={maxStayDaysEnabled}
+                    onValueChange={(val) => {
+                      setMaxStayDaysEnabled(val);
+                      if (!val) setStayDropdownOpen(false);
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+                    style={{ marginLeft: 8, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                  />
+                </View>
               </View>
-              <View style={styles.inlineOptionRight}>
-                <TouchableOpacity 
-                  style={[styles.smallDropdownButton, !maxStayDaysEnabled && styles.smallDropdownButtonDisabled]}
-                  onPress={() => {
-                    if (maxStayDaysEnabled) {
-                      setStayDropdownOpen(!stayDropdownOpen);
-                      setTimedDropdownOpen(false);
-                      setGuestDropdownOpen(false);
-                    }
-                  }}
-                  disabled={!maxStayDaysEnabled}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.smallDropdownText, !maxStayDaysEnabled && styles.smallDropdownTextDisabled]}>
-                    {maxStayDays} Gün
-                  </Text>
-                  <Ionicons name={stayDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={maxStayDaysEnabled ? Colors.text : Colors.textLight} />
-                </TouchableOpacity>
-                <Switch
-                  value={maxStayDaysEnabled}
-                  onValueChange={(val) => {
-                    setMaxStayDaysEnabled(val);
-                    if (!val) setStayDropdownOpen(false);
-                  }}
-                  trackColor={{ false: '#E0E0E0', true: Colors.primary }}
-                  style={{ marginLeft: 8, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-              </View>
+              {stayDropdownOpen && maxStayDaysEnabled && (
+                <View style={styles.smallDropdownListAbsolute}>
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 150, borderRadius: 8, overflow: 'hidden' }}>
+                    {Array.from({ length: 14 }, (_, i) => i + 1).map(days => (
+                      <TouchableOpacity
+                        key={days}
+                        style={[styles.smallDropdownItem, maxStayDays === days && styles.smallDropdownItemSelected]}
+                        onPress={() => { setMaxStayDays(days); setStayDropdownOpen(false); }}
+                      >
+                        <Text style={[styles.smallDropdownItemText, maxStayDays === days && styles.smallDropdownItemTextSelected]}>
+                          {days} Gün
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
-            {stayDropdownOpen && maxStayDaysEnabled && (
-              <View style={styles.smallDropdownList}>
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 150 }}>
-                  {Array.from({ length: 14 }, (_, i) => i + 1).map(days => (
-                    <TouchableOpacity
-                      key={days}
-                      style={[styles.smallDropdownItem, maxStayDays === days && styles.smallDropdownItemSelected]}
-                      onPress={() => { setMaxStayDays(days); setStayDropdownOpen(false); }}
-                    >
-                      <Text style={[styles.smallDropdownItemText, maxStayDays === days && styles.smallDropdownItemTextSelected]}>
-                        {days} Gün
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             <View style={styles.inlineDivider} />
 
             {/* Maks. Misafir Sayısı */}
-            <View style={styles.inlineOptionRow}>
-              <View style={styles.inlineOptionLeft}>
-                <Text style={styles.inlineOptionTitle}>Maks. Misafir Sayısı</Text>
+            <View style={{ zIndex: 1000 }}>
+              <View style={styles.inlineOptionRow}>
+                <View style={styles.inlineOptionLeft}>
+                  <Text style={styles.inlineOptionTitle}>Maks. Misafir Sayısı</Text>
+                </View>
+                <View style={styles.inlineOptionRight}>
+                  <TouchableOpacity 
+                    style={[styles.smallDropdownButton, !maxGuestCountEnabled && styles.smallDropdownButtonDisabled]}
+                    onPress={() => {
+                      if (maxGuestCountEnabled) {
+                        setGuestDropdownOpen(!guestDropdownOpen);
+                        setTimedDropdownOpen(false);
+                        setStayDropdownOpen(false);
+                      }
+                    }}
+                    disabled={!maxGuestCountEnabled}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.smallDropdownText, !maxGuestCountEnabled && styles.smallDropdownTextDisabled]}>
+                      {maxGuestCount} Kişi
+                    </Text>
+                    <Ionicons name={guestDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={maxGuestCountEnabled ? Colors.text : Colors.textLight} />
+                  </TouchableOpacity>
+                  <Switch
+                    value={maxGuestCountEnabled}
+                    onValueChange={(val) => {
+                      setMaxGuestCountEnabled(val);
+                      if (!val) setGuestDropdownOpen(false);
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+                    style={{ marginLeft: 8, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                  />
+                </View>
               </View>
-              <View style={styles.inlineOptionRight}>
-                <TouchableOpacity 
-                  style={[styles.smallDropdownButton, !maxGuestCountEnabled && styles.smallDropdownButtonDisabled]}
-                  onPress={() => {
-                    if (maxGuestCountEnabled) {
-                      setGuestDropdownOpen(!guestDropdownOpen);
-                      setTimedDropdownOpen(false);
-                      setStayDropdownOpen(false);
-                    }
-                  }}
-                  disabled={!maxGuestCountEnabled}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.smallDropdownText, !maxGuestCountEnabled && styles.smallDropdownTextDisabled]}>
-                    {maxGuestCount} Kişi
-                  </Text>
-                  <Ionicons name={guestDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={maxGuestCountEnabled ? Colors.text : Colors.textLight} />
-                </TouchableOpacity>
-                <Switch
-                  value={maxGuestCountEnabled}
-                  onValueChange={(val) => {
-                    setMaxGuestCountEnabled(val);
-                    if (!val) setGuestDropdownOpen(false);
-                  }}
-                  trackColor={{ false: '#E0E0E0', true: Colors.primary }}
-                  style={{ marginLeft: 8, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-              </View>
+              {guestDropdownOpen && maxGuestCountEnabled && (
+                <View style={styles.smallDropdownListAbsolute}>
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 150, borderRadius: 8, overflow: 'hidden' }}>
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map(count => (
+                      <TouchableOpacity
+                        key={count}
+                        style={[styles.smallDropdownItem, maxGuestCount === count && styles.smallDropdownItemSelected]}
+                        onPress={() => { setMaxGuestCount(count); setGuestDropdownOpen(false); }}
+                      >
+                        <Text style={[styles.smallDropdownItemText, maxGuestCount === count && styles.smallDropdownItemTextSelected]}>
+                          {count} Kişi
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
-            {guestDropdownOpen && maxGuestCountEnabled && (
-              <View style={styles.smallDropdownList}>
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 150 }}>
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map(count => (
-                    <TouchableOpacity
-                      key={count}
-                      style={[styles.smallDropdownItem, maxGuestCount === count && styles.smallDropdownItemSelected]}
-                      onPress={() => { setMaxGuestCount(count); setGuestDropdownOpen(false); }}
-                    >
-                      <Text style={[styles.smallDropdownItemText, maxGuestCount === count && styles.smallDropdownItemTextSelected]}>
-                        {count} Kişi
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
           </ScrollView>
         </Animated.View>
@@ -1102,15 +1108,21 @@ const styles = StyleSheet.create({
   smallDropdownTextDisabled: {
     color: Colors.textLight,
   },
-  smallDropdownList: {
+  smallDropdownListAbsolute: {
+    position: 'absolute',
+    top: 50,
+    right: 58,
+    width: 100,
     backgroundColor: '#FFF',
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
-    marginTop: 4,
-    marginBottom: 8,
-    width: '100%',
-    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 9999,
   },
   smallDropdownItem: {
     paddingVertical: 10,
