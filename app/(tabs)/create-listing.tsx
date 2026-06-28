@@ -547,7 +547,13 @@ export default function CreateListingScreen() {
               <View style={styles.inlineOptionRight}>
                 <TouchableOpacity 
                   style={[styles.smallDropdownButton, !isTimedListing && styles.smallDropdownButtonDisabled]}
-                  onPress={() => isTimedListing && setTimedDropdownOpen(!timedDropdownOpen)}
+                  onPress={() => {
+                    if (isTimedListing) {
+                      setTimedDropdownOpen(!timedDropdownOpen);
+                      setStayDropdownOpen(false);
+                      setGuestDropdownOpen(false);
+                    }
+                  }}
                   disabled={!isTimedListing}
                   activeOpacity={0.7}
                 >
@@ -595,7 +601,13 @@ export default function CreateListingScreen() {
               <View style={styles.inlineOptionRight}>
                 <TouchableOpacity 
                   style={[styles.smallDropdownButton, !maxStayDaysEnabled && styles.smallDropdownButtonDisabled]}
-                  onPress={() => maxStayDaysEnabled && setStayDropdownOpen(!stayDropdownOpen)}
+                  onPress={() => {
+                    if (maxStayDaysEnabled) {
+                      setStayDropdownOpen(!stayDropdownOpen);
+                      setTimedDropdownOpen(false);
+                      setGuestDropdownOpen(false);
+                    }
+                  }}
                   disabled={!maxStayDaysEnabled}
                   activeOpacity={0.7}
                 >
@@ -643,7 +655,13 @@ export default function CreateListingScreen() {
               <View style={styles.inlineOptionRight}>
                 <TouchableOpacity 
                   style={[styles.smallDropdownButton, !maxGuestCountEnabled && styles.smallDropdownButtonDisabled]}
-                  onPress={() => maxGuestCountEnabled && setGuestDropdownOpen(!guestDropdownOpen)}
+                  onPress={() => {
+                    if (maxGuestCountEnabled) {
+                      setGuestDropdownOpen(!guestDropdownOpen);
+                      setTimedDropdownOpen(false);
+                      setStayDropdownOpen(false);
+                    }
+                  }}
                   disabled={!maxGuestCountEnabled}
                   activeOpacity={0.7}
                 >
@@ -1091,8 +1109,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 4,
     marginBottom: 8,
-    alignSelf: 'flex-end',
-    width: 140,
+    width: '100%',
     overflow: 'hidden',
   },
   smallDropdownItem: {
