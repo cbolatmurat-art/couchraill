@@ -90,22 +90,37 @@ export default function ProfileScreen() {
   const [issueImage, setIssueImage] = useState<string | null>(null);
   const [issueLoading, setIssueLoading] = useState(false);
   const issueSlideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const issueFadeAnim = useRef(new Animated.Value(0)).current;
 
   const openIssueModal = () => {
     setIssueModalVisible(true);
-    Animated.timing(issueSlideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(issueFadeAnim, {
+        toValue: 0.25,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(issueSlideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
   };
 
   const closeIssueModal = () => {
-    Animated.timing(issueSlideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => setIssueModalVisible(false));
+    Animated.parallel([
+      Animated.timing(issueFadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(issueSlideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => setIssueModalVisible(false));
   };
 
   const pickIssueImage = async () => {
@@ -536,6 +551,10 @@ export default function ProfileScreen() {
     if (dateStr) {
       parts.push(dateStr);
     }
+    if (currentUser.userType) {
+      const uType = String(currentUser.userType).toLowerCase().trim();
+      parts.push(uType === 'host' || uType === 'ev sahibi' ? 'Ev Sahibi' : 'Gezginci');
+    }
     return parts.join(' • ');
   };
 
@@ -616,11 +635,11 @@ export default function ProfileScreen() {
             ) : null}
           </View>
 
-          <Text style={{ marginTop: 4, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
-            {(currentUser.ratingCount && currentUser.ratingCount > 0)
-              ? `⭐ ${(currentUser.ratingAverage || 0).toFixed(1)} • ${currentUser.ratingCount} değerlendirme`
-              : 'Henüz değerlendirme yok'}
-          </Text>
+          {(currentUser.ratingCount && currentUser.ratingCount > 0) ? (
+            <Text style={{ marginTop: 4, fontSize: 13, color: Colors.textLight, fontWeight: '500' }}>
+              ⭐ {(currentUser.ratingAverage || 0).toFixed(1)} • {currentUser.ratingCount} değerlendirme
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -797,11 +816,13 @@ export default function ProfileScreen() {
       <Modal
         visible={issueModalVisible}
         transparent={true}
-        animationType="fade"
+        animationType="none"
+        statusBarTranslucent={true}
         onRequestClose={closeIssueModal}
       >
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: issueFadeAnim }]} pointerEvents="none" />
         <TouchableWithoutFeedback onPress={closeIssueModal}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { backgroundColor: 'transparent' }]}>
             <TouchableWithoutFeedback>
               <Animated.View style={[styles.issueModalContainer, { transform: [{ translateY: issueSlideAnim }] }]}>
                 <View style={styles.issueModalHeader}>
