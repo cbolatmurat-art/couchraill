@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '../constants/config';
 import { Modal, FlatList, ActivityIndicator, Alert, Animated } from 'react-native';
+import { useAppContext } from '../context/AppContext';
 
 interface ListingCardProps {
   item: any;
@@ -61,6 +62,8 @@ export const ListingCard = React.memo(({
   onReportConfirm
 }: ListingCardProps) => {
   const router = useRouter();
+  const appContext = useAppContext?.();
+  const startConversation = appContext?.startConversation;
   const owner = item.owner || {};
   const dateStr = item.createdAt 
     ? new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -137,8 +140,15 @@ export const ListingCard = React.memo(({
     const targetUserId = owner.id || item.hostId || item.ownerId || item.userId;
 
     if (isInterestedByMe) {
-      if (targetUserId) {
-        router.push(`/messages/${targetUserId}`);
+      if (targetUserId && startConversation) {
+        try {
+          const conv = await startConversation({ id: targetUserId, name: owner.name || item.ownerName || 'Kullanıcı', profileImage: owner.profileImage || item.ownerAvatar });
+          router.push(`/messages/${conv.id}`);
+        } catch (e: any) {
+          Alert.alert("Hata", "Sohbet başlatılamadı. Lütfen tekrar deneyin.");
+        }
+      } else {
+        Alert.alert("Hata", "Sohbet başlatılamadı.");
       }
       return;
     }
@@ -170,7 +180,7 @@ export const ListingCard = React.memo(({
         setInterestedPreviewUsers(prev => prev.filter(u => u.id !== currentUserId));
         Alert.alert("Hata", data?.error || "İşlem başarısız.");
       } else {
-        if (targetUserId) {
+        if (targetUserId && startConversation) {
           const itmCity = item.city || '';
           const itmDistrict = item.district || item.ilce || '';
           const itmNeighborhood = item.neighborhood || item.mahalle || '';
@@ -179,10 +189,15 @@ export const ListingCard = React.memo(({
           const title = item.title || item.text || 'İlan';
           const msg = `Merhaba 👋 ${locString}"${title}" ilanınızda misafir olarak kalmak istiyorum. Uygun olduğunuzda görüşebilir miyiz?`;
           
-          router.push({
-            pathname: '/messages/[id]',
-            params: { id: targetUserId, initialMessage: msg }
-          });
+          try {
+            const conv = await startConversation({ id: targetUserId, name: owner.name || item.ownerName || 'Kullanıcı', profileImage: owner.profileImage || item.ownerAvatar });
+            router.push({
+              pathname: '/messages/[id]',
+              params: { id: conv.id, initialMessage: msg }
+            });
+          } catch (e: any) {
+            Alert.alert("Hata", "Sohbet başlatılamadı. Lütfen tekrar deneyin.");
+          }
         }
       }
     } catch (e: any) {
