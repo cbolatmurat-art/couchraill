@@ -346,82 +346,47 @@ export const ListingCard = React.memo(({
         ) : null}
 
         <View style={styles.mobileInfoContainer}>
-          {locationString ? (
-            <View style={styles.mobileInfoRowFull}>
-              <View style={styles.mobileInfoText}>
+          <View style={[styles.mobileInfoRowFull, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+            {locationString ? (
+              <View style={[styles.mobileInfoText, { flex: 1, paddingRight: 8 }]}>
                 <Text style={styles.mobileInfoValue} numberOfLines={2}>📍 {locationString}</Text>
                 <Text style={styles.mobileInfoLabel}>Konum</Text>
               </View>
-            </View>
-          ) : null}
+            ) : <View style={{ flex: 1 }} />}
+
+            {!isOwner && (
+              <TouchableOpacity 
+                style={[
+                  { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
+                  isInterestedByMe && { backgroundColor: Colors.primary }
+                ]}
+                onPress={handleInterestToggle}
+                disabled={isTogglingInterest || isExpired}
+              >
+                <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
+                <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
+                  {isInterestedByMe ? 'İlgilendin' : 'İlgilen'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View style={styles.mobileInfoRowBoxes}>
             {formattedStayDuration && (
-              <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-                <View>
-                  <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
-                  <Text style={styles.mobileInfoLabel}>Konaklama Süresi</Text>
-                </View>
-                {!isOwner && !formattedGuestCount && (
-                  <TouchableOpacity 
-                    style={[
-                      { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
-                      isInterestedByMe && { backgroundColor: Colors.primary }
-                    ]}
-                    onPress={handleInterestToggle}
-                    disabled={isTogglingInterest || isExpired}
-                  >
-                    <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                      {isInterestedByMe ? 'İlgilendin' : 'Uygun'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+              <View style={styles.mobileInfoBox}>
+                <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
+                <Text style={styles.mobileInfoLabel}>Konaklama Süresi</Text>
               </View>
             )}
 
             {formattedGuestCount && (
-              <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-                <View>
-                  <Text style={styles.mobileInfoValue} numberOfLines={1}>👥 {formattedGuestCount}</Text>
-                  <Text style={styles.mobileInfoLabel}>Misafir Sayısı</Text>
-                </View>
-                {!isOwner && (
-                  <TouchableOpacity 
-                    style={[
-                      { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
-                      isInterestedByMe && { backgroundColor: Colors.primary }
-                    ]}
-                    onPress={handleInterestToggle}
-                    disabled={isTogglingInterest || isExpired}
-                  >
-                    <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                      {isInterestedByMe ? 'İlgilendin' : 'Uygun'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+              <View style={styles.mobileInfoBox}>
+                <Text style={styles.mobileInfoValue} numberOfLines={1}>👥 {formattedGuestCount}</Text>
+                <Text style={styles.mobileInfoLabel}>Misafir Sayısı</Text>
               </View>
             )}
 
-            {/* If neither limit is set, still show interest button in a generic box */}
-            {!formattedStayDuration && !formattedGuestCount && !isOwner && (
-              <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }]}>
-                <TouchableOpacity 
-                  style={[
-                    { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
-                    isInterestedByMe && { backgroundColor: Colors.primary }
-                  ]}
-                  onPress={handleInterestToggle}
-                  disabled={isTogglingInterest || isExpired}
-                >
-                  <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                    {isInterestedByMe ? 'İlgilendin' : 'Uygun'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+
 
             {isTimedListing && rawExpiresAt ? (
               <View style={styles.mobileInfoBox}>
