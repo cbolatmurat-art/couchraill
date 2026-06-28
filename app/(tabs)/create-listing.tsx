@@ -33,9 +33,14 @@ export default function CreateListingScreen() {
   
   const [maxStayDaysEnabled, setMaxStayDaysEnabled] = useState(params.max_stay_days_enabled === 'true' || false);
   const [maxStayDays, setMaxStayDays] = useState(params.max_stay_days ? Number(params.max_stay_days) : 3);
+  const [stayDropdownOpen, setStayDropdownOpen] = useState(false);
   
   const [maxGuestCountEnabled, setMaxGuestCountEnabled] = useState(params.max_guest_count_enabled === 'true' || false);
   const [maxGuestCount, setMaxGuestCount] = useState(params.max_guest_count ? Number(params.max_guest_count) : 2);
+  const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
+  
+  const [isTimedListing, setIsTimedListing] = useState(params.isTimedListing === 'true' || false);
+  const [listingDurationDays, setListingDurationDays] = useState(params.listingDurationDays ? Number(params.listingDurationDays) : 3);
   
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
@@ -127,7 +132,11 @@ export default function CreateListingScreen() {
     setMaxStayDays(3);
     setMaxGuestCountEnabled(false);
     setMaxGuestCount(2);
+    setIsTimedListing(false);
+    setListingDurationDays(3);
     setTargetAudience('public');
+    setStayDropdownOpen(false);
+    setGuestDropdownOpen(false);
     
     router.back();
   }, [router]);
@@ -258,9 +267,17 @@ export default function CreateListingScreen() {
 
     try {
       if (editId) {
+            const now = new Date();
+            const finalExpiresAt = isTimedListing
+              ? new Date(now.getTime() + Number(listingDurationDays) * 24 * 60 * 60 * 1000).toISOString()
+              : null;
+              
             const putPayload = {
               title, city, district, neighborhood, description, aboutHome: description,
               targetAudience,
+              isTimedListing: Boolean(isTimedListing),
+              listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
+              expiresAt: finalExpiresAt,
               max_stay_days_enabled: maxStayDaysEnabled,
               max_stay_days: maxStayDaysEnabled ? maxStayDays : null,
               max_guest_count_enabled: maxGuestCountEnabled,
@@ -322,6 +339,9 @@ export default function CreateListingScreen() {
           ...basePayload,
           targetAudience,
           createdAt: now.toISOString(),
+          isTimedListing: Boolean(isTimedListing),
+          listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
+          expiresAt: finalExpiresAt,
           max_stay_days_enabled: maxStayDaysEnabled,
           max_stay_days: maxStayDaysEnabled ? maxStayDays : null,
           max_guest_count_enabled: maxGuestCountEnabled,
@@ -511,71 +531,138 @@ export default function CreateListingScreen() {
         <TouchableWithoutFeedback onPress={closeMoreOptions}>
           <Animated.View style={[styles.bottomSheetOverlay, { opacity: overlayAnim }]} />
         </TouchableWithoutFeedback>
-        <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: slideAnim }], maxHeight: '90%' }]}>
           <View style={styles.bottomSheetHandle} />
           <Text style={styles.bottomSheetTitle}>Ek Seçenekler</Text>
           
-          <View style={styles.switchContainer}>
-            <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={styles.switchLabel}>Maks. Konaklama Süresi</Text>
-              <Text style={styles.switchDesc}>Misafirlerin en fazla kaç gün kalabileceğini belirleyin.</Text>
-            </View>
-            <Switch
-              value={maxStayDaysEnabled}
-              onValueChange={setMaxStayDaysEnabled}
-              trackColor={{ false: '#E0E0E0', true: Colors.primary }}
-            />
-          </View>
-
-          {maxStayDaysEnabled && (
-            <View style={styles.durationContainer}>
-              <View style={styles.chipRow}>
-                {[1, 2, 3, 5, 7, 14].map(days => (
-                  <TouchableOpacity
-                    key={days}
-                    style={[styles.chip, maxStayDays === days && styles.chipSelected]}
-                    onPress={() => setMaxStayDays(days)}
-                  >
-                    <Text style={[styles.chipText, maxStayDays === days && styles.chipTextSelected]}>
-                      {days} gün
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <View style={styles.switchContainer}>
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={styles.switchLabel}>Süreli İlan Oluştur</Text>
+                <Text style={styles.switchDesc}>İlanınız belirlediğiniz süre sonunda otomatik kaldırılır.</Text>
               </View>
+              <Switch
+                value={isTimedListing}
+                onValueChange={setIsTimedListing}
+                trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+              />
             </View>
-          )}
 
-          <View style={[styles.groupDivider, { marginVertical: 16 }]} />
-
-          <View style={styles.switchContainer}>
-            <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={styles.switchLabel}>Maks. Misafir Sayısı</Text>
-              <Text style={styles.switchDesc}>Aynı anda en fazla kaç misafir ağırlayabileceğinizi belirleyin.</Text>
-            </View>
-            <Switch
-              value={maxGuestCountEnabled}
-              onValueChange={setMaxGuestCountEnabled}
-              trackColor={{ false: '#E0E0E0', true: Colors.primary }}
-            />
-          </View>
-
-          {maxGuestCountEnabled && (
-            <View style={styles.durationContainer}>
-              <View style={styles.chipRow}>
-                {[1, 2, 3, 4, 5, 10].map(count => (
-                  <TouchableOpacity
-                    key={count}
-                    style={[styles.chip, maxGuestCount === count && styles.chipSelected]}
-                    onPress={() => setMaxGuestCount(count)}
-                  >
-                    <Text style={[styles.chipText, maxGuestCount === count && styles.chipTextSelected]}>
-                      {count} kişi
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            {isTimedListing && (
+              <View style={styles.durationContainer}>
+                <Text style={styles.inputLabel}>İlan kaç gün yayında kalsın?</Text>
+                <View style={styles.chipRow}>
+                  {[1, 2, 3, 5, 7].map(days => (
+                    <TouchableOpacity
+                      key={days}
+                      style={[styles.chip, listingDurationDays === days && styles.chipSelected]}
+                      onPress={() => setListingDurationDays(days)}
+                    >
+                      <Text style={[styles.chipText, listingDurationDays === days && styles.chipTextSelected]}>
+                        {days} gün
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
+            )}
+
+            <View style={[styles.groupDivider, { marginVertical: 16 }]} />
+
+            <View style={styles.switchContainer}>
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={styles.switchLabel}>Maks. Konaklama Süresi</Text>
+                <Text style={styles.switchDesc}>Misafirlerin en fazla kaç gün kalabileceğini belirleyin.</Text>
+              </View>
+              <Switch
+                value={maxStayDaysEnabled}
+                onValueChange={(val) => {
+                  setMaxStayDaysEnabled(val);
+                  if (!val) setStayDropdownOpen(false);
+                }}
+                trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+              />
             </View>
-          )}
+
+            <TouchableOpacity 
+              style={[styles.dropdownButton, !maxStayDaysEnabled && styles.dropdownButtonDisabled]}
+              onPress={() => maxStayDaysEnabled && setStayDropdownOpen(!stayDropdownOpen)}
+              disabled={!maxStayDaysEnabled}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.dropdownButtonText, !maxStayDaysEnabled && styles.dropdownButtonTextDisabled]}>
+                {maxStayDays} gün
+              </Text>
+              <Ionicons name={stayDropdownOpen ? "chevron-up" : "chevron-down"} size={20} color={maxStayDaysEnabled ? Colors.text : Colors.textLight} />
+            </TouchableOpacity>
+
+            {stayDropdownOpen && maxStayDaysEnabled && (
+              <View style={styles.dropdownList}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                  {Array.from({ length: 14 }, (_, i) => i + 1).map(days => (
+                    <TouchableOpacity
+                      key={days}
+                      style={[styles.dropdownItem, maxStayDays === days && styles.dropdownItemSelected]}
+                      onPress={() => { setMaxStayDays(days); setStayDropdownOpen(false); }}
+                    >
+                      <Text style={[styles.dropdownItemText, maxStayDays === days && styles.dropdownItemTextSelected]}>
+                        {days} gün
+                      </Text>
+                      {maxStayDays === days && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={[styles.groupDivider, { marginVertical: 16 }]} />
+
+            <View style={styles.switchContainer}>
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={styles.switchLabel}>Maks. Misafir Sayısı</Text>
+                <Text style={styles.switchDesc}>Aynı anda en fazla kaç misafir ağırlayabileceğinizi belirleyin.</Text>
+              </View>
+              <Switch
+                value={maxGuestCountEnabled}
+                onValueChange={(val) => {
+                  setMaxGuestCountEnabled(val);
+                  if (!val) setGuestDropdownOpen(false);
+                }}
+                trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.dropdownButton, !maxGuestCountEnabled && styles.dropdownButtonDisabled]}
+              onPress={() => maxGuestCountEnabled && setGuestDropdownOpen(!guestDropdownOpen)}
+              disabled={!maxGuestCountEnabled}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.dropdownButtonText, !maxGuestCountEnabled && styles.dropdownButtonTextDisabled]}>
+                {maxGuestCount} kişi
+              </Text>
+              <Ionicons name={guestDropdownOpen ? "chevron-up" : "chevron-down"} size={20} color={maxGuestCountEnabled ? Colors.text : Colors.textLight} />
+            </TouchableOpacity>
+
+            {guestDropdownOpen && maxGuestCountEnabled && (
+              <View style={styles.dropdownList}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(count => (
+                    <TouchableOpacity
+                      key={count}
+                      style={[styles.dropdownItem, maxGuestCount === count && styles.dropdownItemSelected]}
+                      onPress={() => { setMaxGuestCount(count); setGuestDropdownOpen(false); }}
+                    >
+                      <Text style={[styles.dropdownItemText, maxGuestCount === count && styles.dropdownItemTextSelected]}>
+                        {count} kişi
+                      </Text>
+                      {maxGuestCount === count && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </ScrollView>
         </Animated.View>
       </Modal>
 
@@ -933,5 +1020,57 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textLight,
     marginTop: 4,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  dropdownButtonDisabled: {
+    backgroundColor: '#F0F2F5',
+    opacity: 0.7,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  dropdownButtonTextDisabled: {
+    color: Colors.textLight,
+  },
+  dropdownList: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
+  },
+  dropdownItemSelected: {
+    backgroundColor: `${Colors.primary}10`,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: Colors.text,
+  },
+  dropdownItemTextSelected: {
+    color: Colors.primary,
+    fontWeight: '600',
   }
 });
