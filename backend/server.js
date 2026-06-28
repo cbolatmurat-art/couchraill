@@ -73,12 +73,22 @@ app.get('/api/system-settings', async (req, res) => {
   }
 });
 
-app.post('/api/system-settings', async (req, res) => {
+app.get('/api/admin/settings/identity-verification', checkAdminAuth, async (req, res) => {
   try {
-    const { key, value } = req.body;
+    const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
+    const enabled = rows.length > 0 ? rows[0].value : true;
+    res.json({ success: true, identityVerificationEnabled: enabled });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/admin/settings/identity-verification', checkAdminAuth, async (req, res) => {
+  try {
+    const { enabled } = req.body;
     
-    if (key === 'identityVerificationEnabled' && value === true) {
-      // Sadece kapalıdan açığa geçerken bildirim at
+    // Sadece kapalıdan açığa geçerken bildirim at
+    if (enabled === true) {
       const { rows } = await query(`SELECT value FROM system_settings WHERE key = 'identityVerificationEnabled'`);
       const isCurrentlyEnabled = rows.length > 0 && rows[0].value === true;
       
@@ -96,13 +106,14 @@ app.post('/api/system-settings', async (req, res) => {
       INSERT INTO system_settings (key, value, "updatedAt")
       VALUES ($1, $2::jsonb, NOW())
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()
-    `, [key, JSON.stringify(value)]);
+    `, ['identityVerificationEnabled', JSON.stringify(enabled)]);
     
-    io.emit('system_settings_updated', { key, value });
+    io.emit('system_settings_updated', { key: 'identityVerificationEnabled', value: enabled });
     
-    res.json({ success: true });
+    res.json({ success: true, identityVerificationEnabled: enabled });
   } catch (err) {
-    res.json({ success: false, error: err.message });
+    console.error('System settings patch error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -588,20 +588,47 @@ export default function AdminScreen() {
   const handleToggleIdentityVerification = async (enabled: boolean) => {
     if (isIdentityVerificationEnabled === enabled) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/system-settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'identityVerificationEnabled', value: enabled })
+      console.log(`[IDENTITY_SETTING] Request URL: ${API_BASE_URL}/admin/settings/identity-verification`);
+      console.log(`[IDENTITY_SETTING] Method: PATCH`);
+      console.log(`[IDENTITY_SETTING] Payload:`, { enabled });
+
+      const res = await fetch(`${API_BASE_URL}/admin/settings/identity-verification`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken || ''}`
+        },
+        body: JSON.stringify({ enabled })
       });
-      const data = await res.json();
-      if (data.success) {
+      
+      const status = res.status;
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        data = { error: 'Geçersiz yanıt formatı' };
+      }
+
+      console.log(`[IDENTITY_SETTING] Response Status: ${status}`);
+      console.log(`[IDENTITY_SETTING] Response Data:`, data);
+
+      if (res.ok && data.success) {
         setIsIdentityVerificationEnabled(enabled);
         AlertHelper.alert('Başarılı', `Kimlik doğrulama özelliği ${enabled ? 'aktif edildi' : 'gizlendi'}.`);
       } else {
-        AlertHelper.alert('Hata', data.error || 'Ayar güncellenemedi.');
+        if (status === 404) {
+          AlertHelper.alert('Hata', 'Kimlik doğrulama ayar endpointi bulunamadı.');
+        } else if (status === 401 || status === 403) {
+          AlertHelper.alert('Hata', 'Bu işlem için admin yetkisi gerekiyor.');
+        } else if (status >= 500) {
+          AlertHelper.alert('Hata', 'Kimlik doğrulama ayarı güncellenemedi.');
+        } else {
+          AlertHelper.alert('Hata', data.error || 'Ayar güncellenemedi.');
+        }
       }
-    } catch(e) {
-      AlertHelper.alert('Hata', 'Sunucu bağlantı hatası.');
+    } catch(e: any) {
+      console.error(`[IDENTITY_SETTING] Network Error:`, e);
+      AlertHelper.alert('Hata', 'Sunucuya bağlanılamadı.');
     }
   };
 
