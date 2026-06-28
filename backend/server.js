@@ -1361,7 +1361,13 @@ app.get('/api/listings', async (req, res) => {
 
 app.get('/api/listings/my/:userId', async (req, res) => {
   try {
-    const { rows } = await query(`SELECT * FROM listings WHERE "hostId" = $1 AND active = true AND "deletedAt" IS NULL`, [req.params.userId]);
+    const { rows } = await query(`
+      SELECT l.*,
+             COALESCE(CAST((SELECT COUNT(*) FROM listing_interests li WHERE li.listing_id = l.id) AS INTEGER), 0) AS "interestCount"
+      FROM listings l
+      WHERE l."hostId" = $1 AND l.active = true AND l."deletedAt" IS NULL
+      ORDER BY l."createdAt" DESC
+    `, [req.params.userId]);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -1389,6 +1395,10 @@ app.get('/api/feed', async (req, res) => {
         COALESCE(ll.like_count, 0) as "likeCount",
         COALESCE(lc.comment_count, 0) as "commentCount",
         CASE WHEN mll."userId" IS NOT NULL THEN true ELSE false END as "isLikedByMe",
+        COALESCE((SELECT COUNT(*) FROM listing_interests li WHERE li.listing_id = l.id), 0) AS "interestCount",
+        CASE WHEN $1::text IS NOT NULL THEN
+          EXISTS (SELECT 1 FROM listing_interests li WHERE li.listing_id = l.id AND li.user_id = $1)
+        ELSE false END AS "isInterestedByMe",
         u.name as "owner_name", u.username as "owner_username", u."profileImage" as "owner_profileImage", u.city as "owner_city",
         u."identityVerified", u.verified, u."emailVerified", u."phoneVerified", u."userType" as "owner_userType"
       FROM listings l
@@ -1428,6 +1438,8 @@ app.get('/api/feed', async (req, res) => {
         score,
         likeCount: parseInt(item.likeCount),
         commentCount: parseInt(item.commentCount),
+        interestCount: parseInt(item.interestCount || 0),
+        isInterestedByMe: item.isInterestedByMe,
         isLikedByMe: item.isLikedByMe,
         isFollowed,
         // Event-specific fields — expose explicitly so frontend can access
@@ -1782,24 +1794,94 @@ app.get('/api/debug/all-listings', (req, res) => {
 app.get('/api/listings', async (req, res) => {
   try {
     const { userId } = req.query;
-    let listingsQuery = `SELECT * FROM listings WHERE active = true AND "deletedAt" IS NULL`;
+    let listingsQuery = `
+      SELECT l.*,
+             COALESCE(CAST((SELECT COUNT(*) FROM listing_interests li WHERE li.listing_id = l.id) AS INTEGER), 0) AS "interestCount",
+             CASE WHEN $1::text IS NOT NULL THEN
+               EXISTS (SELECT 1 FROM listing_interests li WHERE li.listing_id = l.id AND li.user_id = $1)
+             ELSE false END AS "isInterestedByMe"
+      FROM listings l
+      WHERE l.active = true AND l."deletedAt" IS NULL
+    `;
     
     if (userId) {
       listingsQuery += ` AND (
-        "targetAudience" IS NULL OR "targetAudience" = 'public' 
-        OR "ownerId" = $1 OR "hostId" = $1
-        OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
-      )`;
+        l."targetAudience" IS NULL OR l."targetAudience" = 'public' 
+        OR l."ownerId" = $1 OR l."hostId" = $1
+        OR (l."targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+      ) ORDER BY l."createdAt" DESC`;
       const { rows } = await query(listingsQuery, [userId]);
       res.json(rows);
     } else {
-      listingsQuery += ` AND ("targetAudience" IS NULL OR "targetAudience" = 'public')`;
-      const { rows } = await query(listingsQuery);
+      listingsQuery += ` AND (l."targetAudience" IS NULL OR l."targetAudience" = 'public') ORDER BY l."createdAt" DESC`;
+      const { rows } = await query(listingsQuery, [null]);
       res.json(rows);
     }
   } catch (error) {
     console.error('[GET_ALL_LISTINGS_ERROR]', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/listings/:listingId/interest', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'userId gerekli.' });
+
+    const { rows: listings } = await query('SELECT "hostId", "ownerId" FROM listings WHERE id = $1', [listingId]);
+    if (listings.length === 0) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+    
+    const hostId = listings[0].hostId || listings[0].ownerId;
+    if (hostId === userId) return res.status(400).json({ success: false, error: 'Kendi ilanınızla ilgilenemezsiniz.' });
+
+    const { rows: blocks } = await query(`
+      SELECT 1 FROM blocked_users 
+      WHERE ("blockerId" = $1 AND "blockedId" = $2) OR ("blockerId" = $2 AND "blockedId" = $1)
+    `, [userId, hostId]);
+    if (blocks.length > 0) return res.status(403).json({ success: false, error: 'Bu ilana ilgi bırakamazsınız.' });
+
+    const { rows: existing } = await query('SELECT id FROM listing_interests WHERE listing_id = $1 AND user_id = $2', [listingId, userId]);
+    
+    if (existing.length > 0) {
+      await query('DELETE FROM listing_interests WHERE listing_id = $1 AND user_id = $2', [listingId, userId]);
+      res.json({ success: true, action: 'removed' });
+    } else {
+      const newId = `li${Date.now()}`;
+      await query('INSERT INTO listing_interests (id, listing_id, user_id) VALUES ($1, $2, $3)', [newId, listingId, userId]);
+      res.json({ success: true, action: 'added' });
+    }
+  } catch (error) {
+    console.error('POST listing interest error:', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + error.message });
+  }
+});
+
+app.get('/api/listings/:listingId/interested-users', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const userId = req.query.userId || req.headers['user-id'];
+
+    if (!userId) return res.status(401).json({ success: false, error: 'Giriş gerekli.' });
+
+    const { rows: listings } = await query('SELECT "hostId", "ownerId" FROM listings WHERE id = $1', [listingId]);
+    if (listings.length === 0) return res.status(404).json({ success: false, error: 'İlan bulunamadı.' });
+
+    const hostId = listings[0].hostId || listings[0].ownerId;
+    if (hostId !== userId) return res.status(403).json({ success: false, error: 'Bu listeyi sadece ilan sahibi görebilir.' });
+
+    const { rows: users } = await query(`
+      SELECT u.id, u.name, u.username, u."profileImage"
+      FROM listing_interests li
+      JOIN users u ON li.user_id = u.id
+      WHERE li.listing_id = $1
+      ORDER BY li.created_at DESC
+    `, [listingId]);
+
+    res.json({ success: true, users });
+  } catch (error) {
+    console.error('GET interested users error:', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası: ' + error.message });
   }
 });
 

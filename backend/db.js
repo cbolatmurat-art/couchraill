@@ -545,6 +545,21 @@ const initDB = async () => {
       console.warn('[DB WARNING] accommodation_requests creation failed:', e.message);
     }
 
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS listing_interests (
+          id TEXT PRIMARY KEY,
+          listing_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(listing_id, user_id)
+        )
+      `);
+      console.log('[DB] listing_interests table ensured.');
+    } catch(e) {
+      console.warn('[DB WARNING] listing_interests creation failed:', e.message);
+    }
+
     // Safety ALTER TABLE for existing DB moved outside main try-catch
 
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}

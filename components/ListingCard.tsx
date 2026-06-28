@@ -71,149 +71,112 @@ export const ListingCard = React.memo(({
   const isTimedListing = item.isTimedListing === true || item.isTimedListing === 'true' || Boolean(rawExpiresAt);
   const expiresAt = rawExpiresAt ? new Date(rawExpiresAt).getTime() : null;
 
-  const [requestStatus, setRequestStatus] = useState<string | null>(null);
-  const [loadingRequest, setLoadingRequest] = useState(false);
-  const [requestsList, setRequestsList] = useState<any[]>([]);
-  const [showRequestsModal, setShowRequestsModal] = useState(false);
-  const [loadingRequestsList, setLoadingRequestsList] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [interestCount, setInterestCount] = useState(Number(item.interestCount) || 0);
+  const [isInterestedByMe, setIsInterestedByMe] = useState(Boolean(item.isInterestedByMe));
+  const [isTogglingInterest, setIsTogglingInterest] = useState(false);
+  
+  const [showInterestsModal, setShowInterestsModal] = useState(false);
+  const [interestedUsers, setInterestedUsers] = useState<any[]>([]);
+  const [loadingInterestedUsers, setLoadingInterestedUsers] = useState(false);
+  
   const slideAnim = React.useRef(new Animated.Value(500)).current;
-
-  useEffect(() => {
-    if (showRequestsModal) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 0
-      }).start();
-    } else {
-      slideAnim.setValue(500);
-    }
-  }, [showRequestsModal]);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   const ownerId = item.userId || item.authorId || item.ownerId || item.hostId || (owner && owner.id) || item._id || item.uid;
-  const isOwner = ownerId && currentUserId && String(ownerId) === String(currentUserId);
+  const isOwner = !!currentUserId && !!ownerId && String(ownerId) === String(currentUserId);
 
+  // Sync state if item changes
   useEffect(() => {
-    if (!item.id || !currentUserId) return;
-    if (isOwner) {
-      fetchRequestsList();
-    } else {
-      fetchMyRequest();
+    setInterestCount(Number(item.interestCount) || 0);
+    setIsInterestedByMe(Boolean(item.isInterestedByMe));
+  }, [item.interestCount, item.isInterestedByMe]);
+
+  const openInterestsModal = async () => {
+    if (!isOwner) return;
+    setShowInterestsModal(true);
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 0.25, duration: 180, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+    ]).start();
+    
+    // Fetch users
+    setLoadingInterestedUsers(true);
+    try {
+      const url = `${API_BASE_URL}/listings/${item.id}/interested-users?userId=${currentUserId}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setInterestedUsers(data.users || []);
+        // Update exact count if it drifted
+        setInterestCount(data.users?.length || 0);
+      }
+    } catch (e) {
+      console.error('fetch interested users error:', e);
+    } finally {
+      setLoadingInterestedUsers(false);
     }
-  }, [item.id, currentUserId, isOwner]);
-
-  const fetchMyRequest = async () => {
-    try {
-      const url = `${API_BASE_URL}/listings/${item.id}/my-request?userId=${currentUserId}`;
-      const response = await fetch(url);
-      const text = await response.text();
-      let data = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (e) {
-        console.error('fetchMyRequest non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
-        return;
-      }
-      if (!response.ok) {
-        // Silently return on error
-        return;
-      }
-      if (data && data.success && data.request) {
-        setRequestStatus(data.request.status);
-      }
-    } catch(e) { console.error('fetchMyRequest network error:', e); }
   };
 
-  const fetchRequestsList = async () => {
-    try {
-      if (!isOwner || !currentUserId) return;
-      setLoadingRequestsList(true);
-      const url = `${API_BASE_URL}/listings/${item.id}/requests?userId=${currentUserId}`;
-      const response = await fetch(url);
-      const text = await response.text();
-      let data = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (e) {
-        console.error('fetchRequestsList non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
-        return;
-      }
-      if (!response.ok) {
-        // Silently return on 401/403 to prevent LogBox spam
-        return;
-      }
-      if (data && data.success && data.requests) {
-        setRequestsList(data.requests);
-        setPendingCount(data.requests.filter((r: any) => r.status === 'pending').length);
-      }
-    } catch(e) { console.error('fetchRequestsList network error:', e); } finally { setLoadingRequestsList(false); }
+  const closeInterestsModal = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 500, duration: 150, useNativeDriver: true })
+    ]).start(() => setShowInterestsModal(false));
   };
 
-  const handleApply = async () => {
-    if (loadingRequest) return;
-    setLoadingRequest(true);
+  const handleInterestToggle = async () => {
+    if (!currentUserId) {
+      Alert.alert("Giriş Gerekli", "İlgilendiğinizi belirtmek için giriş yapmalısınız.");
+      return;
+    }
+    if (isOwner) return;
+    if (isTogglingInterest) return;
+
+    // Optimistic UI Update
+    setIsTogglingInterest(true);
+    const newIsInterested = !isInterestedByMe;
+    setIsInterestedByMe(newIsInterested);
+    setInterestCount(prev => newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+
     try {
-      const url = `${API_BASE_URL}/listings/${item.id}/requests`;
+      const url = `${API_BASE_URL}/listings/${item.id}/interest`;
+      console.log('[INTEREST_TOGGLE] Request URL:', url);
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
       });
+      
+      console.log('[INTEREST_TOGGLE] Response status:', response.status);
+      
+      if (response.status === 404) {
+        console.error('[INTEREST_TOGGLE] Endpoint 404 hatası. URL:', url);
+      }
+      
       const text = await response.text();
       let data = null;
       try {
-        data = text ? JSON.parse(text) : null;
+        data = JSON.parse(text);
       } catch (e) {
-        console.error('handleApply non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
-        Alert.alert("Hata", "Sunucudan geçersiz bir cevap alındı.");
-        return;
+        console.error('[INTEREST_TOGGLE] JSON Parse Error. Response Text:', text.slice(0, 300));
+        throw new Error('Sunucudan geçersiz bir cevap alındı.');
       }
-      if (!response.ok) {
-        Alert.alert("Hata", data?.error || "İstek gönderilemedi.");
-        return;
+      
+      if (!response.ok || !data.success) {
+        // Revert optimistic update
+        setIsInterestedByMe(!newIsInterested);
+        setInterestCount(prev => !newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+        Alert.alert("Hata", data?.error || "İşlem başarısız.");
       }
-      if (data && data.success) {
-        Alert.alert("Başarılı", "Konaklama isteği gönderildi.");
-        setRequestStatus('pending');
-      } else {
-        Alert.alert("Hata", data?.error || "İstek gönderilemedi.");
-      }
-    } catch(e) {
-      Alert.alert("Hata", "Bağlantı hatası.");
+    } catch (e) {
+      console.error('[INTEREST_TOGGLE] Fetch Error:', e);
+      // Revert optimistic update
+      setIsInterestedByMe(!newIsInterested);
+      setInterestCount(prev => !newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+      Alert.alert("Hata", e.message || "Bağlantı hatası.");
     } finally {
-      setLoadingRequest(false);
-    }
-  };
-
-  const handleUpdateRequest = async (requestId: string, status: string) => {
-    try {
-      const url = `${API_BASE_URL}/listings/${item.id}/requests/${requestId}/status`;
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, hostId: currentUserId })
-      });
-      const text = await response.text();
-      let data = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (e) {
-        console.error('handleUpdateRequest non-json response:', { url, status: response.status, body: text?.slice(0, 300) });
-        Alert.alert("Hata", "Sunucudan geçersiz bir cevap alındı.");
-        return;
-      }
-      if (!response.ok) {
-        Alert.alert("Hata", data?.error || "İşlem başarısız.");
-        return;
-      }
-      if (data && data.success) {
-        fetchRequestsList();
-      } else {
-        Alert.alert("Hata", data?.error || "İşlem başarısız.");
-      }
-    } catch(e) {
-      Alert.alert("Hata", "Bağlantı hatası.");
+      setIsTogglingInterest(false);
     }
   };
 
@@ -359,11 +322,46 @@ export const ListingCard = React.memo(({
 
           <View style={styles.mobileInfoRowBoxes}>
             {formattedStayDuration ? (
-              <View style={styles.mobileInfoBox}>
-                <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
-                <Text style={styles.mobileInfoLabel}>Müsaitlik</Text>
+              <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                <View>
+                  <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
+                  <Text style={styles.mobileInfoLabel}>Müsaitlik</Text>
+                </View>
+                {!isOwner && (
+                  <TouchableOpacity 
+                    style={[
+                      { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
+                      isInterestedByMe && { backgroundColor: Colors.primary }
+                    ]}
+                    onPress={handleInterestToggle}
+                    disabled={isTogglingInterest || isExpired}
+                  >
+                    <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
+                      {isInterestedByMe ? 'İlgilendin' : 'İlgilen'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            ) : null}
+            ) : (
+              !isOwner && (
+                <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }]}>
+                  <TouchableOpacity 
+                    style={[
+                      { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
+                      isInterestedByMe && { backgroundColor: Colors.primary }
+                    ]}
+                    onPress={handleInterestToggle}
+                    disabled={isTogglingInterest || isExpired}
+                  >
+                    <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
+                      {isInterestedByMe ? 'İlgilendin' : 'İlgilen'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )
+            )}
 
             {isTimedListing && rawExpiresAt ? (
               <View style={styles.mobileInfoBox}>
@@ -406,97 +404,59 @@ export const ListingCard = React.memo(({
         </View>
       )}
 
-      {/* Accommodation Action Button */}
-      <View style={{ marginTop: 16 }}>
-        {isOwner ? (
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: Colors.primary }]}
-            onPress={() => setShowRequestsModal(true)}
-          >
-            <Text style={styles.actionButtonText}>İstekler {pendingCount > 0 ? `(${pendingCount})` : ''}</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity 
-            style={[styles.actionButton, { 
-              backgroundColor: requestStatus === 'pending' ? Colors.warning : 
-                               requestStatus === 'accepted' ? Colors.success : 
-                               Colors.primary 
-            }]}
-            onPress={handleApply}
-            disabled={loadingRequest || requestStatus === 'pending' || requestStatus === 'accepted'}
-          >
-            {loadingRequest ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.actionButtonText}>
-                {requestStatus === 'pending' ? 'Beklemede' : 
-                 requestStatus === 'accepted' ? 'Kabul Edildi' : 
-                 'Uygun'}
+      {/* İlgilenenler Sayaç */}
+      {interestCount > 0 && (
+        <View style={{ marginTop: 16 }}>
+          {isOwner ? (
+            <TouchableOpacity onPress={openInterestsModal}>
+              <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>
+                {interestCount >= 3 ? '3+ kişi ilgileniyor' : `${interestCount} kişi ilgileniyor`}
               </Text>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
+            </TouchableOpacity>
+          ) : (
+            <Text style={{ fontSize: 14, color: Colors.textLight, fontWeight: '500' }}>
+              1+ kişi ilgileniyor
+            </Text>
+          )}
+        </View>
+      )}
 
-      {/* Requests Modal for Owner */}
-      <Modal visible={showRequestsModal} animationType="fade" transparent={true} onRequestClose={() => setShowRequestsModal(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowRequestsModal(false)} />
+      {/* Interests Modal for Owner */}
+      <Modal visible={showInterestsModal} animationType="none" statusBarTranslucent={true} transparent={true} onRequestClose={closeInterestsModal}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: fadeAnim }]} pointerEvents="none" />
+        <View style={[styles.modalOverlay, { backgroundColor: 'transparent' }]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeInterestsModal} />
           <Animated.View style={[styles.modalContainer, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Konaklama İstekleri</Text>
-              <TouchableOpacity onPress={() => setShowRequestsModal(false)}>
+              <Text style={styles.modalTitle}>İlgilenenler</Text>
+              <TouchableOpacity onPress={closeInterestsModal}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
             
-            {loadingRequestsList ? (
+            {loadingInterestedUsers ? (
               <ActivityIndicator style={{ padding: 40 }} color={Colors.primary} />
-            ) : requestsList.length === 0 ? (
-              <Text style={{ textAlign: 'center', padding: 40, color: Colors.textLight }}>Henüz istek yok.</Text>
+            ) : interestedUsers.length === 0 ? (
+              <Text style={{ textAlign: 'center', padding: 40, color: Colors.textLight }}>Henüz ilgilenen yok.</Text>
             ) : (
               <FlatList
-                data={requestsList}
-                keyExtractor={(r) => r.id}
-                renderItem={({ item: req }) => (
+                data={interestedUsers}
+                keyExtractor={(u) => u.id}
+                renderItem={({ item: u }) => (
                   <View style={styles.requestRow}>
-                    <TouchableOpacity onPress={() => { setShowRequestsModal(false); onProfilePress(req.requester_id); }} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      {req.profileImage ? (
-                        <Image source={{ uri: req.profileImage }} style={styles.reqAvatar} />
+                    <TouchableOpacity onPress={() => { closeInterestsModal(); onProfilePress(u.id); }} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      {u.profileImage ? (
+                        <Image source={{ uri: u.profileImage }} style={styles.reqAvatar} />
                       ) : (
                         <View style={styles.reqAvatarPlaceholder}>
-                          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{req.name?.charAt(0) || '?'}</Text>
+                          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{u.name?.charAt(0) || '?'}</Text>
                         </View>
                       )}
                       <View style={{ marginLeft: 12, flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={styles.reqName} numberOfLines={1}>{req.name}</Text>
-                          {req.isFullyVerified || req.identityVerified ? <Ionicons name="checkmark-circle" size={14} color="#1DA1F2" style={{ marginLeft: 4 }} /> : null}
-                        </View>
-                        <Text style={styles.reqUsername}>@{req.username}</Text>
+                        <Text style={styles.reqName} numberOfLines={1}>{u.name}</Text>
+                        <Text style={styles.reqUsername}>@{u.username}</Text>
                       </View>
                     </TouchableOpacity>
-
-                    {req.status === 'pending' ? (
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity 
-                          style={[styles.reqBtn, { backgroundColor: Colors.danger }]}
-                          onPress={() => handleUpdateRequest(req.id, 'rejected')}
-                        >
-                          <Text style={styles.reqBtnText}>Reddet</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.reqBtn, { backgroundColor: Colors.success }]}
-                          onPress={() => handleUpdateRequest(req.id, 'accepted')}
-                        >
-                          <Text style={styles.reqBtnText}>Kabul Et</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <Text style={{ fontWeight: '600', color: req.status === 'accepted' ? Colors.success : Colors.danger }}>
-                        {req.status === 'accepted' ? 'Kabul edildi' : 'Reddedildi'}
-                      </Text>
-                    )}
                   </View>
                 )}
               />
