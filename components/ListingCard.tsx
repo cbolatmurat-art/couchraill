@@ -356,18 +356,15 @@ export const ListingCard = React.memo(({
               </View>
             ) : <View style={{ flex: 1 }} />}
 
-            {!isOwner && (
+            {!isOwner && !isInterestedByMe && (
               <TouchableOpacity 
-                style={[
-                  { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
-                  isInterestedByMe && { backgroundColor: Colors.primary }
-                ]}
+                style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' }}
                 onPress={handleInterestToggle}
                 disabled={isTogglingInterest || isExpired}
               >
-                <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
-                <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                  {isInterestedByMe ? '✓ İlgileniyorsun' : 'İlgileniyorum'}
+                <Ionicons name="star-outline" size={14} color={Colors.primary} style={{ marginRight: 4 }} />
+                <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '600' }}>
+                  İlgileniyorum
                 </Text>
               </TouchableOpacity>
             )}
