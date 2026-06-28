@@ -275,6 +275,9 @@ export const ListingCard = React.memo(({
 
   const timeStr = getRelativeTime(item.createdAt);
 
+  const hasMaxStay = item.max_stay_days_enabled === true || item.max_stay_days_enabled === 'true';
+  const hasMaxGuest = item.max_guest_count_enabled === true || item.max_guest_count_enabled === 'true';
+
   const rawStayDuration =
     item.guestStayDuration ||
     item.stayDuration ||
@@ -282,12 +285,16 @@ export const ListingCard = React.memo(({
     item.misafirSuresi ||
     item.daysCanHost;
 
-  console.log("CARD_GUEST_STAY_DURATION:", rawStayDuration);
-
-  const formattedStayDuration = rawStayDuration
-    ? String(rawStayDuration).toLowerCase().includes("gün")
-      ? String(rawStayDuration).replace(/gün/i, 'Gün')
-      : `${rawStayDuration} Gün`
+  const formattedStayDuration = hasMaxStay && item.max_stay_days 
+    ? `${item.max_stay_days} Gün`
+    : rawStayDuration
+      ? String(rawStayDuration).toLowerCase().includes("gün")
+        ? String(rawStayDuration).replace(/gün/i, 'Gün')
+        : `${rawStayDuration} Gün`
+      : null;
+      
+  const formattedGuestCount = hasMaxGuest && item.max_guest_count
+    ? `${item.max_guest_count} Misafir`
     : null;
 
   return (
@@ -349,11 +356,35 @@ export const ListingCard = React.memo(({
           ) : null}
 
           <View style={styles.mobileInfoRowBoxes}>
-            {formattedStayDuration ? (
+            {formattedStayDuration && (
               <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
                 <View>
                   <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
-                  <Text style={styles.mobileInfoLabel}>Müsaitlik</Text>
+                  <Text style={styles.mobileInfoLabel}>Konaklama Süresi</Text>
+                </View>
+                {!isOwner && !formattedGuestCount && (
+                  <TouchableOpacity 
+                    style={[
+                      { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
+                      isInterestedByMe && { backgroundColor: Colors.primary }
+                    ]}
+                    onPress={handleInterestToggle}
+                    disabled={isTogglingInterest || isExpired}
+                  >
+                    <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
+                      {isInterestedByMe ? 'İlgilendin' : 'Uygun'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {formattedGuestCount && (
+              <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                <View>
+                  <Text style={styles.mobileInfoValue} numberOfLines={1}>👥 {formattedGuestCount}</Text>
+                  <Text style={styles.mobileInfoLabel}>Misafir Sayısı</Text>
                 </View>
                 {!isOwner && (
                   <TouchableOpacity 
@@ -366,29 +397,30 @@ export const ListingCard = React.memo(({
                   >
                     <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
                     <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                      {isInterestedByMe ? 'İlgilendin' : 'İlgilen'}
+                      {isInterestedByMe ? 'İlgilendin' : 'Uygun'}
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
-            ) : (
-              !isOwner && (
-                <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }]}>
-                  <TouchableOpacity 
-                    style={[
-                      { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
-                      isInterestedByMe && { backgroundColor: Colors.primary }
-                    ]}
-                    onPress={handleInterestToggle}
-                    disabled={isTogglingInterest || isExpired}
-                  >
-                    <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                      {isInterestedByMe ? 'İlgilendin' : 'İlgilen'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )
+            )}
+
+            {/* If neither limit is set, still show interest button in a generic box */}
+            {!formattedStayDuration && !formattedGuestCount && !isOwner && (
+              <View style={[styles.mobileInfoBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }]}>
+                <TouchableOpacity 
+                  style={[
+                    { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' },
+                    isInterestedByMe && { backgroundColor: Colors.primary }
+                  ]}
+                  onPress={handleInterestToggle}
+                  disabled={isTogglingInterest || isExpired}
+                >
+                  <Ionicons name={isInterestedByMe ? "checkmark" : "star-outline"} size={14} color={isInterestedByMe ? "#FFF" : Colors.primary} style={{ marginRight: 4 }} />
+                  <Text style={{ color: isInterestedByMe ? '#FFF' : Colors.primary, fontSize: 13, fontWeight: '600' }}>
+                    {isInterestedByMe ? 'İlgilendin' : 'Uygun'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             {isTimedListing && rawExpiresAt ? (

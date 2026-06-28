@@ -1928,7 +1928,7 @@ app.get('/api/listings/:listingId/interested-users', async (req, res) => {
 
 app.post('/api/listings', async (req, res) => {
   try {
-    const { hostId, userId, userName, userEmail, userPhone, city, district, neighborhood, location, title, description, price, availableFrom, availableTo, images, guestStayDuration, isTimedListing, listingDurationDays, expiresAt, type, targetAudience } = req.body;
+    const { hostId, userId, userName, userEmail, userPhone, city, district, neighborhood, location, title, description, price, availableFrom, availableTo, images, guestStayDuration, isTimedListing, listingDurationDays, expiresAt, type, targetAudience, max_stay_days_enabled, max_stay_days, max_guest_count_enabled, max_guest_count } = req.body;
     
     console.log("CREATE_LISTING_BODY", req.body);
     
@@ -1947,16 +1947,20 @@ app.post('/api/listings', async (req, res) => {
       INSERT INTO listings (
         id, "hostId", "ownerId", type, title, description, city, district, neighborhood, location,
         images, "guestStayDuration", "isTimedListing", "listingDurationDays", "expiresAt",
-        "createdAt", active, status, "ownerName", "userName", "targetAudience"
+        "createdAt", active, status, "ownerName", "userName", "targetAudience",
+        max_stay_days_enabled, max_stay_days, max_guest_count_enabled, max_guest_count
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21
+        $16, $17, $18, $19, $20, $21,
+        $22, $23, $24, $25
       ) RETURNING *
     `, [
       newListingId, ownerId, ownerId, finalType, title, description, city, district, neighborhood || '', location || district || '',
       JSON.stringify(images || []), guestStayDuration || '', Boolean(isTimedListing), isTimedListing ? Number(listingDurationDays) : null, finalExpiresAt,
-      now, true, 'active', userName || null, userName || null, finalTargetAudience
+      now, true, 'active', userName || null, userName || null, finalTargetAudience,
+      Boolean(max_stay_days_enabled), max_stay_days ? Number(max_stay_days) : null,
+      Boolean(max_guest_count_enabled), max_guest_count ? Number(max_guest_count) : null
     ]);
 
     const newListing = rows[0];

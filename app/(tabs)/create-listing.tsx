@@ -28,11 +28,15 @@ export default function CreateListingScreen() {
   const [city, setCity] = useState(params.city as string || currentUser.city || '');
   const [district, setDistrict] = useState(params.district as string || '');
   const [neighborhood, setNeighborhood] = useState(params.neighborhood as string || '');
-  const [guestStayDuration, setGuestStayDuration] = useState(params.guestStayDuration as string || '');
   const [description, setDescription] = useState(params.description as string || '');
   const [targetAudience, setTargetAudience] = useState<'public' | 'verified_only'>((params.targetAudience as any) || 'public');
-  const [isTimedListing, setIsTimedListing] = useState(params.isTimedListing === 'true' || false);
-  const [listingDurationDays, setListingDurationDays] = useState(params.listingDurationDays ? Number(params.listingDurationDays) : 3);
+  
+  const [maxStayDaysEnabled, setMaxStayDaysEnabled] = useState(params.max_stay_days_enabled === 'true' || false);
+  const [maxStayDays, setMaxStayDays] = useState(params.max_stay_days ? Number(params.max_stay_days) : 3);
+  
+  const [maxGuestCountEnabled, setMaxGuestCountEnabled] = useState(params.max_guest_count_enabled === 'true' || false);
+  const [maxGuestCount, setMaxGuestCount] = useState(params.max_guest_count ? Number(params.max_guest_count) : 2);
+  
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
   React.useEffect(() => {
@@ -118,10 +122,11 @@ export default function CreateListingScreen() {
     setCity('');
     setDistrict('');
     setNeighborhood('');
-    setGuestStayDuration('');
     setDescription('');
-    setIsTimedListing(false);
-    setListingDurationDays(3);
+    setMaxStayDaysEnabled(false);
+    setMaxStayDays(3);
+    setMaxGuestCountEnabled(false);
+    setMaxGuestCount(2);
     setTargetAudience('public');
     
     router.back();
@@ -195,15 +200,15 @@ export default function CreateListingScreen() {
   const openLocationModal = () => {
     setLocationModalVisible(true);
     Animated.parallel([
-      Animated.timing(locOverlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.spring(locSlideAnim, { toValue: 0, tension: 65, friction: 10, useNativeDriver: true })
+      Animated.timing(locOverlayAnim, { toValue: 0.25, duration: 180, useNativeDriver: true }),
+      Animated.timing(locSlideAnim, { toValue: 0, duration: 200, useNativeDriver: true })
     ]).start();
   };
 
   const closeLocationModal = () => {
     Animated.parallel([
-      Animated.timing(locOverlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(locSlideAnim, { toValue: 500, duration: 200, useNativeDriver: true })
+      Animated.timing(locOverlayAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(locSlideAnim, { toValue: 500, duration: 150, useNativeDriver: true })
     ]).start(() => setLocationModalVisible(false));
   };
 
@@ -244,7 +249,7 @@ export default function CreateListingScreen() {
 
   const handleSubmit = async () => {
     setErrorMsg('');
-    if (!title || !city || !description || !guestStayDuration) {
+    if (!title || !city || !description) {
       setErrorMsg('Lütfen tüm zorunlu alanları doldurun.');
       return;
     }
@@ -253,17 +258,13 @@ export default function CreateListingScreen() {
 
     try {
       if (editId) {
-            const now = new Date();
-            const finalExpiresAt = isTimedListing
-              ? new Date(now.getTime() + Number(listingDurationDays) * 24 * 60 * 60 * 1000).toISOString()
-              : null;
-              
             const putPayload = {
-              title, city, district, neighborhood, description, aboutHome: description, guestStayDuration,
-              isTimedListing: Boolean(isTimedListing),
-              listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
-              expiresAt: finalExpiresAt,
-              targetAudience
+              title, city, district, neighborhood, description, aboutHome: description,
+              targetAudience,
+              max_stay_days_enabled: maxStayDaysEnabled,
+              max_stay_days: maxStayDaysEnabled ? maxStayDays : null,
+              max_guest_count_enabled: maxGuestCountEnabled,
+              max_guest_count: maxGuestCountEnabled ? maxGuestCount : null
             };
             
             const response = await fetch(`${API_BASE_URL}/posts/${editId}`, {
@@ -306,7 +307,6 @@ export default function CreateListingScreen() {
           neighborhood,
           description,
           aboutHome: description,
-          guestStayDuration,
           userId: currentUser?.id || currentUser?._id,
           ownerId: currentUser?.id || currentUser?._id,
           hostId: currentUser?.id || currentUser?._id,
@@ -320,11 +320,12 @@ export default function CreateListingScreen() {
 
         const listingData = {
           ...basePayload,
-          isTimedListing: Boolean(isTimedListing),
-          listingDurationDays: isTimedListing ? Number(listingDurationDays) : null,
-          expiresAt: finalExpiresAt,
           targetAudience,
-          createdAt: now.toISOString()
+          createdAt: now.toISOString(),
+          max_stay_days_enabled: maxStayDaysEnabled,
+          max_stay_days: maxStayDaysEnabled ? maxStayDays : null,
+          max_guest_count_enabled: maxGuestCountEnabled,
+          max_guest_count: maxGuestCountEnabled ? maxGuestCount : null
         };
 
         console.log("FINAL_LISTING_BEFORE_SAVE", listingData);
@@ -431,19 +432,7 @@ export default function CreateListingScreen() {
           <View style={styles.groupDivider} />
 
           <View style={styles.rowInputs}>
-            <View style={styles.flexHalf}>
-              <Text style={styles.groupLabel}>Kaç Gün Misafir Edebilirsin?</Text>
-              <TextInput
-                style={styles.groupInput}
-                placeholder="Örn: 1-3 gün"
-                value={guestStayDuration}
-                onChangeText={(text) => setGuestStayDuration(text.replace(/[^0-9]/g, ''))}
-                keyboardType="numeric"
-                placeholderTextColor={Colors.textLight}
-              />
-            </View>
-            <View style={styles.flexDivider} />
-            <View style={styles.flexHalf}>
+            <View style={{flex: 1}}>
               <Text style={styles.groupLabel}>🎯 Hedef Kitle</Text>
               <TouchableOpacity style={styles.targetAudienceSelector} onPress={openAudienceModal}>
                 <Text style={styles.targetAudienceText} numberOfLines={1}>
@@ -460,26 +449,27 @@ export default function CreateListingScreen() {
             <Button 
               title={isSubmitting ? "Kaydediliyor..." : (editId ? "İlanı Güncelle" : "İlanı Yayınla")} 
               onPress={handleSubmit} 
-              disabled={isSubmitting || !title || !city || !description || !guestStayDuration}
+              disabled={isSubmitting || !title || !city || !description}
             />
           </View>
           <TouchableOpacity 
             style={[
               styles.plusButton, 
-              (isSubmitting || !title || !city || !description || !guestStayDuration) && { opacity: 0.5 }
+              (isSubmitting || !title || !city || !description) && { opacity: 0.5 }
             ]} 
             onPress={openMoreOptions}
-            disabled={isSubmitting || !title || !city || !description || !guestStayDuration}
+            disabled={isSubmitting || !title || !city || !description}
           >
             <Ionicons name="add" size={28} color="#FFF" />
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      <Modal visible={isLocationModalVisible} transparent={true} animationType="none" onRequestClose={closeLocationModal}>
-        <TouchableWithoutFeedback onPress={closeLocationModal}>
-          <Animated.View style={[styles.bottomSheetOverlay, { opacity: locOverlayAnim }]} />
-        </TouchableWithoutFeedback>
+      <Modal visible={isLocationModalVisible} transparent={true} animationType="none" statusBarTranslucent={true} onRequestClose={closeLocationModal}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: locOverlayAnim }]} pointerEvents="none" />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'transparent' }]}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeLocationModal} />
+        </View>
         <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: locSlideAnim }] }]}>
           <View style={styles.bottomSheetHandle} />
           <Text style={styles.bottomSheetTitle}>Konum Seçimi</Text>
@@ -527,28 +517,59 @@ export default function CreateListingScreen() {
           
           <View style={styles.switchContainer}>
             <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={styles.switchLabel}>Süreli İlan Oluştur</Text>
-              <Text style={styles.switchDesc}>İlanınız belirlediğiniz süre sonunda otomatik kaldırılır.</Text>
+              <Text style={styles.switchLabel}>Maks. Konaklama Süresi</Text>
+              <Text style={styles.switchDesc}>Misafirlerin en fazla kaç gün kalabileceğini belirleyin.</Text>
             </View>
             <Switch
-              value={isTimedListing}
-              onValueChange={setIsTimedListing}
+              value={maxStayDaysEnabled}
+              onValueChange={setMaxStayDaysEnabled}
               trackColor={{ false: '#E0E0E0', true: Colors.primary }}
             />
           </View>
 
-          {isTimedListing && (
+          {maxStayDaysEnabled && (
             <View style={styles.durationContainer}>
-              <Text style={styles.inputLabel}>İlan kaç gün yayında kalsın?</Text>
               <View style={styles.chipRow}>
-                {[1, 2, 3, 5, 7].map(days => (
+                {[1, 2, 3, 5, 7, 14].map(days => (
                   <TouchableOpacity
                     key={days}
-                    style={[styles.chip, listingDurationDays === days && styles.chipSelected]}
-                    onPress={() => setListingDurationDays(days)}
+                    style={[styles.chip, maxStayDays === days && styles.chipSelected]}
+                    onPress={() => setMaxStayDays(days)}
                   >
-                    <Text style={[styles.chipText, listingDurationDays === days && styles.chipTextSelected]}>
+                    <Text style={[styles.chipText, maxStayDays === days && styles.chipTextSelected]}>
                       {days} gün
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          <View style={[styles.groupDivider, { marginVertical: 16 }]} />
+
+          <View style={styles.switchContainer}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+              <Text style={styles.switchLabel}>Maks. Misafir Sayısı</Text>
+              <Text style={styles.switchDesc}>Aynı anda en fazla kaç misafir ağırlayabileceğinizi belirleyin.</Text>
+            </View>
+            <Switch
+              value={maxGuestCountEnabled}
+              onValueChange={setMaxGuestCountEnabled}
+              trackColor={{ false: '#E0E0E0', true: Colors.primary }}
+            />
+          </View>
+
+          {maxGuestCountEnabled && (
+            <View style={styles.durationContainer}>
+              <View style={styles.chipRow}>
+                {[1, 2, 3, 4, 5, 10].map(count => (
+                  <TouchableOpacity
+                    key={count}
+                    style={[styles.chip, maxGuestCount === count && styles.chipSelected]}
+                    onPress={() => setMaxGuestCount(count)}
+                  >
+                    <Text style={[styles.chipText, maxGuestCount === count && styles.chipTextSelected]}>
+                      {count} kişi
                     </Text>
                   </TouchableOpacity>
                 ))}
