@@ -73,6 +73,7 @@ export const ListingCard = React.memo(({
 
   const [interestCount, setInterestCount] = useState(Number(item.interestCount) || 0);
   const [isInterestedByMe, setIsInterestedByMe] = useState(Boolean(item.isInterestedByMe));
+  const [interestedPreviewUsers, setInterestedPreviewUsers] = useState<any[]>(item.interestedPreviewUsers || []);
   const [isTogglingInterest, setIsTogglingInterest] = useState(false);
   
   const [showInterestsModal, setShowInterestsModal] = useState(false);
@@ -89,7 +90,8 @@ export const ListingCard = React.memo(({
   useEffect(() => {
     setInterestCount(Number(item.interestCount) || 0);
     setIsInterestedByMe(Boolean(item.isInterestedByMe));
-  }, [item.interestCount, item.isInterestedByMe]);
+    setInterestedPreviewUsers(item.interestedPreviewUsers || []);
+  }, [item.interestCount, item.isInterestedByMe, item.interestedPreviewUsers]);
 
   const openInterestsModal = async () => {
     if (!isOwner) return;
@@ -137,6 +139,16 @@ export const ListingCard = React.memo(({
     const newIsInterested = !isInterestedByMe;
     setIsInterestedByMe(newIsInterested);
     setInterestCount(prev => newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+    
+    setInterestedPreviewUsers(prev => {
+      if (newIsInterested) {
+        // Optimistic preview user for "Siz"
+        const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
+        return [newUser, ...prev].slice(0, 3);
+      } else {
+        return prev.filter(u => u.id !== currentUserId);
+      }
+    });
 
     try {
       const url = `${API_BASE_URL}/listings/${item.id}/interest`;
@@ -167,6 +179,14 @@ export const ListingCard = React.memo(({
         // Revert optimistic update
         setIsInterestedByMe(!newIsInterested);
         setInterestCount(prev => !newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+        setInterestedPreviewUsers(prev => {
+          if (!newIsInterested) {
+            const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
+            return [newUser, ...prev].slice(0, 3);
+          } else {
+            return prev.filter(u => u.id !== currentUserId);
+          }
+        });
         Alert.alert("Hata", data?.error || "İşlem başarısız.");
       }
     } catch (e) {
@@ -174,6 +194,14 @@ export const ListingCard = React.memo(({
       // Revert optimistic update
       setIsInterestedByMe(!newIsInterested);
       setInterestCount(prev => !newIsInterested ? prev + 1 : Math.max(0, prev - 1));
+      setInterestedPreviewUsers(prev => {
+        if (!newIsInterested) {
+          const newUser = { id: currentUserId, name: 'Siz', profileImage: null, username: 'siz' };
+          return [newUser, ...prev].slice(0, 3);
+        } else {
+          return prev.filter(u => u.id !== currentUserId);
+        }
+      });
       Alert.alert("Hata", e.message || "Bağlantı hatası.");
     } finally {
       setIsTogglingInterest(false);
@@ -406,7 +434,25 @@ export const ListingCard = React.memo(({
 
       {/* İlgilenenler Sayaç */}
       {interestCount > 0 && (
-        <View style={{ marginTop: 16 }}>
+        <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center' }}>
+          {/* Avatarlar */}
+          {interestedPreviewUsers.length > 0 && (
+            <View style={{ flexDirection: 'row', marginRight: 8 }}>
+              {interestedPreviewUsers.map((u, index) => (
+                <View key={u.id || index} style={[styles.previewAvatarContainer, { marginLeft: index > 0 ? -10 : 0, zIndex: 3 - index }]}>
+                  {u.profileImage ? (
+                    <Image source={{ uri: u.profileImage }} style={styles.previewAvatar} />
+                  ) : (
+                    <View style={styles.previewAvatarPlaceholder}>
+                      <Text style={styles.previewAvatarText}>{u.name?.charAt(0) || '?'}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Sayaç */}
           {isOwner ? (
             <TouchableOpacity onPress={openInterestsModal}>
               <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>
@@ -415,7 +461,7 @@ export const ListingCard = React.memo(({
             </TouchableOpacity>
           ) : (
             <Text style={{ fontSize: 14, color: Colors.textLight, fontWeight: '500' }}>
-              1+ kişi ilgileniyor
+              {interestCount >= 3 ? '3+ kişi ilgileniyor' : `${interestCount}+ kişi ilgileniyor`}
             </Text>
           )}
         </View>
@@ -443,21 +489,21 @@ export const ListingCard = React.memo(({
                 data={interestedUsers}
                 keyExtractor={(u) => u.id}
                 renderItem={({ item: u }) => (
-                  <View style={styles.requestRow}>
-                    <TouchableOpacity onPress={() => { closeInterestsModal(); onProfilePress(u.id); }} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      {u.profileImage ? (
-                        <Image source={{ uri: u.profileImage }} style={styles.reqAvatar} />
-                      ) : (
-                        <View style={styles.reqAvatarPlaceholder}>
-                          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{u.name?.charAt(0) || '?'}</Text>
-                        </View>
-                      )}
-                      <View style={{ marginLeft: 12, flex: 1 }}>
-                        <Text style={styles.reqName} numberOfLines={1}>{u.name}</Text>
-                        <Text style={styles.reqUsername}>@{u.username}</Text>
+                <View style={styles.requestRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    {u.profileImage ? (
+                      <Image source={{ uri: u.profileImage }} style={styles.reqAvatar} />
+                    ) : (
+                      <View style={styles.reqAvatarPlaceholder}>
+                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{u.name?.charAt(0) || '?'}</Text>
                       </View>
-                    </TouchableOpacity>
+                    )}
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={styles.reqName} numberOfLines={1}>{u.name}</Text>
+                      <Text style={styles.reqUsername}>@{u.username}</Text>
+                    </View>
                   </View>
+                </View>
                 )}
               />
             )}
@@ -524,5 +570,9 @@ const styles = StyleSheet.create({
   reqName: { fontSize: 15, fontWeight: '600', color: Colors.text },
   reqUsername: { fontSize: 13, color: Colors.textLight },
   reqBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  reqBtnText: { color: '#FFF', fontSize: 13, fontWeight: '600' }
+  reqBtnText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  previewAvatarContainer: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#FFF', backgroundColor: '#FFF' },
+  previewAvatar: { width: '100%', height: '100%', borderRadius: 12 },
+  previewAvatarPlaceholder: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  previewAvatarText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' }
 });

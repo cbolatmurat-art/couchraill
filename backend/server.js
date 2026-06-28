@@ -1336,6 +1336,41 @@ const isRealItem = (db, item, type) => {
   return true;
 };
 
+const attachInterestedPreviewUsers = async (listingsList) => {
+  if (!listingsList || listingsList.length === 0) return listingsList;
+  try {
+    const ids = listingsList.map(l => l.id);
+    const { rows: interests } = await query(`
+      SELECT li.listing_id, u.id, u.name, u."profileImage", u.username, li.created_at
+      FROM listing_interests li
+      JOIN users u ON u.id = li.user_id
+      WHERE li.listing_id = ANY($1::text[])
+      ORDER BY li.created_at DESC
+    `, [ids]);
+    
+    const interestMap = {};
+    for (const row of interests) {
+      if (!interestMap[row.listing_id]) interestMap[row.listing_id] = [];
+      if (interestMap[row.listing_id].length < 3) {
+        interestMap[row.listing_id].push({
+          id: row.id,
+          name: row.name,
+          profileImage: row.profileImage,
+          username: row.username
+        });
+      }
+    }
+    
+    return listingsList.map(l => ({
+      ...l,
+      interestedPreviewUsers: interestMap[l.id] || []
+    }));
+  } catch(e) {
+    console.error('attachInterestedPreviewUsers error:', e);
+    return listingsList;
+  }
+};
+
 app.get('/api/listings', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -1348,11 +1383,13 @@ app.get('/api/listings', async (req, res) => {
         OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
       )`;
       const { rows } = await query(listingsQuery, [userId]);
-      res.json(rows);
+      const withPreviews = await attachInterestedPreviewUsers(rows);
+      res.json(withPreviews);
     } else {
       listingsQuery += ` AND ("targetAudience" IS NULL OR "targetAudience" = 'public')`;
       const { rows } = await query(listingsQuery);
-      res.json(rows);
+      const withPreviews = await attachInterestedPreviewUsers(rows);
+      res.json(withPreviews);
     }
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -1368,7 +1405,8 @@ app.get('/api/listings/my/:userId', async (req, res) => {
       WHERE l."hostId" = $1 AND l.active = true AND l."deletedAt" IS NULL
       ORDER BY l."createdAt" DESC
     `, [req.params.userId]);
-    res.json(rows);
+    const withPreviews = await attachInterestedPreviewUsers(rows);
+    res.json(withPreviews);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -1466,7 +1504,8 @@ app.get('/api/feed', async (req, res) => {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
-    res.json({ success: true, isFollowingAnyone: followingIds.length > 0, items: populatedFeed });
+    const feedWithPreviews = await attachInterestedPreviewUsers(populatedFeed);
+    res.json({ success: true, isFollowingAnyone: followingIds.length > 0, items: feedWithPreviews });
   } catch (err) {
     console.error('[FEED_ERROR]', err);
     res.status(500).json({ success: false, error: 'Sunucu hatası.', debug: err.message, detail: err.detail || null });
@@ -1811,11 +1850,13 @@ app.get('/api/listings', async (req, res) => {
         OR (l."targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
       ) ORDER BY l."createdAt" DESC`;
       const { rows } = await query(listingsQuery, [userId]);
-      res.json(rows);
+      const withPreviews = await attachInterestedPreviewUsers(rows);
+      res.json(withPreviews);
     } else {
       listingsQuery += ` AND (l."targetAudience" IS NULL OR l."targetAudience" = 'public') ORDER BY l."createdAt" DESC`;
       const { rows } = await query(listingsQuery, [null]);
-      res.json(rows);
+      const withPreviews = await attachInterestedPreviewUsers(rows);
+      res.json(withPreviews);
     }
   } catch (error) {
     console.error('[GET_ALL_LISTINGS_ERROR]', error);
