@@ -298,7 +298,7 @@ export const ListingCard = React.memo(({
     : null;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, openMenuId === item.id && { zIndex: 5000, elevation: 10 }]}>
       <View style={styles.cardHeader}>
         <TouchableOpacity onPress={() => onProfilePress(owner.id || item.hostId || item.ownerId || item.userId)} style={styles.ownerInfo}>
           {ownerAvatar ? (
@@ -445,6 +445,22 @@ export const ListingCard = React.memo(({
 
 
       {openMenuId === item.id && (
+        <Pressable
+          style={{
+            position: 'absolute',
+            top: -3000,
+            bottom: -3000,
+            left: -3000,
+            right: -3000,
+            zIndex: 998,
+            elevation: 8,
+            backgroundColor: 'rgba(0,0,0,0.02)'
+          }}
+          onPress={() => setOpenMenuId && setOpenMenuId(null)}
+        />
+      )}
+
+      {openMenuId === item.id && (
         <View style={styles.dropdownMenu}>
           {isOwner && onEditPress && (
             <TouchableOpacity style={styles.dropdownItem} onPress={() => { setOpenMenuId && setOpenMenuId(null); onEditPress(item); }}>
@@ -586,8 +602,7 @@ const styles = StyleSheet.create({
   mobileInfoText: { justifyContent: 'center' },
   mobileInfoValue: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 4 },
   mobileInfoLabel: { fontSize: 12, color: Colors.textLight },
-  dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
-  dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
+  dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#FFF', borderRadius: 8, paddingVertical: 4, minWidth: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 9, borderWidth: 1, borderColor: Colors.border, zIndex: 999 },
   dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
   dropdownItemText: { fontSize: 15, fontWeight: '500', color: Colors.text },
   actionButton: { paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
