@@ -29,7 +29,7 @@ export default function CreateListingScreen() {
   const [district, setDistrict] = useState(params.district as string || '');
   const [neighborhood, setNeighborhood] = useState(params.neighborhood as string || '');
   const [description, setDescription] = useState(params.description as string || '');
-  const [targetAudience, setTargetAudience] = useState<'public' | 'verified_only'>((params.targetAudience as any) || 'public');
+  const [targetAudience, setTargetAudience] = useState<'public' | 'verified_only' | 'friends_only'>((params.targetAudience as any) || 'public');
   
   const [maxStayDaysEnabled, setMaxStayDaysEnabled] = useState(params.max_stay_days_enabled === 'true' || false);
   const [maxStayDays, setMaxStayDays] = useState(params.max_stay_days ? Number(params.max_stay_days) : 3);
@@ -458,7 +458,7 @@ export default function CreateListingScreen() {
               <Text style={styles.groupLabel}>🎯 Hedef Kitle</Text>
               <TouchableOpacity style={styles.targetAudienceSelector} onPress={openAudienceModal}>
                 <Text style={styles.targetAudienceText} numberOfLines={1}>
-                  {targetAudience === 'verified_only' ? 'Doğrulanmış Kişiler' : 'Herkese Açık'}
+                  {targetAudience === 'verified_only' ? 'Doğrulanmış Kişiler' : targetAudience === 'friends_only' ? 'Arkadaşlarım' : 'Herkese Açık'}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={Colors.textLight} />
               </TouchableOpacity>
@@ -670,6 +670,18 @@ export default function CreateListingScreen() {
               <Text style={styles.audienceOptionDesc}>İlanınız yalnızca kimliğini doğrulamış kullanıcılar tarafından görüntülenebilir.</Text>
             </View>
             {targetAudience === 'verified_only' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.audienceOption, targetAudience === 'friends_only' && styles.audienceOptionSelected]} 
+            onPress={() => handleSelectAudience('friends_only')}
+          >
+            <Ionicons name="people" size={24} color={targetAudience === 'friends_only' ? Colors.primary : Colors.textLight} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.audienceOptionTitle, targetAudience === 'friends_only' && styles.audienceOptionTitleSelected]}>Arkadaşlarım</Text>
+              <Text style={styles.audienceOptionDesc}>İlanınız yalnızca karşılıklı takipleştiğiniz arkadaşlarınız tarafından görüntülenebilir.</Text>
+            </View>
+            {targetAudience === 'friends_only' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
           </TouchableOpacity>
         </Animated.View>
       </Modal>

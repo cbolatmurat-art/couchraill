@@ -1381,6 +1381,7 @@ app.get('/api/listings', async (req, res) => {
         "targetAudience" IS NULL OR "targetAudience" = 'public' 
         OR "ownerId" = $1 OR "hostId" = $1
         OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+        OR ("targetAudience" = 'friends_only' AND EXISTS (SELECT 1 FROM follows f1 INNER JOIN follows f2 ON f1."followerUserId" = f2."followingUserId" AND f1."followingUserId" = f2."followerUserId" WHERE f1."followerUserId" = COALESCE("ownerId", "hostId") AND f1."followingUserId" = $1))
       )`;
       const { rows } = await query(listingsQuery, [userId]);
       const withPreviews = await attachInterestedPreviewUsers(rows);
@@ -1451,6 +1452,7 @@ app.get('/api/feed', async (req, res) => {
         l."targetAudience" IS NULL OR l."targetAudience" = 'public' 
         OR l."ownerId" = $1 OR l."hostId" = $1
         OR (l."targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+        OR (l."targetAudience" = 'friends_only' AND EXISTS (SELECT 1 FROM follows f1 INNER JOIN follows f2 ON f1."followerUserId" = f2."followingUserId" AND f1."followingUserId" = f2."followerUserId" WHERE f1."followerUserId" = COALESCE(l."ownerId", l."hostId") AND f1."followingUserId" = $1))
       )
     `, [userId, blockedArr]);
 
@@ -1848,6 +1850,7 @@ app.get('/api/listings', async (req, res) => {
         l."targetAudience" IS NULL OR l."targetAudience" = 'public' 
         OR l."ownerId" = $1 OR l."hostId" = $1
         OR (l."targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND "identityVerified" = true))
+        OR (l."targetAudience" = 'friends_only' AND EXISTS (SELECT 1 FROM follows f1 INNER JOIN follows f2 ON f1."followerUserId" = f2."followingUserId" AND f1."followingUserId" = f2."followerUserId" WHERE f1."followerUserId" = COALESCE(l."ownerId", l."hostId") AND f1."followingUserId" = $1))
       ) ORDER BY l."createdAt" DESC`;
       const { rows } = await query(listingsQuery, [userId]);
       const withPreviews = await attachInterestedPreviewUsers(rows);
@@ -4493,6 +4496,7 @@ app.get('/api/users/:id/public', async (req, res) => {
         listQuery += ` AND (
           "targetAudience" IS NULL OR "targetAudience" = 'public' 
           OR ("targetAudience" = 'verified_only' AND EXISTS (SELECT 1 FROM users WHERE id = $2 AND "identityVerified" = true))
+          OR ("targetAudience" = 'friends_only' AND EXISTS (SELECT 1 FROM follows f1 INNER JOIN follows f2 ON f1."followerUserId" = f2."followingUserId" AND f1."followingUserId" = f2."followerUserId" WHERE f1."followerUserId" = $1 AND f1."followingUserId" = $2))
         )`;
         const { rows } = await query(listQuery, [targetId, requesterId]);
         activeListings = rows;
