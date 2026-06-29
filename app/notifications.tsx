@@ -201,6 +201,9 @@ export default function NotificationsScreen() {
     const showPokeAction = item.type === 'poke' && item.relatedUserId;
     const hasPokedBack = item.relatedUserId ? pokedUsers[item.relatedUserId] : false;
 
+    const SYSTEM_TYPES = ['system', 'profile_verified', 'identity_approved', 'identity_rejected', 'email_verified', 'phone_verified'];
+    const isSystemNotification = SYSTEM_TYPES.includes(item.type);
+
     return (
       <Pressable
         style={[styles.notificationItem, !item.read && styles.unreadItem]}
@@ -211,10 +214,17 @@ export default function NotificationsScreen() {
         </View>
         <View style={styles.contentContainer}>
           <View style={styles.headerRow}>
-            <Text style={[styles.title, !item.read && styles.unreadText]}>{item.title}</Text>
+            <Text style={[
+              isSystemNotification ? styles.title : styles.normalText, 
+              !item.read && styles.unreadText
+            ]}>
+              {isSystemNotification ? item.title : item.message}
+            </Text>
             <Text style={styles.time}>{dateString}</Text>
           </View>
-          <Text style={[styles.message, !item.read && styles.unreadText]}>{item.message}</Text>
+          {isSystemNotification && item.message ? (
+            <Text style={[styles.message, !item.read && styles.unreadText]}>{item.message}</Text>
+          ) : null}
 
           {showFriendActions && (
             <View style={styles.actionRow}>
@@ -261,8 +271,9 @@ export default function NotificationsScreen() {
     );
   };
 
-  const systemNotifications = notifications.filter(n => n.type === 'system');
-  const otherNotifications = notifications.filter(n => n.type !== 'system');
+  const SYSTEM_TYPES = ['system', 'profile_verified', 'identity_approved', 'identity_rejected', 'email_verified', 'phone_verified'];
+  const systemNotifications = notifications.filter(n => SYSTEM_TYPES.includes(n.type));
+  const otherNotifications = notifications.filter(n => !SYSTEM_TYPES.includes(n.type));
 
   const sections = [
     ...(systemNotifications.length > 0 ? [{ title: 'Sistem Bildirimleri', icon: 'megaphone-outline' as const, data: systemNotifications }] : []),
@@ -390,7 +401,8 @@ const styles = StyleSheet.create({
   },
   notificationItem: {
     flexDirection: 'row',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     backgroundColor: Colors.cardBackground,
@@ -400,36 +412,49 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F8FF',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   contentContainer: {
     flex: 1,
+    justifyContent: 'center',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 4,
   },
   title: {
     ...Typography.subtitle,
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.text,
     flex: 1,
     marginRight: 8,
+    lineHeight: 20,
+  },
+  normalText: {
+    fontSize: 14,
+    color: Colors.text,
+    flex: 1,
+    marginRight: 8,
+    lineHeight: 20,
   },
   time: {
     ...Typography.caption,
+    fontSize: 12,
     color: Colors.textLight,
+    marginTop: 2,
   },
   message: {
     ...Typography.body,
     color: Colors.textLight,
     fontSize: 13,
+    marginTop: 2,
   },
   actionRow: {
     flexDirection: 'row',

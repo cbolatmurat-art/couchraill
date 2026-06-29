@@ -57,7 +57,13 @@ export default function MyListingsScreen() {
     }
   };
 
-  const myListings = listings.filter(l => l.ownerId === currentUser.id || l.userId === currentUser.id || l.hostId === currentUser.id);
+  const myListings = listings
+    .filter(l => l.ownerId === currentUser.id || l.userId === currentUser.id || l.hostId === currentUser.id)
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>

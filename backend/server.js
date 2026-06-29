@@ -244,12 +244,16 @@ const activeUsers = new Map(); // userId -> socket.id
 
 const sendPushNotification = async (receiverId, title, body, data = {}) => {
   let pushToken = null;
+  let pushSettings = { master: false, messages: false, pokes: false, comments: false, events: false };
   
   try {
     const { query } = require('./db');
-    const { rows } = await query(`SELECT "pushToken" FROM users WHERE id = $1 LIMIT 1`, [receiverId]);
+    const { rows } = await query(`SELECT "pushToken", "pushSettings" FROM users WHERE id = $1 LIMIT 1`, [receiverId]);
     if (rows.length > 0 && rows[0].pushToken) {
       pushToken = rows[0].pushToken;
+      if (rows[0].pushSettings) {
+        pushSettings = typeof rows[0].pushSettings === 'string' ? JSON.parse(rows[0].pushSettings) : rows[0].pushSettings;
+      }
     } else {
       // Fallback to db.json just in case
       const db = readDB();
@@ -278,6 +282,36 @@ const sendPushNotification = async (receiverId, title, body, data = {}) => {
   // Ensure eventId is in data if relatedType is event
   if (data.type === 'system' && data.relatedId) {
     data.eventId = data.relatedId;
+  }
+
+  // Check push settings
+  if (data.type !== 'system') {
+    if (pushSettings.master === false) {
+      console.log(`[PUSH] User ${receiverId} has master push disabled.`);
+      return;
+    }
+
+    if ((data.type === 'message' || data.type === 'message_reaction') && pushSettings.messages === false) {
+      console.log(`[PUSH] User ${receiverId} has messages push disabled.`);
+      return;
+    }
+
+    if (data.type === 'poke' && pushSettings.pokes === false) {
+      console.log(`[PUSH] User ${receiverId} has pokes push disabled.`);
+      return;
+    }
+
+    if ((data.type === 'comment' || data.type === 'comment_reply') && pushSettings.comments === false) {
+      console.log(`[PUSH] User ${receiverId} has comments push disabled.`);
+      return;
+    }
+
+    if ((data.type === 'event_like' || data.type === 'event_capacity' || data.type === 'event_participant') && pushSettings.events === false) {
+      console.log(`[PUSH] User ${receiverId} has events push disabled.`);
+      return;
+    }
+    
+    // For backwards compatibility or unknown types, if master is true, allow it to pass unless explicitly caught above.
   }
 
   try {
@@ -539,6 +573,133 @@ const calculateProfileCompletion = (user) => {
 
   return Math.min(100, profileCompletion);
 };
+
+// ---- PHONE VERIFICATION ENDPOINTS ----
+app.post('/api/phone/send-code', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Telefon numarası eksik.', message: 'Telefon numarası eksik.' });
+    }
+
+    const p = phone.replace(/\D/g, '');
+    if (p.length !== 10 || !p.startsWith('5')) {
+      return res.status(400).json({ success: false, error: 'Telefon numarası 5 ile başlamalı ve 10 haneli olmalıdır.', message: 'Telefon numarası 5 ile başlamalı ve 10 haneli olmalıdır.' });
+    }
+
+    const formattedPhone = `+90${p}`;
+
+    const now = Date.now();
+    // 60 seconds cooldown check
+    const { rows: existingCodeRows } = await query(
+      `SELECT "createdAt" FROM verifications WHERE target = $1 AND type = 'sms_verification' ORDER BY "createdAt" DESC LIMIT 1`, 
+      [formattedPhone]
+    );
+
+    if (existingCodeRows.length > 0) {
+      const lastSent = parseInt(existingCodeRows[0].createdAt || '0');
+      if (now - lastSent < 60 * 1000) {
+        return res.status(429).json({ success: false, error: 'Lütfen yeni bir kod istemeden önce 60 saniye bekleyin.', message: 'Lütfen yeni bir kod istemeden önce 60 saniye bekleyin.' });
+      }
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = now + 5 * 60 * 1000; // 5 mins
+    const verificationId = `v${now}_${Math.random().toString(36).substring(2, 7)}`;
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedCode = await bcrypt.hash(code, salt);
+
+    await query(`
+      INSERT INTO verifications (id, type, target, code, "expiresAt", "createdAt")
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [verificationId, 'sms_verification', formattedPhone, hashedCode, expiresAt, now]);
+
+    const smsMessage = `Couchraill doğrulama kodunuz: ${code}`;
+    
+    const iletKey = process.env.ILETI_API_KEY;
+    const iletHash = process.env.ILETI_API_HASH;
+    const iletSender = process.env.ILETI_SENDER;
+
+    if (!iletKey || !iletHash || !iletSender) {
+      console.warn('[SMS] ILETI_API_KEY, ILETI_API_HASH or ILETI_SENDER is missing in env vars.');
+      return res.status(400).json({ success: false, error: 'SMS ayarları eksik.' });
+    } else {
+      const payload = {
+        request: {
+          authentication: { key: iletKey, hash: iletHash },
+          order: {
+            sender: iletSender,
+            message: {
+              text: smsMessage,
+              receipents: { number: [p] }
+            }
+          }
+        }
+      };
+
+      const smsResponse = await fetch('https://api.iletimerkezi.com/v1/send-sms/json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      const smsResData = await smsResponse.json();
+      if (!smsResponse.ok || (smsResData.response && smsResData.response.status && smsResData.response.status.code !== 200)) {
+         console.error('[SMS ERROR]', smsResData);
+         return res.status(500).json({ success: false, error: 'SMS gönderilemedi.', message: 'SMS gönderilemedi.' });
+      }
+    }
+
+    res.json({ success: true, message: 'Doğrulama kodu gönderildi.' });
+  } catch (error) {
+    console.error('[SEND_SMS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası oluştu.', message: 'Sunucu hatası oluştu.' });
+  }
+});
+
+app.post('/api/phone/verify-code', async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+      return res.status(400).json({ success: false, error: 'Telefon ve kod zorunludur.', message: 'Telefon ve kod zorunludur.' });
+    }
+
+    const p = phone.replace(/\D/g, '');
+    const formattedPhone = `+90${p}`;
+
+    const { rows: existingCodeRows } = await query(
+      `SELECT * FROM verifications WHERE target = $1 AND type = 'sms_verification' AND used = false ORDER BY "createdAt" DESC LIMIT 1`, 
+      [formattedPhone]
+    );
+
+    if (existingCodeRows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Geçerli bir doğrulama kodu bulunamadı.', message: 'Geçerli bir doğrulama kodu bulunamadı.' });
+    }
+
+    const verificationRecord = existingCodeRows[0];
+    const expiresAt = parseInt(verificationRecord.expiresAt || '0');
+
+    if (Date.now() > expiresAt) {
+      return res.status(400).json({ success: false, error: 'Kodun süresi dolmuş.', message: 'Kodun süresi dolmuş.' });
+    }
+
+    const isMatch = await bcrypt.compare(code, verificationRecord.code);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, error: 'Hatalı kod.', message: 'Hatalı kod.' });
+    }
+
+    await query(`UPDATE verifications SET used = true WHERE id = $1`, [verificationRecord.id]);
+    
+    // Update user if they exist with this phone
+    await query(`UPDATE users SET "phoneVerified" = true WHERE phone = $1`, [formattedPhone]);
+
+    res.json({ success: true, message: 'Telefon numarası doğrulandı.' });
+  } catch (error) {
+    console.error('[VERIFY_SMS_ERROR]', error);
+    res.status(500).json({ success: false, error: 'Sunucu hatası oluştu.', message: 'Sunucu hatası oluştu.' });
+  }
+});
 
 // ---- AUTH & USERS ----
 app.post('/api/auth/register', async (req, res) => {
@@ -1312,14 +1473,15 @@ app.put('/api/users/profile', async (req, res) => {
       profile_completion: 'profile_completion',
       house_rules: '"house_rules"',
       house_rules_note: '"house_rules_note"',
-      house_rules_updated_at: '"house_rules_updated_at"'
+      house_rules_updated_at: '"house_rules_updated_at"',
+      pushSettings: '"pushSettings"'
     };
 
     for (const [key, value] of Object.entries(updates)) {
       if (pgKeyMap[key]) {
         let val = value;
-        if (key === 'interests' || key === 'spoken_languages' || key === 'house_rules') {
-          val = typeof val === 'string' ? val : JSON.stringify(val || []);
+        if (key === 'interests' || key === 'spoken_languages' || key === 'house_rules' || key === 'pushSettings') {
+          val = typeof val === 'string' ? val : JSON.stringify(val || (key === 'pushSettings' ? {} : []));
         }
         setKeys.push(`${pgKeyMap[key]} = $${paramIndex}`);
         setValues.push(val);

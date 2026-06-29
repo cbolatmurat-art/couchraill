@@ -43,6 +43,7 @@ export const EventCard = React.memo(({
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   
   const slideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  const participantsFadeAnim = React.useRef(new Animated.Value(0)).current;
   const shareSlideAnim = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
   const openShareModal = () => {
@@ -113,11 +114,18 @@ export const EventCard = React.memo(({
 
   const openParticipantsModal = async () => {
     setParticipantsModalVisible(true);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(participantsFadeAnim, {
+        toValue: 0.25,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
 
     try {
       const response = await fetch(`${API_BASE_URL}/events/${item.id}/participants?userId=${currentUser?.id || currentUser?._id}`);
@@ -131,11 +139,18 @@ export const EventCard = React.memo(({
   };
 
   const closeParticipantsModal = () => {
-    Animated.timing(slideAnim, {
-      toValue: Dimensions.get('window').height,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(participantsFadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: Dimensions.get('window').height,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
       setParticipantsModalVisible(false);
     });
   };
@@ -475,46 +490,33 @@ export const EventCard = React.memo(({
               <Ionicons name="location-outline" size={16} color="#757575" />
               <Text style={styles.detailText}>{locationText || '-'}</Text>
             </View>
+          </View>
+
+          <View style={styles.badgesRow}>
+            <TouchableOpacity 
+              style={styles.infoBadge}
+              activeOpacity={0.6}
+              onPress={openParticipantsModal}
+            >
+              <Text style={styles.infoBadgeText}>
+                👥 {item.participantLimit ? (
+                  <><Text style={{ color: participantCount >= item.participantLimit ? '#FF3B30' : Colors.primary, fontWeight: '700' }}>{participantCount}</Text>/{item.participantLimit} Kişi</>
+                ) : (
+                  <><Text style={{ color: Colors.primary, fontWeight: '700' }}>{participantCount}</Text> Kişi</>
+                )}
+              </Text>
+            </TouchableOpacity>
+
             {item.priceType === 'paid' && (
-              <>
-                <View style={styles.detailSeparator} />
-                <View style={styles.detailItem}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF9500', marginLeft: 2 }} />
-                  <Text style={[styles.detailText, { fontWeight: '600', color: '#FF9500' }]}>
-                    Ücretli
-                  </Text>
-                </View>
-              </>
+              <View style={styles.infoBadge}>
+                <Text style={styles.infoBadgeText}>💰 Ücretli</Text>
+              </View>
             )}
-            {item.participantLimit ? (
-              <>
-                <View style={styles.detailSeparator} />
-                <TouchableOpacity 
-                  style={styles.detailItem}
-                  activeOpacity={0.6}
-                  onPress={openParticipantsModal}
-                >
-                  <Ionicons name="people-outline" size={16} color="#757575" />
-                  <Text style={styles.detailText}>
-                    Kontenjan: <Text style={{ color: participantCount >= item.participantLimit ? '#FF3B30' : Colors.primary, textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text>/{item.participantLimit}
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : participantCount > 0 ? (
-              <>
-                <View style={styles.detailSeparator} />
-                <TouchableOpacity 
-                  style={styles.detailItem}
-                  activeOpacity={0.6}
-                  onPress={openParticipantsModal}
-                >
-                  <Ionicons name="people-outline" size={16} color="#757575" />
-                  <Text style={styles.detailText}>
-                    <Text style={{ color: Colors.primary, textDecorationLine: 'underline', fontWeight: '600' }}>{participantCount}</Text> kişi katılacak
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : null}
+            {item.priceType === 'free' && (
+              <View style={styles.infoBadge}>
+                <Text style={styles.infoBadgeText}>💰 Ücretsiz</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -683,11 +685,13 @@ export const EventCard = React.memo(({
       {/* Participants Modal */}
       <Modal
         visible={participantsModalVisible}
-        animationType="fade"
+        animationType="none"
+        statusBarTranslucent={true}
         transparent={true}
         onRequestClose={closeParticipantsModal}
       >
-        <View style={styles.modalOverlay}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: participantsFadeAnim }]} pointerEvents="none" />
+        <View style={[styles.modalOverlay, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity style={styles.dismissOverlay} onPress={closeParticipantsModal} />
           <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
@@ -885,6 +889,29 @@ const styles = StyleSheet.create({
     height: 12,
     backgroundColor: '#E0E0E0',
     marginHorizontal: 8,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  infoBadge: {
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoBadgeText: {
+    fontSize: 13,
+    color: '#444',
+    fontWeight: '500',
   },
   organizerContainer: {
     marginTop: 16,

@@ -24,6 +24,87 @@ export default function RegisterScreen() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  const [isPhoneModalVisible, setIsPhoneModalVisible] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyErrorMsg, setVerifyErrorMsg] = useState('');
+
+  React.useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (phoneCooldown > 0) {
+      timer = setInterval(() => setPhoneCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [phoneCooldown]);
+
+  const handleSendCode = async () => {
+    setVerifyErrorMsg('');
+    setIsSendingCode(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/phone/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim() })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setPhoneCooldown(60);
+      } else if (res.status === 429) {
+        setPhoneCooldown(60);
+        setVerifyErrorMsg(data?.error || 'Lütfen yeni bir kod istemeden önce 60 saniye bekleyin.');
+      } else {
+        setVerifyErrorMsg(data?.error || data?.message || 'Kod gönderilemedi.');
+      }
+    } catch (err: any) {
+      setVerifyErrorMsg('Sunucu bağlantı hatası.');
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    setVerifyErrorMsg('');
+    if (verificationCode.length !== 6) {
+      setVerifyErrorMsg('Lütfen 6 haneli kodu girin.');
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/phone/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim(), code: verificationCode })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setIsPhoneModalVisible(false);
+        router.push({
+          pathname: '/(auth)/setup',
+          params: {
+            name,
+            email: '',
+            password,
+            phone: `+90${phone}`,
+            city: '',
+            gender,
+            termsAccepted: termsAccepted ? 'true' : 'false'
+          }
+        });
+      } else {
+        setVerifyErrorMsg(data?.error || data?.message || 'Hatalı kod.');
+      }
+    } catch (err: any) {
+      setVerifyErrorMsg('Sunucu bağlantı hatası.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleRegister = async () => {
     console.log("KAYDI_TAMAMLA_CLICKED");
     setErrorMsg('');
@@ -33,8 +114,6 @@ export default function RegisterScreen() {
       setErrorMsg('Devam etmek için şartları kabul etmelisiniz.');
       return;
     }
-
-    // E-posta adresi artık kayıt aşamasında zorunlu değil. İsteyen profil düzenlemeden ekleyebilir.
 
     if (!name || !password || !phone) {
       setErrorMsg('Lütfen zorunlu alanları doldurun.');
@@ -99,19 +178,13 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Validasyonlar başarılı, Kurulum ekranına yönlendir
-    router.push({
-      pathname: '/(auth)/setup',
-      params: {
-        name,
-        email: '',
-        password,
-        phone: `+90${phone}`,
-        city: '',
-        gender,
-        termsAccepted: termsAccepted ? 'true' : 'false'
-      }
-    });
+    // Doğrulama modalını aç ve SMS gönder
+    setVerificationCode('');
+    setVerifyErrorMsg('');
+    setIsPhoneModalVisible(true);
+    if (phoneCooldown === 0) {
+      await handleSendCode();
+    }
   };
 
   return (
@@ -307,6 +380,70 @@ export default function RegisterScreen() {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+      {/* Phone Verification Modal */}
+      <Modal
+        visible={isPhoneModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPhoneModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.bottomSheet, { maxHeight: '90%' }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Telefon Doğrulama</Text>
+                <TouchableOpacity onPress={() => setIsPhoneModalVisible(false)} style={styles.closeIcon}>
+                  <Ionicons name="close" size={24} color={Colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalScroll}>
+                <Text style={[styles.modalText, { textAlign: 'center', marginBottom: 20 }]}>
+                  {phone} numarasına gönderilen 6 haneli kodu girin.
+                </Text>
+
+                {verifyErrorMsg ? (
+                  <Text style={{ color: Colors.danger, textAlign: 'center', marginBottom: 10 }}>{verifyErrorMsg}</Text>
+                ) : null}
+
+                <Input
+                  placeholder="6 Haneli Kod"
+                  value={verificationCode}
+                  onChangeText={setVerificationCode}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  maxLength={6}
+                  textContentType="oneTimeCode"
+                  autoComplete="sms-otp"
+                  autoFocus={false}
+                  textAlign="center"
+                  style={{ fontSize: 22, letterSpacing: 4, height: 56 }}
+                />
+
+                <Pressable 
+                  style={[styles.submitBtn, { marginTop: 16 }, isVerifying && styles.submitBtnDisabled]}
+                  onPress={handleVerifyCode}
+                  disabled={isVerifying}
+                >
+                  <Text style={styles.submitBtnText}>{isVerifying ? 'Doğrulanıyor...' : 'Doğrula'}</Text>
+                </Pressable>
+
+                <Pressable 
+                  style={{ alignItems: 'center', paddingVertical: 16, marginTop: 8 }} 
+                  onPress={handleSendCode}
+                  disabled={phoneCooldown > 0 || isSendingCode || isVerifying}
+                >
+                  <Text style={[{ fontSize: 16, fontWeight: 'bold' }, phoneCooldown > 0 ? { color: Colors.textLight } : { color: Colors.primary }]}>
+                    {phoneCooldown > 0 ? `Kodu Tekrar Gönder (${phoneCooldown}sn)` : 'Kodu Tekrar Gönder'}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Animated, Dimensions } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Typography } from '../constants/Typography';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +29,43 @@ export const ReportModal: React.FC<ReportModalProps> = ({ visible, onClose, repo
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [internalVisible, setInternalVisible] = useState(visible);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setInternalVisible(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0.25,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: Dimensions.get('window').height,
+          duration: 150,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setInternalVisible(false);
+      });
+    }
+  }, [visible]);
 
   const handleSubmit = async () => {
     if (!selectedReason) {
@@ -95,9 +132,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({ visible, onClose, repo
   };
 
   return (
-    <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.modalContent}>
+    <Modal visible={internalVisible} transparent={true} animationType="none" statusBarTranslucent={true} onRequestClose={handleClose}>
+      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: fadeAnim }]} pointerEvents="none" />
+      <KeyboardAvoidingView style={[styles.overlay, { backgroundColor: 'transparent' }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={handleClose} />
+        <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.header}>
             <Text style={styles.title}>Şikayet Et</Text>
             <TouchableOpacity onPress={handleClose}>
@@ -137,7 +176,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ visible, onClose, repo
           <TouchableOpacity style={[styles.submitButton, loading && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={loading}>
             {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitButtonText}>Şikayeti Gönder</Text>}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

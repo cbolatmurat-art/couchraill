@@ -979,7 +979,7 @@ export default function DiscoverScreen() {
                     onChangeText={text => { setMapCityQuery(text); setShowCitySuggestions(true); }}
                     onSubmitEditing={() => handleSelectMapCity(mapCityQuery)}
                     returnKeyType="search"
-                    autoFocus={true}
+                    autoFocus={false}
                   />
                   {mapCityQuery.length > 0 && (
                     <TouchableOpacity onPress={() => { setMapCityQuery(''); handleSelectMapCity(''); }}>

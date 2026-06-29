@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Modal, Animated, PanResponder, Keyboard, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -12,8 +12,216 @@ import * as ImagePicker from 'expo-image-picker';
 import { Message } from '../../data/MockData';
 import { EventCard } from '../../components/EventCard';
 
+const HOUSE_RULES_OPTIONS = [
+  "Sigara kullanılmaz",
+  "Evcil hayvan getirilemez",
+  "Alkol kullanılmaz"
+];
+
+const HouseRulesBottomSheet = React.memo(({ 
+  visible, 
+  onClose, 
+  currentUser, 
+  otherUserHouseRules, 
+  otherUserHouseRulesNote, 
+  updateProfile, 
+  onSaveResult, 
+  insets 
+}: any) => {
+  const isHost = currentUser?.userType === 'host';
+  const [selectedRules, setSelectedRules] = useState<string[]>([]);
+  const [rulesNote, setRulesNote] = useState('');
+  const [saveAsDefault, setSaveAsDefault] = useState(true);
+  const [isSavingRules, setIsSavingRules] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const sheetAnim = useRef(new Animated.Value(600)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      if (isHost) {
+        let parsed = [];
+        try { parsed = typeof (currentUser as any).house_rules === 'string' ? JSON.parse((currentUser as any).house_rules) : ((currentUser as any).house_rules || []); } catch (e) {}
+        setSelectedRules(parsed);
+        setRulesNote((currentUser as any).house_rules_note || '');
+        setSaveAsDefault(true);
+      } else {
+        setSelectedRules(otherUserHouseRules || []);
+        setRulesNote(otherUserHouseRulesNote || '');
+        setSaveAsDefault(false);
+      }
+      setModalVisible(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0.25,
+          duration: 180,
+          useNativeDriver: true
+        }),
+        Animated.timing(sheetAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true
+        }),
+        Animated.timing(sheetAnim, {
+          toValue: 600,
+          duration: 150,
+          useNativeDriver: true
+        })
+      ]).start(() => setModalVisible(false));
+    }
+  }, [visible]);
+
+  const toggleRule = useCallback((rule: string) => {
+    setSelectedRules(prev => prev.includes(rule) ? prev.filter(r => r !== rule) : [...prev, rule]);
+  }, []);
+
+  return (
+    <Modal
+      visible={modalVisible}
+      animationType="none"
+      transparent={true}
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
+      <Animated.View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#000', opacity: fadeAnim }} pointerEvents="none" />
+      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+      <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
+        <Animated.View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: insets.bottom + 20, maxHeight: '80%', transform: [{ translateY: sheetAnim }] }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text }}>Ev Kuralları</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close-circle" size={28} color="#999" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {useMemo(() => HOUSE_RULES_OPTIONS.map(rule => {
+              const isSelected = selectedRules.includes(rule);
+              return (
+                <TouchableOpacity 
+                  key={rule}
+                  disabled={!isHost}
+                  onPress={() => toggleRule(rule)}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}
+                >
+                  <Ionicons 
+                    name={isSelected ? "checkbox" : "square-outline"} 
+                    size={24} 
+                    color={isSelected ? Colors.primary : '#CCC'} 
+                  />
+                  <Text style={{ marginLeft: 12, fontSize: 15, color: Colors.text, flex: 1 }}>{rule}</Text>
+                </TouchableOpacity>
+              );
+            }), [selectedRules, isHost, toggleRule])}
+
+            {isHost ? (
+              <View style={{ marginTop: 20 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 }}>📝 Ek Not (isteğe bağlı)</Text>
+                <TextInput
+                  style={{ backgroundColor: '#F9F9F9', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 12, height: 80, textAlignVertical: 'top', color: Colors.text }}
+                  placeholder="Eklemek istediğiniz başka kurallar var mı?"
+                  value={rulesNote}
+                  onChangeText={setRulesNote}
+                  maxLength={150}
+                  multiline
+                  editable={true}
+                />
+                <Text style={{ textAlign: 'right', fontSize: 10, color: '#999', marginTop: 4 }}>{rulesNote.length}/150</Text>
+              </View>
+            ) : rulesNote && rulesNote.trim().length > 0 ? (
+              <View style={{ marginTop: 20 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 }}>📝 Ek Not</Text>
+                <View style={{ backgroundColor: '#F9F9F9', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14 }}>{rulesNote}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {isHost && (
+              <View style={{ marginTop: 20 }}>
+                <TouchableOpacity 
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                  onPress={() => setSaveAsDefault(!saveAsDefault)}
+                >
+                  <Ionicons 
+                    name={saveAsDefault ? "checkbox" : "square-outline"} 
+                    size={24} 
+                    color={saveAsDefault ? Colors.primary : '#CCC'} 
+                  />
+                  <Text style={{ marginLeft: 12, fontSize: 14, color: Colors.text }}>Gelecekteki sohbetler için varsayılan kaydet</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={{ backgroundColor: isSavingRules ? '#FFB74D' : Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24, flexDirection: 'row', justifyContent: 'center', opacity: isSavingRules ? 0.7 : 1 }}
+                  disabled={isSavingRules}
+                  onPress={async () => {
+                    let initialRules = [];
+                    try { initialRules = typeof (currentUser as any).house_rules === 'string' ? JSON.parse((currentUser as any).house_rules) : ((currentUser as any).house_rules || []); } catch (e) {}
+                    const initialNote = (currentUser as any).house_rules_note || '';
+                    
+                    const hasChanges = 
+                      initialRules.length !== selectedRules.length || 
+                      !initialRules.every((r: string) => selectedRules.includes(r)) ||
+                      initialNote !== rulesNote;
+
+                    if (!hasChanges) {
+                      onClose();
+                      return;
+                    }
+
+                    setIsSavingRules(true);
+                    try {
+                      if (saveAsDefault && updateProfile) {
+                        const res = await updateProfile({
+                          house_rules: selectedRules,
+                          house_rules_note: rulesNote,
+                          house_rules_updated_at: new Date().toISOString()
+                        });
+                        if (res && res.success === false) {
+                          throw new Error("API returned failure");
+                        }
+                      }
+                      
+                      (currentUser as any).house_rules = selectedRules;
+                      (currentUser as any).house_rules_note = rulesNote;
+
+                      onClose();
+                      onSaveResult('success', '✅ Ev kuralları kaydedildi.');
+                    } catch (e) {
+                      onSaveResult('error', '❌ Ev kuralları kaydedilemedi. Lütfen tekrar deneyin.');
+                    } finally {
+                      setIsSavingRules(false);
+                    }
+                  }}
+                >
+                  {isSavingRules ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFF" style={{ marginRight: 8 }} />
+                      <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Kaydediliyor...</Text>
+                    </>
+                  ) : (
+                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Kaydet ve Kapat</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+});
+
 export default function ChatScreen() {
-  const { id, initialMessage } = useLocalSearchParams<{ id: string, initialMessage?: string }>();
+  const { id, initialMessage, initialImage } = useLocalSearchParams<{ id: string, initialMessage?: string, initialImage?: string }>();
   const router = useRouter();
   const { 
     currentUser, 
@@ -42,47 +250,94 @@ export default function ChatScreen() {
   });
   const [currentOtherUserIdentityVerified, setCurrentOtherUserIdentityVerified] = useState<boolean | undefined>(undefined);
   const [currentOtherUserGender, setCurrentOtherUserGender] = useState<string | undefined>(undefined);
-  const [currentOtherUserImage, setCurrentOtherUserImage] = useState<string | null>(null);
+  const [currentOtherUserImage, setCurrentOtherUserImage] = useState<string | null>(initialImage || null);
   const [otherUserVerificationLoaded, setOtherUserVerificationLoaded] = useState(false);
   const [otherUserHouseRules, setOtherUserHouseRules] = useState<string[]>([]);
   const [otherUserHouseRulesNote, setOtherUserHouseRulesNote] = useState<string>('');
   const [showHouseRulesModal, setShowHouseRulesModal] = useState(false);
-  const [selectedRules, setSelectedRules] = useState<string[]>([]);
-  const [rulesNote, setRulesNote] = useState('');
-  const [saveAsDefault, setSaveAsDefault] = useState(true);
+  const closeHouseRulesModal = useCallback(() => setShowHouseRulesModal(false), []);
+  const [toastConfig, setToastConfig] = useState<{visible: boolean, message: string, type: 'success'|'error'}>({visible: false, message: '', type: 'success'});
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTranslateX = useRef(new Animated.Value(0)).current;
   
-  const [modalVisible, setModalVisible] = useState(false);
-  const sheetAnim = useRef(new Animated.Value(600)).current;
+  const toastPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 10,
+      onPanResponderMove: (_, gestureState) => {
+        toastTranslateX.setValue(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (Math.abs(gestureState.dx) > 80) {
+          Animated.timing(toastTranslateX, {
+            toValue: gestureState.dx > 0 ? 500 : -500,
+            duration: 200,
+            useNativeDriver: true
+          }).start(() => {
+             setToastConfig(prev => ({...prev, visible: false}));
+          });
+        } else {
+          Animated.spring(toastTranslateX, {
+            toValue: 0,
+            useNativeDriver: true
+          }).start();
+        }
+      }
+    })
+  ).current;
 
-  useEffect(() => {
-    if (showHouseRulesModal) {
-      setModalVisible(true);
-      Animated.spring(sheetAnim, {
-        toValue: 0,
+  const showToast = useCallback((type: 'success'|'error', message: string) => {
+    toastTranslateX.setValue(0);
+    setToastConfig({visible: true, message, type});
+    Animated.sequence([
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 300,
         useNativeDriver: true,
-        bounciness: 0,
-        speed: 12
-      }).start();
-    } else {
-      Animated.timing(sheetAnim, {
-        toValue: 600,
-        duration: 250,
-        useNativeDriver: true
-      }).start(() => setModalVisible(false));
-    }
-  }, [showHouseRulesModal]);
+      }),
+      Animated.delay(2500),
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start(({ finished }) => {
+      if (finished) {
+        setToastConfig(prev => ({...prev, visible: false}));
+      }
+    });
+  }, [toastAnim, toastTranslateX]);
 
-  const HOUSE_RULES_OPTIONS = [
-    "Sigara kullanılmaz",
-    "Evcil hayvan getirilemez",
-    "Sadece doğrulanmış hesaplar",
-    "Sessiz ortam tercih edilir",
-    "Gece geç giriş uygun değil",
-    "Ortak alanlar temiz bırakılmalı",
-    "Misafir getirmek uygun değil",
-    "Alkol kullanılmaz",
-    "Kimlik doğrulaması olan kullanıcılar tercih edilir"
-  ];
+  const renderToast = () => {
+    if (!toastConfig.visible) return null;
+    return (
+      <Animated.View {...toastPanResponder.panHandlers} pointerEvents="auto" style={{
+        position: 'absolute',
+        bottom: Platform.OS === 'ios' ? 100 : 80,
+        alignSelf: 'center',
+        backgroundColor: 'rgba(30,30,30,0.95)',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 30,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+        opacity: toastAnim,
+        transform: [
+          { translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+          { translateX: toastTranslateX }
+        ],
+        zIndex: 9999
+      }}>
+        <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '500' }}>{toastConfig.message}</Text>
+      </Animated.View>
+    );
+  };
+
+
   
   const insets = useSafeAreaInsets();
   
@@ -688,12 +943,12 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messageList}
           keyboardShouldPersistTaps="handled"
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          ListEmptyComponent={
-            <View style={[styles.emptyContainer, { transform: [{ scaleY: -1 }] }]}>
-              <Text style={styles.emptyText}>Henüz mesaj yok. İlk mesajı siz gönderin.</Text>
-            </View>
-          }
         />
+        {reversedMessages.length === 0 && (
+          <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', zIndex: -1 }]} pointerEvents="none">
+            <Text style={styles.emptyText}>Henüz mesaj yok. İlk mesajı siz gönderin.</Text>
+          </View>
+        )}
 
         {isBlocked ? (
           <View style={[styles.blockedContainer, { 
@@ -704,23 +959,11 @@ export default function ChatScreen() {
             <Text style={styles.blockedText}>Bu kullanıcıyla mesajlaşamazsınız.</Text>
           </View>
         ) : (
-          <View style={[styles.inputWrapper, { 
-            paddingBottom: Platform.OS === 'android' && keyboardHeight > 0 
-              ? keyboardHeight + insets.bottom + 8 
-              : insets.bottom + 8 
-          }]}>
-            
+          <>
             {currentUser.userType === 'host' ? (
               <TouchableOpacity 
                 style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 12, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
-                onPress={() => {
-                  let parsed = [];
-                  try { parsed = typeof (currentUser as any).house_rules === 'string' ? JSON.parse((currentUser as any).house_rules) : ((currentUser as any).house_rules || []); } catch (e) {}
-                  setSelectedRules(parsed);
-                  setRulesNote((currentUser as any).house_rules_note || '');
-                  setSaveAsDefault(true);
-                  setShowHouseRulesModal(true);
-                }}
+                onPress={() => setShowHouseRulesModal(true)}
               >
                 <Text style={{ fontSize: 12, color: '#E65100', fontWeight: '600' }}>
                   {(() => {
@@ -734,12 +977,7 @@ export default function ChatScreen() {
             ) : (otherUserHouseRules && otherUserHouseRules.length > 0) || (otherUserHouseRulesNote && otherUserHouseRulesNote.length > 0) ? (
               <TouchableOpacity 
                 style={{ backgroundColor: '#FFF8E1', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', marginBottom: 12, marginTop: 4, borderWidth: 1, borderColor: '#FFE0B2' }}
-                onPress={() => {
-                  setSelectedRules(otherUserHouseRules);
-                  setRulesNote(otherUserHouseRulesNote);
-                  setSaveAsDefault(false);
-                  setShowHouseRulesModal(true);
-                }}
+                onPress={() => setShowHouseRulesModal(true)}
               >
                 <Text style={{ fontSize: 12, color: '#E65100', fontWeight: '600' }}>
                   📋 Bu evin kuralları var • Görüntüle
@@ -747,6 +985,11 @@ export default function ChatScreen() {
               </TouchableOpacity>
             ) : null}
 
+            <View style={[styles.inputWrapper, { 
+              paddingBottom: Platform.OS === 'android' && keyboardHeight > 0 
+                ? keyboardHeight + insets.bottom + 8 
+                : insets.bottom + 8 
+            }]}>
             {replyingToMessage && (
             <View style={styles.replyPreviewContainer}>
               {console.log("REPLY_BAR_SELECTED:", replyingToMessage)}
@@ -784,6 +1027,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
             </View>
           </View>
+          </>
         )}
         </View>
       </KeyboardAvoidingView>
@@ -876,98 +1120,17 @@ export default function ChatScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={modalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowHouseRulesModal(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowHouseRulesModal(false)} />
-          <Animated.View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: insets.bottom + 20, maxHeight: '80%', transform: [{ translateY: sheetAnim }] }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text }}>Ev Kuralları</Text>
-              <TouchableOpacity onPress={() => setShowHouseRulesModal(false)}>
-                <Ionicons name="close-circle" size={28} color="#999" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {HOUSE_RULES_OPTIONS.map(rule => {
-                const isSelected = selectedRules.includes(rule);
-                const isHost = currentUser.userType === 'host';
-                return (
-                  <TouchableOpacity 
-                    key={rule}
-                    disabled={!isHost}
-                    onPress={() => {
-                      if (isSelected) {
-                        setSelectedRules(selectedRules.filter(r => r !== rule));
-                      } else {
-                        setSelectedRules([...selectedRules, rule]);
-                      }
-                    }}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}
-                  >
-                    <Ionicons 
-                      name={isSelected ? "checkbox" : "square-outline"} 
-                      size={24} 
-                      color={isSelected ? Colors.primary : '#CCC'} 
-                    />
-                    <Text style={{ marginLeft: 12, fontSize: 15, color: Colors.text, flex: 1 }}>{rule}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-
-              <View style={{ marginTop: 20 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 }}>📝 Ek Not (isteğe bağlı)</Text>
-                <TextInput
-                  style={{ backgroundColor: '#F9F9F9', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 12, height: 80, textAlignVertical: 'top', color: Colors.text }}
-                  placeholder="Eklemek istediğiniz başka kurallar var mı?"
-                  value={rulesNote}
-                  onChangeText={setRulesNote}
-                  maxLength={150}
-                  multiline
-                  editable={currentUser.userType === 'host'}
-                />
-                <Text style={{ textAlign: 'right', fontSize: 10, color: '#999', marginTop: 4 }}>{rulesNote.length}/150</Text>
-              </View>
-
-              {currentUser.userType === 'host' && (
-                <View style={{ marginTop: 20 }}>
-                  <TouchableOpacity 
-                    style={{ flexDirection: 'row', alignItems: 'center' }}
-                    onPress={() => setSaveAsDefault(!saveAsDefault)}
-                  >
-                    <Ionicons 
-                      name={saveAsDefault ? "checkbox" : "square-outline"} 
-                      size={24} 
-                      color={saveAsDefault ? Colors.primary : '#CCC'} 
-                    />
-                    <Text style={{ marginLeft: 12, fontSize: 14, color: Colors.text }}>Gelecekteki sohbetler için varsayılan kaydet</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={{ backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 24 }}
-                    onPress={async () => {
-                      if (saveAsDefault && updateProfile) {
-                        await updateProfile({
-                          house_rules: selectedRules,
-                          house_rules_note: rulesNote,
-                          house_rules_updated_at: new Date().toISOString()
-                        });
-                      }
-                      setShowHouseRulesModal(false);
-                    }}
-                  >
-                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Kaydet ve Kapat</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
+      <HouseRulesBottomSheet
+        visible={showHouseRulesModal}
+        onClose={closeHouseRulesModal}
+        currentUser={currentUser}
+        otherUserHouseRules={otherUserHouseRules}
+        otherUserHouseRulesNote={otherUserHouseRulesNote}
+        updateProfile={updateProfile}
+        onSaveResult={showToast}
+        insets={insets}
+      />
+      {renderToast()}
     </SafeAreaView>
   );
 }

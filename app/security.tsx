@@ -205,7 +205,6 @@ export default function SecurityScreen() {
   // Phone state
   const [phoneNumber, setPhoneNumber] = useState(currentUser?.phone || '');
   const [verificationCode, setVerificationCode] = useState('');
-  const [sentCode, setSentCode] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -363,6 +362,16 @@ export default function SecurityScreen() {
   };
 
   // ---- Phone Verification Actions ----
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (phoneCooldown > 0) {
+      timer = setInterval(() => setPhoneCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [phoneCooldown]);
+
   const handleSendCode = async () => {
     setPhoneErrorMsg('');
     setPhoneSuccessMsg('');
@@ -372,14 +381,31 @@ export default function SecurityScreen() {
       return;
     }
 
+    if (phoneCooldown > 0) {
+      setPhoneErrorMsg(`Lütfen ${phoneCooldown} saniye bekleyin.`);
+      return;
+    }
+
     setIsSendingCode(true);
     try {
-      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setSentCode(generatedCode);
-      setCodeSent(true);
+      const res = await fetch(`${API_BASE_URL}/phone/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setCodeSent(true);
+        setPhoneCooldown(60);
+      } else if (res.status === 429) {
+        setPhoneCooldown(60);
+        setPhoneErrorMsg(data?.error || 'Lütfen yeni bir kod istemeden önce 60 saniye bekleyin.');
+      } else {
+        setPhoneErrorMsg(data?.error || data?.message || 'Kod gönderilemedi. Lütfen tekrar deneyin.');
+      }
     } catch (err: any) {
-      setPhoneErrorMsg('Kod gönderilemedi. Lütfen tekrar deneyin.');
+      setPhoneErrorMsg(err?.message || 'Sunucu bağlantı hatası.');
     } finally {
       setIsSendingCode(false);
     }
@@ -389,26 +415,33 @@ export default function SecurityScreen() {
     setPhoneErrorMsg('');
     setPhoneSuccessMsg('');
 
-    if (verificationCode !== sentCode) {
+    if (verificationCode.length !== 6) {
       setPhoneErrorMsg('Doğrulama kodu hatalı.');
       return;
     }
 
     setIsVerifying(true);
     try {
-      const result = await updateProfile({
-        phone: phoneNumber,
-        phoneVerified: true
+      const res = await fetch(`${API_BASE_URL}/phone/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber, code: verificationCode })
       });
+      const data = await res.json().catch(() => null);
 
-      if (result.success) {
+      if (res.ok && data?.success) {
+        await updateProfile({
+          phone: `+90${phoneNumber.replace(/\D/g, '').slice(-10)}`,
+          phoneVerified: true
+        });
+
         setPhoneSuccessMsg('Telefon numaranız doğrulandı.');
         setIsEditingPhone(false);
         setCodeSent(false);
-        setSentCode(null);
         setVerificationCode('');
+        setPhoneCooldown(0);
       } else {
-        setPhoneErrorMsg(result.error || 'Doğrulama sırasında bir hata oluştu.');
+        setPhoneErrorMsg(data?.error || data?.message || 'Doğrulama sırasında bir hata oluştu.');
       }
     } catch (err: any) {
       setPhoneErrorMsg(err?.message || 'Sistem hatası oluştu.');
@@ -420,7 +453,6 @@ export default function SecurityScreen() {
   const handleCancelVerification = () => {
     setCodeSent(false);
     setVerificationCode('');
-    setSentCode(null);
     setPhoneErrorMsg('');
     setPhoneSuccessMsg('');
     setIsEditingPhone(false);
@@ -661,12 +693,6 @@ export default function SecurityScreen() {
               </View>
             ) : (
               <View style={{ marginTop: 12 }}>
-                {sentCode && (
-                  <View style={styles.testCodeBox}>
-                    <Text style={styles.testCodeText}>Test doğrulama kodu: {sentCode}</Text>
-                  </View>
-                )}
-
                 <Input
                   label="Doğrulama Kodu"
                   placeholder="6 Haneli Kod"

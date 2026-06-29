@@ -28,14 +28,13 @@ export default function EventDetailsScreen() {
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
+        toValue: 0.25,
+        duration: 180,
         useNativeDriver: true,
       }),
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 0,
-        damping: 25,
-        stiffness: 250,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start();
@@ -45,12 +44,12 @@ export default function EventDetailsScreen() {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 200,
+        duration: 150,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: SCREEN_HEIGHT,
-        duration: 250,
+        duration: 150,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -179,7 +178,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
+    backgroundColor: '#000',
   },
   bottomSheet: {
     backgroundColor: Colors.background,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert, Pressable, Image, Modal, TextInput, Animated } from 'react-native';
 import { useRouter, Stack, Redirect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -77,6 +77,43 @@ export default function EditProfileScreen() {
   const initialGender = currentUser?.gender || '';
   const [genderType, setGenderType] = useState(initialGender);
   const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
+  const genderSlideAnim = useRef(new Animated.Value(400)).current;
+  const genderFadeAnim = useRef(new Animated.Value(0)).current;
+
+  const openGenderModal = () => {
+    setIsGenderModalVisible(true);
+    setFocusedField('gender');
+    Animated.parallel([
+      Animated.timing(genderFadeAnim, {
+        toValue: 0.25,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(genderSlideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const closeGenderModal = () => {
+    Animated.parallel([
+      Animated.timing(genderFadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(genderSlideAnim, {
+        toValue: 400,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setIsGenderModalVisible(false);
+      setFocusedField(null);
+    });
+  };
 
   const [interests, setInterests] = useState<string[]>([]);
   const [languages, setLanguages] = useState<string[]>([]);
@@ -398,8 +435,41 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleOpenPhoneVerification = () => {
-    router.push('/security');
+  const handleOpenPhoneVerification = async () => {
+    if (!phone.trim()) {
+      setErrorMsg('Geçerli bir telefon numarası girin.');
+      return;
+    }
+    if (phoneVerificationCooldown > 0) {
+      setIsPhoneModalVisible(true);
+      return;
+    }
+    
+    setIsPhoneVerifying(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/phone/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim() })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setPhoneVerificationCooldown(60);
+        setIsPhoneModalVisible(true);
+        setPhoneVerifyError('');
+      } else if (res.status === 429) {
+        setPhoneVerificationCooldown(60);
+        setIsPhoneModalVisible(true);
+        setPhoneVerifyError(data?.error || 'Lütfen bekleyin.');
+      } else {
+        setErrorMsg(data?.error || data?.message || 'Kod gönderilemedi.');
+      }
+    } catch (e: any) {
+      setErrorMsg('Sunucu bağlantı hatası.');
+    } finally {
+      setIsPhoneVerifying(false);
+    }
   };
 
   const handleVerifyPhone = async () => {
@@ -412,11 +482,10 @@ export default function EditProfileScreen() {
       setIsPhoneVerifying(true);
       setPhoneVerifyError('');
 
-      const res = await fetch(`${API_BASE_URL}/auth/confirm-phone-verification`, {
+      const res = await fetch(`${API_BASE_URL}/phone/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: currentUser?.id,
           phone: phone.trim(),
           code: phoneVerificationCode
         })
@@ -424,7 +493,7 @@ export default function EditProfileScreen() {
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.success) {
-        await updateProfile({ phone: `+90${phone.trim()}`, phoneVerified: true });
+        await updateProfile({ phone: `+90${phone.replace(/\D/g, '').slice(-10)}`, phoneVerified: true });
         setIsPhoneModalVisible(false);
         setPhoneVerificationCode('');
         setPhoneVerificationCooldown(0);
@@ -887,8 +956,7 @@ export default function EditProfileScreen() {
                   style={[styles.phoneInputContainer, { paddingHorizontal: 16, paddingVertical: 14, justifyContent: 'space-between', opacity: currentUser?.genderChangedOnce ? 0.6 : 1 }]}
                   onPress={() => { 
                     if (currentUser?.genderChangedOnce) return;
-                    setIsGenderModalVisible(true); 
-                    setFocusedField('gender'); 
+                    openGenderModal(); 
                   }}
                 >
                   <Text style={{ fontSize: 16, color: genderType ? Colors.text : Colors.textLight }}>
@@ -903,9 +971,10 @@ export default function EditProfileScreen() {
                   <Text style={{ fontSize: 12, color: Colors.textLight, marginTop: 4 }}>Cinsiyet bilginizi yalnızca 1 kez değiştirebilirsiniz. Lütfen seçiminizi dikkatli yapın.</Text>
                 )}
 
-                <Modal visible={isGenderModalVisible} transparent animationType="fade">
-                  <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => { setIsGenderModalVisible(false); setFocusedField(null); }}>
-                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 30 }}>
+                <Modal visible={isGenderModalVisible} transparent animationType="none" statusBarTranslucent={true} onRequestClose={closeGenderModal}>
+                  <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: genderFadeAnim }]} pointerEvents="none" />
+                  <Pressable style={{ flex: 1, justifyContent: 'flex-end' }} onPress={closeGenderModal}>
+                    <Animated.View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 30, transform: [{ translateY: genderSlideAnim }] }} onStartShouldSetResponder={() => true}>
                       <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0', alignItems: 'center' }}>
                         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Cinsiyet Seç</Text>
                       </View>
@@ -913,16 +982,16 @@ export default function EditProfileScreen() {
                         <Pressable
                           key={opt}
                           style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', flexDirection: 'row', justifyContent: 'space-between' }}
-                          onPress={() => { setGenderType(opt); setIsGenderModalVisible(false); setFocusedField(null); }}
+                          onPress={() => { setGenderType(opt); closeGenderModal(); }}
                         >
                           <Text style={{ fontSize: 16, color: Colors.text }}>{opt}</Text>
                           {genderType === opt && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
                         </Pressable>
                       ))}
-                      <Pressable style={{ padding: 16, alignItems: 'center' }} onPress={() => { setIsGenderModalVisible(false); setFocusedField(null); }}>
+                      <Pressable style={{ padding: 16, alignItems: 'center' }} onPress={closeGenderModal}>
                         <Text style={{ fontSize: 16, color: Colors.danger, fontWeight: '600' }}>İptal</Text>
                       </Pressable>
-                    </View>
+                    </Animated.View>
                   </Pressable>
                 </Modal>
               </View>
@@ -1118,10 +1187,6 @@ export default function EditProfileScreen() {
                 <Text style={styles.emailModalDesc}>
                   {phone} numarasına gönderilen 6 haneli kodu girin.
                 </Text>
-
-                {phoneDevCode ? (
-                  <Text style={{ textAlign: 'center', color: Colors.textLight, marginBottom: 10, fontSize: 12 }}>Test kodu: {phoneDevCode}</Text>
-                ) : null}
 
                 {phoneVerifyError ? (
                   <Text style={styles.emailModalError}>{phoneVerifyError}</Text>

@@ -756,6 +756,16 @@ export default function ProfileScreen() {
                 <Pressable 
                   style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
                   android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
+                  onPress={() => { closeMenu(); router.push('/notification-settings'); }}
+                >
+                  <Ionicons name="notifications-outline" size={22} color={Colors.text} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Bildirimler</Text>
+                  <Text style={styles.menuArrow}>»</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: '#F3F4F6' }]} 
+                  android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
                   onPress={() => { closeMenu(); router.push('/security'); }}
                 >
                   <Ionicons name="shield-checkmark-outline" size={22} color={Colors.text} style={styles.menuIcon} />

@@ -96,7 +96,7 @@ export const SocialListModal: React.FC<SocialListModalProps> = ({
           <Text style={styles.userName} numberOfLines={1}>{item.name}</Text>
           <View style={[styles.badge, { backgroundColor: item.userType === 'host' ? '#E8F5E9' : '#ECEFF1' }]}>
             <Text style={[styles.badgeText, { color: item.userType === 'host' ? '#2E7D32' : '#37474F' }]}>
-              {item.userType === 'host' ? 'Ev Sahibi' : 'Misafir'}
+              {item.userType === 'host' ? 'Ev Sahibi' : 'Gezginci'}
             </Text>
           </View>
         </View>

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, Modal, Animated, Image, TextInput, FlatList } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, Modal, Animated, Image, TextInput, FlatList, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { useAppContext } from '../../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { API_BASE_URL } from '../../constants/config';
 import { CityPicker } from '../../components/CityPicker';
 import { Input } from '../../components/Input';
+import * as Location from 'expo-location';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -44,6 +45,149 @@ export default function CreateEventScreen() {
   const [friendsList, setFriendsList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCoOrganizers, setSelectedCoOrganizers] = useState<string[]>([]);
+
+  // Location Selector State
+  const [isLocationModalVisible, setLocationModalVisible] = useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  
+  const [tempCity, setTempCity] = useState('');
+  const [tempDistrict, setTempDistrict] = useState('');
+  const [tempNeighborhood, setTempNeighborhood] = useState('');
+  const [hasAutoDetected, setHasAutoDetected] = useState(false);
+
+  const resetForm = () => {
+    setTitle('');
+    setCity('');
+    setDistrict('');
+    setNeighborhood('');
+    setStartDT({ day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' });
+    setEndDT({ day: 'GG', month: 'AA', year: 'YYYY', hour: 'SS', minute: 'DD' });
+    setDescription('');
+    setShowEndDate(false);
+    setIsPaid(false);
+    setShowParticipantLimit(false);
+    setParticipantLimit('');
+    setMenuVisible(false);
+    setSelectedCoOrganizers([]);
+    setHasAutoDetected(false);
+    setIsDetectingLocation(false);
+    setLocationError(null);
+  };
+
+  const locOverlayAnim = React.useRef(new Animated.Value(0)).current;
+  const locSlideAnim = React.useRef(new Animated.Value(500)).current;
+
+  const openLocationModal = () => {
+    setTempCity(city);
+    setTempDistrict(district);
+    setTempNeighborhood(neighborhood);
+    setLocationError(null);
+    setLocationModalVisible(true);
+    Animated.parallel([
+      Animated.timing(locOverlayAnim, { toValue: 0.25, duration: 180, useNativeDriver: true }),
+      Animated.timing(locSlideAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+    ]).start();
+  };
+
+  const closeLocationModal = () => {
+    Animated.parallel([
+      Animated.timing(locOverlayAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(locSlideAnim, { toValue: 500, duration: 150, useNativeDriver: true })
+    ]).start(() => setLocationModalVisible(false));
+  };
+
+  const handleSaveLocation = () => {
+    setCity(tempCity);
+    setDistrict(tempDistrict);
+    setNeighborhood(tempNeighborhood);
+    closeLocationModal();
+  };
+
+  const performLocationDetection = async (isActiveRef: { current: boolean }) => {
+    if (!isActiveRef.current) return;
+    setIsDetectingLocation(true);
+    setLocationError(null);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (isActiveRef.current) setLocationError('Konum izni verilmedi');
+        return;
+      }
+      
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+      
+      if (isActiveRef.current && loc?.coords) {
+        let reverse = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude
+        });
+        
+        if (isActiveRef.current && reverse && reverse.length > 0) {
+          const place = reverse[0];
+          const detectedCity = place.region || place.city || place.subregion;
+          const detectedDistrict = place.subregion || place.city;
+          if (detectedCity) {
+            setTempCity(detectedCity);
+            if (detectedDistrict && detectedDistrict !== detectedCity) {
+               let finalDistrict = detectedDistrict;
+               const cityLower = detectedCity.toLocaleLowerCase('tr-TR');
+               const districtLower = finalDistrict.toLocaleLowerCase('tr-TR');
+               if (districtLower.startsWith(cityLower)) {
+                 finalDistrict = finalDistrict.substring(detectedCity.length).trim();
+               }
+               setTempDistrict(finalDistrict || '');
+            } else {
+               setTempDistrict('');
+            }
+            let detectedNeighborhood = place.district || place.street || place.name || '';
+            if (detectedNeighborhood && detectedDistrict && detectedNeighborhood.toLocaleLowerCase('tr-TR') === detectedDistrict.toLocaleLowerCase('tr-TR')) {
+              detectedNeighborhood = '';
+            }
+            const finalNeighborhood = detectedNeighborhood ? detectedNeighborhood.trim() : 'Mahalle Algılanamadı';
+            setTempNeighborhood(finalNeighborhood);
+            
+            // Automatically save and close after successful detection as requested
+            setCity(detectedCity);
+            setDistrict(tempDistrict ? tempDistrict : (detectedDistrict && detectedDistrict !== detectedCity) ? (detectedDistrict.toLocaleLowerCase('tr-TR').startsWith(detectedCity.toLocaleLowerCase('tr-TR')) ? detectedDistrict.substring(detectedCity.length).trim() : detectedDistrict) : '');
+            // Let's just rely on the local vars for immediate assignment
+            setDistrict((detectedDistrict && detectedDistrict !== detectedCity) ? (detectedDistrict.toLocaleLowerCase('tr-TR').startsWith(detectedCity.toLocaleLowerCase('tr-TR')) ? detectedDistrict.substring(detectedCity.length).trim() : detectedDistrict) : '');
+            setNeighborhood(finalNeighborhood);
+            
+            if (isLocationModalVisible) {
+              closeLocationModal();
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (isActiveRef.current) {
+        setLocationError('Konum alınamadı. Konum servislerini açıp tekrar deneyin.');
+      }
+    } finally {
+      if (isActiveRef.current) {
+        setIsDetectingLocation(false);
+        setHasAutoDetected(true);
+      }
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = { current: true };
+
+      if (!hasAutoDetected) {
+        performLocationDetection(isActive);
+      }
+
+      return () => {
+        isActive.current = false;
+      };
+    }, [hasAutoDetected])
+  );
 
   const [toast, setToast] = useState<{visible: boolean, message: string, type: 'success'|'error'}>({visible: false, message: '', type: 'success'});
   const [toastAnim] = useState(new Animated.Value(-100));
@@ -280,6 +424,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => {
+            resetForm();
             try {
               if (router.canGoBack()) {
                 router.back();
@@ -297,6 +442,25 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
         </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          
+          {menuVisible && (
+            <Pressable
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                width: '100%',
+                height: '100%',
+                minHeight: Dimensions.get('window').height,
+                backgroundColor: 'transparent',
+                zIndex: 90,
+                elevation: 90,
+              }}
+              onPress={() => setMenuVisible(false)}
+            />
+          )}
 
           <Input
             label="Etkinlik Başlığı"
@@ -306,29 +470,32 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
             maxLength={100}
           />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Konum</Text>
-            <CityPicker 
-              selectedCity={city}
-              onSelectCity={setCity}
-              placeholder="Şehir seçin..."
-              showAllOption={false}
-            />
-          </View>
-
-          <Input
-            label="İlçe"
-            placeholder="Örn: Merkez, Kadıköy, Çankaya..."
-            value={district}
-            onChangeText={(text) => setDistrict(formatTitleCase(text))}
-          />
-
-          <Input
-            label="Mahalle"
-            placeholder="Örn: Yenice Mah., Caferağa Mah..."
-            value={neighborhood}
-            onChangeText={(text) => setNeighborhood(formatTitleCase(text))}
-          />
+          <TouchableOpacity style={styles.locationSelector} onPress={openLocationModal}>
+            <View style={styles.locationSelectorIcon}>
+              <Ionicons name="location" size={24} color={Colors.primary} />
+            </View>
+            <View style={styles.locationSelectorContent}>
+              <Text style={styles.locationSelectorLabel}>Konum</Text>
+              {isDetectingLocation ? (
+                <Text style={[styles.locationSelectorValue, { color: Colors.primary }]} numberOfLines={1}>
+                  📍 Konum Algılanıyor...
+                </Text>
+              ) : locationError ? (
+                <Text style={[styles.locationSelectorValue, { color: Colors.danger }]} numberOfLines={1}>
+                  📍 Konum alınamadı
+                </Text>
+              ) : city || district || neighborhood ? (
+                <Text style={styles.locationSelectorValue} numberOfLines={1}>
+                  📍 {[city, district, neighborhood].filter(Boolean).join(' / ')}
+                </Text>
+              ) : (
+                <Text style={[styles.locationSelectorValue, { color: Colors.textLight }]} numberOfLines={1}>
+                  📍 Konum Seç
+                </Text>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+          </TouchableOpacity>
 
           <View style={[styles.row, { zIndex: 100 }]}>
             <View style={[styles.halfWidth, { zIndex: 101 }]}>
@@ -591,7 +758,7 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
             </Pressable>
 
             {(!showEndDate || !isPaid || !showParticipantLimit) && (
-              <View style={{ position: 'relative', zIndex: 99 }}>
+              <View style={{ position: 'relative', zIndex: 99, elevation: 99 }}>
                 <Pressable
                   onPress={() => setMenuVisible(!menuVisible)}
                   style={({ pressed }) => [
@@ -760,6 +927,54 @@ const WheelColumn = ({ data, selectedValue, onValueChange, width = 60 }: any) =>
         </View>
       </Modal>
 
+      <Modal visible={isLocationModalVisible} transparent={true} animationType="none" statusBarTranslucent={true} onRequestClose={closeLocationModal}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: locOverlayAnim }]} pointerEvents="none" />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'transparent' }]}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeLocationModal} />
+        </View>
+        <Animated.View style={[styles.bottomSheetContainer, { transform: [{ translateY: locSlideAnim }] }]}>
+          <View style={styles.bottomSheetHandle} />
+          <Text style={styles.bottomSheetTitle}>Konum Seçimi</Text>
+          
+          {(isDetectingLocation || locationError) ? (
+            <View style={{ marginBottom: 12, alignItems: 'center' }}>
+              {isDetectingLocation && <Text style={{ color: Colors.textLight, fontSize: 13 }}>Konum alınıyor...</Text>}
+              {locationError && <Text style={{ color: Colors.danger, fontSize: 13 }}>{locationError}</Text>}
+            </View>
+          ) : null}
+          
+          <Input
+            label="Şehir"
+            placeholder="Örn: İstanbul"
+            value={tempCity}
+            onChangeText={(text) => setTempCity(formatTitleCase(text))}
+          />
+
+          <Input
+            label="İlçe"
+            placeholder="Örn: Kadıköy"
+            value={tempDistrict}
+            onChangeText={(text) => setTempDistrict(formatTitleCase(text))}
+          />
+
+          <Input
+            label="Mahalle"
+            placeholder="Örn: Caferağa Mah."
+            value={tempNeighborhood}
+            onChangeText={(text) => setTempNeighborhood(formatTitleCase(text))}
+          />
+
+          <View style={{ marginTop: 8 }}>
+            <TouchableOpacity 
+              style={[styles.createButton, { width: '100%', paddingVertical: 14 }]}
+              onPress={handleSaveLocation}
+            >
+              <Text style={styles.createButtonText}>Tamam</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -864,32 +1079,50 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomSheetOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
   },
   bottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 40,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 20,
+    shadowRadius: 8,
+    elevation: 5,
   },
   bottomSheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    marginBottom: 16,
   },
   cancelBtn: { color: '#999', fontSize: 16, fontWeight: '600' },
   confirmBtn: { color: '#FF7A00', fontSize: 16, fontWeight: 'bold' },
-  bottomSheetTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  bottomSheetTitle: {
+    ...Typography.subtitle,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    color: Colors.text,
+  },
   pickerColumnsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -976,8 +1209,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  modalOverlayFixed: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
   dismissOverlay: {
     ...StyleSheet.absoluteFillObject,
+  },
+  locationModalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 20,
+    alignSelf: 'stretch',
+    height: 'auto',
+    maxHeight: '72%',
   },
   modalContent: {
     backgroundColor: '#FFF',
@@ -998,9 +1250,66 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: 'bold',
   },
+  inputLabel: {
+    ...Typography.caption,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginLeft: 4,
+    color: Colors.text,
+  },
+  locationSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  locationSelectorIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF3E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  locationSelectorContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  locationSelectorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  locationSelectorValue: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  currentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  currentLocationText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+
   contactRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

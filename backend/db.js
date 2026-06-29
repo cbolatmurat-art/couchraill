@@ -679,6 +679,7 @@ const initDB = async () => {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules" JSONB DEFAULT '[]'`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules_note" VARCHAR(150)`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS "house_rules_updated_at" TIMESTAMP`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "pushSettings" JSONB DEFAULT '{}'`,
     `CREATE TABLE IF NOT EXISTS listing_interests (
       id TEXT PRIMARY KEY,
       listing_id TEXT NOT NULL,

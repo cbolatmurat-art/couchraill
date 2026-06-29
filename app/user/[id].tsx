@@ -319,7 +319,8 @@ export default function PublicProfileScreen() {
       parts.push(dateStr);
     }
     if (profile?.userType) {
-      parts.push(profile.userType === 'host' ? 'Ev Sahibi' : 'Ev Arıyorum');
+      const uType = String(profile.userType).toLowerCase().trim();
+      parts.push(uType === 'host' || uType === 'ev sahibi' ? 'Ev Sahibi' : 'Gezginci');
     }
     
     return parts.join(' • ');

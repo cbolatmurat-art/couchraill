@@ -28,7 +28,7 @@ export default function FeedScreen() {
   const [isFollowingAnyone, setIsFollowingAnyone] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'events' | 'listings'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'events' | 'listings' | 'following'>('all');
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,6 +66,23 @@ export default function FeedScreen() {
   const commentInputRef = useRef<TextInput>(null);
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
+
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
@@ -334,6 +351,11 @@ export default function FeedScreen() {
   const openComments = useCallback(async (itemId: string, itemType: string = 'listing', topId?: string, highlightId?: string) => {
     setActiveListingId(itemId);
     setCommentsModalVisible(true);
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
     setLoadingComments(true);
     setCommentError('');
     setComments([]);
@@ -367,12 +389,18 @@ export default function FeedScreen() {
   }, []);
 
   const closeComments = () => {
-    setCommentsModalVisible(false);
-    setActiveListingId(null);
-    setNewComment('');
-    setReplyingToCommentId(null);
-    setCommentTopCommentId(null);
-    setCommentHighlightCommentId(null);
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setCommentsModalVisible(false);
+      setActiveListingId(null);
+      setNewComment('');
+      setReplyingToCommentId(null);
+      setCommentTopCommentId(null);
+      setCommentHighlightCommentId(null);
+    });
   };
 
   const submitComment = async () => {
@@ -466,6 +494,16 @@ export default function FeedScreen() {
           <Ionicons name="calendar-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Henüz etkinlik paylaşılmamış.</Text>
           <Text style={styles.emptyText}>Yeni etkinlikler paylaşıldığında burada görünecek.</Text>
+        </View>
+      );
+    }
+
+    if (activeFilter === 'following') {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="people-outline" size={64} color={Colors.textLight} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Takip ettiklerinin paylaşımı yok.</Text>
+          <Text style={styles.emptyText}>Takip ettiğin kullanıcıların gönderileri, ilanları ve etkinlikleri burada görünür.</Text>
         </View>
       );
     }
@@ -731,6 +769,15 @@ export default function FeedScreen() {
       if (ownerIsGuest) return false;
     }
     
+    if (activeFilter === 'following') {
+      const ownerId = item.authorId || item.userId || item.ownerId || item.hostId || (item.owner && item.owner.id) || (item.author && item.author.id) || (item.host && item.host.id) || (item.user && item.user.id);
+      
+      if (ownerId === currentUser?.id) return false;
+      if (!followingIds.includes(ownerId)) return false;
+      
+      return true;
+    }
+    
     if (activeFilter === 'events') return isEvent;
     if (activeFilter === 'listings') return isListing;
     
@@ -747,13 +794,17 @@ export default function FeedScreen() {
               <Text style={styles.dropdownMenuItemIcon}>☰</Text>
               <Text style={[styles.dropdownMenuItemText, activeFilter === 'all' && styles.dropdownMenuItemTextActive]}>Akış</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('listings'); setDropdownVisible(false); }}>
+              <Text style={styles.dropdownMenuItemIcon}>🏠</Text>
+              <Text style={[styles.dropdownMenuItemText, activeFilter === 'listings' && styles.dropdownMenuItemTextActive]}>İlanlar</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('events'); setDropdownVisible(false); }}>
               <Text style={styles.dropdownMenuItemIcon}>🎉</Text>
               <Text style={[styles.dropdownMenuItemText, activeFilter === 'events' && styles.dropdownMenuItemTextActive]}>Etkinlikler</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('listings'); setDropdownVisible(false); }}>
-              <Text style={styles.dropdownMenuItemIcon}>🏠</Text>
-              <Text style={[styles.dropdownMenuItemText, activeFilter === 'listings' && styles.dropdownMenuItemTextActive]}>İlanlar</Text>
+            <TouchableOpacity style={styles.dropdownMenuItem} onPress={() => { setActiveFilter('following'); setDropdownVisible(false); }}>
+              <Text style={styles.dropdownMenuItemIcon}>👥</Text>
+              <Text style={[styles.dropdownMenuItemText, activeFilter === 'following' && styles.dropdownMenuItemTextActive]}>Takip Ettiklerim</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -831,18 +882,21 @@ export default function FeedScreen() {
       {/* Comments Bottom Modal */}
       <Modal
         visible={commentsModalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={closeComments}
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardAvoidingView 
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, Platform.OS === 'android' && { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 8 : 0 }]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          pointerEvents="box-none"
         >
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.25)' }]} pointerEvents="none" />
           <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={closeComments} />
           
-          <View style={styles.modalContent}>
+          <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
               <TouchableOpacity onPress={closeComments} style={styles.modalCloseBtn}>
@@ -896,7 +950,7 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
             </ScrollView>
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
         </GestureHandlerRootView>
       </Modal>
@@ -1175,7 +1229,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: '70%',
+    minHeight: '20%',
+    maxHeight: '75%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -1191,8 +1246,9 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   modalTitle: {
-    ...Typography.subtitle,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
   },
   modalCloseBtn: {
     position: 'absolute',
@@ -1201,7 +1257,7 @@ const styles = StyleSheet.create({
   },
   commentsList: {
     padding: 16,
-    flexGrow: 1,
+    flexGrow: 0,
   },
   emptyCommentsText: {
     textAlign: 'center',
@@ -1211,7 +1267,7 @@ const styles = StyleSheet.create({
   },
   commentItem: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   commentAvatar: {
     width: 36,
@@ -1239,7 +1295,7 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 0,
   },
   commentUsername: {
     fontSize: 14,

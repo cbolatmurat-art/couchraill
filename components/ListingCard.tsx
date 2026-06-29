@@ -228,20 +228,24 @@ export const ListingCard = React.memo(({
     expiresAt: item.expiresAt
   });
 
-  const getRemainingTimeText = (expiresAtStr) => {
+  const getRemainingTimeText = (expiresAtStr: string) => {
     const nowTime = new Date();
     const end = new Date(expiresAtStr);
     const diffMs = end.getTime() - nowTime.getTime();
 
     if (diffMs <= 0) return "Süresi Doldu";
 
-    const totalHours = Math.ceil(diffMs / (1000 * 60 * 60));
-    const days = Math.floor(totalHours / 24);
-    const hours = totalHours % 24;
+    const totalMinutes = Math.max(1, Math.ceil(diffMs / (1000 * 60)));
+    const days = Math.floor(totalMinutes / (24 * 60));
+    const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+    const minutes = totalMinutes % 60;
 
-    if (days > 0 && hours > 0) return `${days} gün ${hours} saat kaldı`;
-    if (days > 0) return `${days} gün kaldı`;
-    return `${hours} saat kaldı`;
+    let textParts = [];
+    if (days > 0) textParts.push(`${days} Gün`);
+    if (hours > 0) textParts.push(`${hours} Saat`);
+    if (days === 0 && hours === 0) textParts.push(`${minutes} Dakika`);
+
+    return textParts.join(' ');
   };
 
   const isExpired = item.expiresAt ? new Date(item.expiresAt).getTime() <= Date.now() : false;
@@ -349,28 +353,24 @@ export const ListingCard = React.memo(({
 
         <View style={styles.mobileInfoContainer}>
           <View style={[styles.mobileInfoRowFull, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-            {locationString ? (
-              <View style={[styles.mobileInfoText, { flex: 1, paddingRight: 8 }]}>
-                <Text style={styles.mobileInfoValue} numberOfLines={2}>📍 {locationString}</Text>
-                <Text style={styles.mobileInfoLabel}>Konum</Text>
-              </View>
-            ) : <View style={{ flex: 1 }} />}
+            <View style={[styles.mobileInfoText, { flex: 1, paddingRight: 8 }]}>
+              <Text style={styles.mobileInfoValue} numberOfLines={2}>
+                {locationString ? `📍 ${locationString}` : '📍 Konum Belirtilmemiş'}
+              </Text>
+              <Text style={styles.mobileInfoLabel}>Konum</Text>
+            </View>
 
-            {!isOwner && !isInterestedByMe && (
-              <TouchableOpacity 
-                style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary, flexDirection: 'row', alignItems: 'center' }}
-                onPress={handleInterestToggle}
-                disabled={isTogglingInterest || isExpired}
-              >
-                <Ionicons name="star-outline" size={14} color={Colors.primary} style={{ marginRight: 4 }} />
-                <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '600' }}>
-                  İlgileniyorum
+            {isTimedListing && rawExpiresAt && (
+              <View style={[styles.mobileInfoText, { flex: 1, paddingRight: 8 }]}>
+                <Text style={styles.mobileInfoValue} numberOfLines={1}>
+                  ⏳ {isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}
                 </Text>
-              </TouchableOpacity>
+                <Text style={styles.mobileInfoLabel}>Süreli İlan</Text>
+              </View>
             )}
           </View>
 
-          <View style={styles.mobileInfoRowBoxes}>
+          <View style={[styles.mobileInfoRowBoxes, { flexDirection: 'row', alignItems: 'center' }]}>
             {formattedStayDuration && (
               <View style={styles.mobileInfoBox}>
                 <Text style={styles.mobileInfoValue} numberOfLines={1}>📅 {formattedStayDuration}</Text>
@@ -384,17 +384,23 @@ export const ListingCard = React.memo(({
                 <Text style={styles.mobileInfoLabel}>Misafir Sayısı</Text>
               </View>
             )}
-
-
-
-            {isTimedListing && rawExpiresAt ? (
-              <View style={styles.mobileInfoBox}>
-                <Text style={styles.mobileInfoValue} numberOfLines={1}>⏳ {isExpired ? 'Süresi Doldu' : getRemainingTimeText(rawExpiresAt)}</Text>
-                <Text style={styles.mobileInfoLabel}>Süreli İlan</Text>
-              </View>
-            ) : null}
           </View>
         </View>
+
+        {!isOwner && !isInterestedByMe && (
+          <View style={{ alignItems: 'flex-end', marginTop: -24, zIndex: 10 }}>
+            <TouchableOpacity 
+              style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', flexShrink: 0, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }}
+              onPress={handleInterestToggle}
+              disabled={isTogglingInterest || isExpired}
+            >
+              <Ionicons name="star" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '700' }}>
+                İlgileniyorum
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {item.price ? (
           <View style={styles.tagsRow}>

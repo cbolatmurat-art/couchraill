@@ -71,6 +71,21 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   const commentInputRef = useRef<TextInput>(null);
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleProfilePress = (ownerId: string) => {
     if (!ownerId || ownerId === currentUserId) return;
@@ -497,7 +512,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
           }}
         >
 
-        <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
+        <View style={{ flexDirection: 'row', backgroundColor: 'transparent' }}>
           <TouchableOpacity onPress={() => {
               closeCommentsModal();
               handleProfilePress(user.id);
@@ -558,7 +573,7 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
                   }}
                 >
 
-                <View style={{ flexDirection: 'row', backgroundColor: Colors.background }}>
+                <View style={{ flexDirection: 'row', backgroundColor: 'transparent' }}>
                   <TouchableOpacity onPress={() => { closeCommentsModal(); handleProfilePress(rUser.id); }}>
                     <View style={{ position: 'relative', marginRight: 12 }}>
                       <GenderBadge gender={rUser.gender} size={16} />
@@ -612,7 +627,14 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
   
   const currentUid = String(currentUser?.id || currentUser?._id || currentUser?.userId || '');
 
-  const listingsFeed = (listings || []).filter((l: any) => String(l.hostId || l.ownerId || l.userId) === String(userId)).map((l: any) => ({...l, type: 'listing'}));
+  const listingsFeed = (listings || [])
+    .filter((l: any) => String(l.hostId || l.ownerId || l.userId) === String(userId))
+    .map((l: any) => ({...l, type: 'listing'}))
+    .sort((a: any, b: any) => {
+      const dateA = new Date(a.createdAt || a.created_at || a.timestamp || 0).getTime();
+      const dateB = new Date(b.createdAt || b.created_at || b.timestamp || 0).getTime();
+      return dateB - dateA;
+    });
 
   const isMyProfile = !preview && String(currentUserId) === String(userId);
   const userTypeRaw = String(profile?.userType || currentUser?.userType || '').toLowerCase().trim();
@@ -826,11 +848,12 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
       {activeTab === 'about' && renderAboutContent()}
 
       {/* Comments Modal */}
-      <Modal visible={commentsModalVisible} animationType="fade" transparent={true} onRequestClose={closeCommentsModal}>
+      <Modal visible={commentsModalVisible} animationType="fade" transparent={true} statusBarTranslucent={true} onRequestClose={closeCommentsModal}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <View style={styles.modalOverlayFixed}>
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.25)' }]} pointerEvents="none" />
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeCommentsModal} />
-          <KeyboardAvoidingView style={styles.modalSheetWrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+          <KeyboardAvoidingView style={[styles.modalSheetWrapper, Platform.OS === 'android' && { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 8 : 0 }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
             <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Yorumlar</Text>
@@ -841,17 +864,17 @@ export function UserPosts({ userId, currentUserId, profile, currentUser, preview
             {loadingComments ? (
               <View style={{ padding: 20 }}><ActivityIndicator size="large" color={Colors.primary} /></View>
             ) : (
-              <>
+              <View style={{ flexShrink: 1 }}>
                 {commentError ? <Text style={{color: 'red', textAlign: 'center', padding: 8}}>{commentError}</Text> : null}
-              <FlatList
-                data={comments.filter(c => !c.parentCommentId)}
-                keyExtractor={item => item.id}
-                renderItem={renderCommentItem}
-                contentContainerStyle={{ padding: 16 }}
-                extraData={comments}
-                ListEmptyComponent={<Text style={{ textAlign: 'center', color: Colors.textLight, marginTop: 20 }}>Henüz yorum yok. İlk yorumu sen yap!</Text>}
-              />
-              </>
+                <FlatList
+                  data={comments.filter(c => !c.parentCommentId)}
+                  keyExtractor={item => item.id}
+                  renderItem={renderCommentItem}
+                  contentContainerStyle={{ padding: 16, paddingBottom: 24, flexGrow: 0 }}
+                  extraData={comments}
+                  ListEmptyComponent={<Text style={{ textAlign: 'center', color: Colors.textLight, marginTop: 20 }}>Henüz yorum yok. İlk yorumu sen yap!</Text>}
+                />
+              </View>
             )}
             <ScrollView keyboardShouldPersistTaps="handled" scrollEnabled={false} style={{flexGrow: 0, flexShrink: 0}}>
             <View style={styles.commentInputContainer}>
@@ -977,14 +1000,14 @@ const styles = StyleSheet.create({
 
   // Modal Styles
   modalOverlayFixed: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', justifyContent: 'flex-end' },
-  modalSheetWrapper: { justifyContent: 'flex-end' },
+  modalSheetWrapper: { flex: 1, justifyContent: 'flex-end' },
   modalBackground: { flex: 1 },
   modalContent: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
-    minHeight: '50%',
+    minHeight: '20%',
+    maxHeight: '75%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -1001,12 +1024,12 @@ const styles = StyleSheet.create({
   },
   modalTitle: { ...Typography.subtitle, fontWeight: 'bold' },
   modalCloseBtn: { padding: 4 },
-  commentItem: { flexDirection: 'row', marginBottom: 16 },
+  commentItem: { flexDirection: 'row', marginBottom: 12 },
   commentAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 12 },
   commentAvatarPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   commentAvatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   commentContent: { flex: 1 },
-  commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 0 },
   commentUsername: { fontWeight: 'bold', fontSize: 14 },
   commentDate: { fontSize: 12, color: Colors.textLight },
   commentText: { fontSize: 14, color: Colors.text },

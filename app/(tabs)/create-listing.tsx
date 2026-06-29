@@ -6,7 +6,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { CityPicker } from '../../components/CityPicker';
 import { useAppContext } from '../../context/AppContext';
-import { useRouter, Redirect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useRouter, Redirect, useLocalSearchParams, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../../constants/config';
 import { DeviceEventEmitter } from 'react-native';
@@ -44,88 +44,105 @@ export default function CreateListingScreen() {
   const [timedDropdownOpen, setTimedDropdownOpen] = useState(false);
   
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [hasAutoDetected, setHasAutoDetected] = useState(false);
 
-  React.useEffect(() => {
-    if (!editId && !params.city) {
-      console.log("[LOCATION] Otomatik konum alma basladi.");
-      const detectLocation = async () => {
-        setIsDetectingLocation(true);
-        try {
-          const locationPromise = new Promise<any>(async (resolve, reject) => {
-            console.log("[LOCATION] Izin isteniyor...");
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-              reject(new Error('Permission denied'));
-              return;
+  const [locationError, setLocationError] = useState<'denied' | 'unavailable' | null>(null);
+
+  const performLocationDetection = async (isActiveRef: { current: boolean }) => {
+    if (!isActiveRef.current) return;
+    setIsDetectingLocation(true);
+    setLocationError(null);
+    try {
+      console.log("[LOCATION] Izin isteniyor...");
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (isActiveRef.current) {
+          console.warn("[LOCATION] Permission denied");
+          setLocationError('denied');
+        }
+        return;
+      }
+      
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+      
+      if (isActiveRef.current && loc?.coords) {
+        console.log("[LOCATION] Konum basariyla alindi. Koordinatlar cozumleniyor...");
+        let reverse = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude
+        });
+        
+        if (isActiveRef.current && reverse && reverse.length > 0) {
+          const place = reverse[0];
+          const detectedCity = place.region || place.city || place.subregion;
+          const detectedDistrict = place.subregion || place.city;
+          if (detectedCity) {
+            console.log("[LOCATION] Cozumlenen sehir/ilce:", detectedCity, detectedDistrict);
+            setCity(detectedCity);
+            if (detectedDistrict && detectedDistrict !== detectedCity) {
+               let finalDistrict = detectedDistrict;
+               const cityLower = detectedCity.toLocaleLowerCase('tr-TR');
+               const districtLower = finalDistrict.toLocaleLowerCase('tr-TR');
+               
+               if (districtLower.startsWith(cityLower)) {
+                 finalDistrict = finalDistrict.substring(detectedCity.length).trim();
+               }
+               
+               if (finalDistrict) {
+                 setDistrict(finalDistrict);
+               } else {
+                 setDistrict('');
+               }
             }
-            let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            resolve(location);
-          });
-          
-          const timeoutPromise = new Promise<any>((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout')), 5000);
-          });
-
-          const loc = await Promise.race([locationPromise, timeoutPromise]);
-          
-          if (loc?.coords) {
-            console.log("[LOCATION] Konum basariyla alindi. Koordinatlar cozumleniyor...");
-            let reverse = await Location.reverseGeocodeAsync({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude
-            });
             
-            if (reverse && reverse.length > 0) {
-              const place = reverse[0];
-              const detectedCity = place.region || place.city || place.subregion;
-              const detectedDistrict = place.subregion || place.city;
-              if (detectedCity) {
-                console.log("[LOCATION] Cozumlenen sehir/ilce:", detectedCity, detectedDistrict);
-                setCity(detectedCity);
-                if (detectedDistrict && detectedDistrict !== detectedCity) {
-                   let finalDistrict = detectedDistrict;
-                   const cityLower = detectedCity.toLocaleLowerCase('tr-TR');
-                   const districtLower = finalDistrict.toLocaleLowerCase('tr-TR');
-                   
-                   if (districtLower.startsWith(cityLower)) {
-                     finalDistrict = finalDistrict.substring(detectedCity.length).trim();
-                   }
-                   
-                   if (finalDistrict) {
-                     setDistrict(finalDistrict);
-                   } else {
-                     setDistrict('');
-                   }
-                }
-                
-                let detectedNeighborhood = place.district || '';
-                if (detectedNeighborhood && detectedDistrict && detectedNeighborhood.toLocaleLowerCase('tr-TR') === detectedDistrict.toLocaleLowerCase('tr-TR')) {
-                  detectedNeighborhood = '';
-                }
-                
-                if (!detectedNeighborhood || detectedNeighborhood.trim() === '') {
-                  setNeighborhood('Mahalle Algılanamadı');
-                } else {
-                  setNeighborhood(detectedNeighborhood.trim());
-                }
-              }
+            let detectedNeighborhood = place.district || '';
+            if (detectedNeighborhood && detectedDistrict && detectedNeighborhood.toLocaleLowerCase('tr-TR') === detectedDistrict.toLocaleLowerCase('tr-TR')) {
+              detectedNeighborhood = '';
+            }
+            
+            if (!detectedNeighborhood || detectedNeighborhood.trim() === '') {
+              setNeighborhood('Mahalle Algılanamadı');
+            } else {
+              setNeighborhood(detectedNeighborhood.trim());
             }
           }
-        } catch (error) {
-          console.log("[LOCATION] Konum otomatik alınamadı veya zaman asimina ugradi:", error);
-        } finally {
-          console.log("[LOCATION] Konum alma islemi bitti.");
-          setIsDetectingLocation(false);
         }
-      };
-      
-      detectLocation();
+      }
+    } catch (error: any) {
+      if (isActiveRef.current) {
+        console.warn("[LOCATION] Location unavailable:", error.message || error);
+        setLocationError('unavailable');
+      }
+    } finally {
+      if (isActiveRef.current) {
+        console.log("[LOCATION] Konum alma islemi bitti.");
+        setIsDetectingLocation(false);
+        setHasAutoDetected(true);
+      }
     }
-  }, []);
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = { current: true };
+
+      if (!editId && !params.city && !hasAutoDetected) {
+        console.log("[LOCATION] Otomatik konum alma basladi.");
+        performLocationDetection(isActive);
+      }
+
+      return () => {
+        isActive.current = false;
+      };
+    }, [editId, params.city, hasAutoDetected])
+  );
 
   const handleClose = React.useCallback(() => {
     setTitle('');
-    setCity('');
+    setCity(currentUser?.city || '');
     setDistrict('');
     setNeighborhood('');
     setDescription('');
@@ -140,8 +157,12 @@ export default function CreateListingScreen() {
     setGuestDropdownOpen(false);
     setTimedDropdownOpen(false);
     
+    setHasAutoDetected(false);
+    setIsDetectingLocation(false);
+    setLocationError(null);
+    
     router.back();
-  }, [router]);
+  }, [router, currentUser]);
 
   React.useEffect(() => {
     navigation.setOptions({
@@ -418,7 +439,13 @@ export default function CreateListingScreen() {
           onChangeText={setTitle}
         />
 
-        <TouchableOpacity style={styles.locationSelector} onPress={openLocationModal}>
+        <TouchableOpacity style={styles.locationSelector} onPress={() => {
+          if (locationError) {
+            performLocationDetection({ current: true });
+          } else {
+            openLocationModal();
+          }
+        }}>
           <View style={styles.locationSelectorIcon}>
             <Ionicons name="location" size={24} color={Colors.primary} />
           </View>
@@ -428,6 +455,21 @@ export default function CreateListingScreen() {
               <Text style={styles.locationSelectorValue} numberOfLines={1}>
                 📍 Konumunuz algılanıyor...
               </Text>
+            ) : locationError === 'denied' ? (
+              <View>
+                <Text style={[styles.locationSelectorValue, { color: Colors.danger }]} numberOfLines={1}>
+                  Konum izni verilmedi
+                </Text>
+              </View>
+            ) : locationError === 'unavailable' ? (
+              <View>
+                <Text style={[styles.locationSelectorValue, { color: Colors.danger }]} numberOfLines={1}>
+                  Konum alınamadı
+                </Text>
+                <Text style={{ fontSize: 12, color: Colors.textLight, marginTop: 2 }}>
+                  Konum servislerini açıp tekrar deneyin.
+                </Text>
+              </View>
             ) : city || district || neighborhood ? (
               <Text style={styles.locationSelectorValue} numberOfLines={1}>
                 📍 {[city, district, neighborhood].filter(Boolean).join(' / ')}
