@@ -643,17 +643,29 @@ app.post('/api/phone/send-code', async (req, res) => {
         body: JSON.stringify(payload)
       });
       
-      const smsResData = await smsResponse.json();
-      if (!smsResponse.ok || (smsResData.response && smsResData.response.status && smsResData.response.status.code !== 200)) {
+      const responseText = await smsResponse.text();
+      let smsResData;
+      try {
+        smsResData = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('[SMS PARSE ERROR] Received non-JSON:', responseText);
+        return res.status(500).json({ success: false, error: 'SMS servisine ulaşılamadı.' });
+      }
+
+      if (!smsResponse.ok || (smsResData.response && smsResData.response.status && smsResData.response.status.code != 200)) {
          console.error('[SMS ERROR]', smsResData.response?.status || 'Unknown API Error');
-         return res.status(500).json({ success: false, error: 'SMS gönderilemedi.', message: 'SMS gönderilemedi.' });
+         return res.status(500).json({ success: false, error: 'SMS gönderilemedi.' });
       }
     }
 
     res.json({ success: true, message: 'Doğrulama kodu gönderildi.' });
   } catch (error) {
-    console.error('SMS send-code error:', error);
-    res.status(500).json({ success: false, error: 'Sunucu hatası oluştu.', message: 'Sunucu hatası oluştu.' });
+    console.error('SMS send-code error:', {
+      message: error?.message,
+      response: error?.response?.data,
+      status: error?.response?.status
+    });
+    res.status(500).json({ success: false, error: 'SMS servisine ulaşılamadı.' });
   }
 });
 
