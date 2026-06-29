@@ -680,29 +680,6 @@ app.post('/api/phone/send-code', async (req, res) => {
   }
 });
 
-app.get('/api/debug/db-columns', async (req, res) => {
-  try {
-    const { rows } = await query(`
-      SELECT table_name, column_name, data_type, character_maximum_length
-      FROM information_schema.columns
-      WHERE character_maximum_length = 50 OR data_type = 'character varying'
-      ORDER BY table_name, column_name;
-    `);
-    res.json({ success: true, data: rows });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/debug/alter-table', async (req, res) => {
-  try {
-    await query('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT');
-    res.json({ success: true, message: 'Altered successfully' });
-  } catch(e) {
-    res.status(500).json({ error: e.message, code: e.code, detail: e.detail });
-  }
-});
-
 app.post('/api/phone/verify-code', async (req, res) => {
   try {
     const { phone, code } = req.body;
