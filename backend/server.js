@@ -584,7 +584,7 @@ app.post('/api/phone/send-code', async (req, res) => {
 
     const p = phone.replace(/\D/g, '');
     if (p.length !== 10 || !p.startsWith('5')) {
-      return res.status(400).json({ success: false, error: 'Telefon numarası 5 ile başlamalı ve 10 haneli olmalıdır.', message: 'Telefon numarası 5 ile başlamalı ve 10 haneli olmalıdır.' });
+      return res.status(400).json({ success: false, error: 'Telefon numarası geçersiz.', message: 'Telefon numarası geçersiz.' });
     }
 
     const formattedPhone = `+90${p}`;
@@ -615,14 +615,13 @@ app.post('/api/phone/send-code', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6)
     `, [verificationId, 'sms_verification', formattedPhone, hashedCode, expiresAt, now]);
 
-    const smsMessage = `Couchraill doğrulama kodunuz: ${code}`;
+    const smsMessage = `Couchraill dogrulama kodunuz: ${code}`;
     
     const iletKey = process.env.ILETI_API_KEY;
     const iletHash = process.env.ILETI_API_HASH;
-    const iletSender = process.env.ILETI_SENDER;
+    const iletSender = process.env.ILETI_API_NAME;
 
     if (!iletKey || !iletHash || !iletSender) {
-      console.warn('[SMS] ILETI_API_KEY, ILETI_API_HASH or ILETI_SENDER is missing in env vars.');
       return res.status(400).json({ success: false, error: 'SMS ayarları eksik.' });
     } else {
       const payload = {
@@ -646,14 +645,14 @@ app.post('/api/phone/send-code', async (req, res) => {
       
       const smsResData = await smsResponse.json();
       if (!smsResponse.ok || (smsResData.response && smsResData.response.status && smsResData.response.status.code !== 200)) {
-         console.error('[SMS ERROR]', smsResData);
+         console.error('[SMS ERROR]', smsResData.response?.status || 'Unknown API Error');
          return res.status(500).json({ success: false, error: 'SMS gönderilemedi.', message: 'SMS gönderilemedi.' });
       }
     }
 
     res.json({ success: true, message: 'Doğrulama kodu gönderildi.' });
   } catch (error) {
-    console.error('[SEND_SMS_ERROR]', error);
+    console.error('SMS send-code error:', error);
     res.status(500).json({ success: false, error: 'Sunucu hatası oluştu.', message: 'Sunucu hatası oluştu.' });
   }
 });
