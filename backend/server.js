@@ -694,6 +694,15 @@ app.get('/api/debug/db-columns', async (req, res) => {
   }
 });
 
+app.get('/api/debug/alter-table', async (req, res) => {
+  try {
+    await query('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT');
+    res.json({ success: true, message: 'Altered successfully' });
+  } catch(e) {
+    res.status(500).json({ error: e.message, code: e.code, detail: e.detail });
+  }
+});
+
 app.post('/api/phone/verify-code', async (req, res) => {
   try {
     const { phone, code } = req.body;
