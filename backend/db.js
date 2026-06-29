@@ -561,7 +561,7 @@ const initDB = async () => {
     }
 
     // Safety ALTER TABLE for existing DB moved outside main try-catch
-    try { await client.query('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT'); } catch(e) {}
+    try { await client.query('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT'); console.log('[DB] Altered verifications.code to TEXT'); } catch(e) { console.error('[DB ERROR] ALTER verifications code:', e.message); }
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
     try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
     
