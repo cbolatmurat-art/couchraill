@@ -639,21 +639,32 @@ app.post('/api/phone/send-code', async (req, res) => {
 
       const smsResponse = await fetch('https://api.iletimerkezi.com/v1/send-sms/json', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(payload)
       });
       
       const responseText = await smsResponse.text();
+
+      // Güvenli raw loglama
+      console.error('ILETI SMS raw response:', {
+        status: smsResponse.status,
+        contentType: smsResponse.headers.get('content-type'),
+        bodyPreview: responseText?.slice(0, 300)
+      });
+
       let smsResData;
       try {
         smsResData = JSON.parse(responseText);
       } catch (parseErr) {
-        console.error('[SMS PARSE ERROR] Received non-JSON:', responseText);
-        return res.status(500).json({ success: false, error: 'SMS servisine ulaşılamadı.' });
+        console.error('[SMS PARSE ERROR] Received non-JSON response from API.');
+        // JSON değilse direkt "SMS gönderilemedi." dönüyoruz (sunucuya ulaşılamadı değil)
+        return res.status(500).json({ success: false, error: 'SMS gönderilemedi.' });
       }
 
       if (!smsResponse.ok || (smsResData.response && smsResData.response.status && smsResData.response.status.code != 200)) {
-         console.error('[SMS ERROR]', smsResData.response?.status || 'Unknown API Error');
          return res.status(500).json({ success: false, error: 'SMS gönderilemedi.' });
       }
     }
