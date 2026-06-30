@@ -625,15 +625,11 @@ app.post('/api/phone/send-code', async (req, res) => {
 
     const smsMessage = `Couchraill dogrulama kodunuz: ${code}`;
     
-    const iletApiName = process.env.ILETI_API_NAME?.trim();
     const iletApiKey = process.env.ILETI_API_KEY?.trim();
     const iletApiHash = process.env.ILETI_API_HASH?.trim();
-    const iletSenderTitle = process.env.ILETI_SENDER?.trim() || 'COUCHRAILL'; // Fallback sender title if env missing
 
     console.log('=== ILETI ENV CHECK ===');
     console.log({
-      hasApiName: !!process.env.ILETI_API_NAME,
-      apiNameLength: process.env.ILETI_API_NAME?.trim()?.length || 0,
       hasApiKey: !!process.env.ILETI_API_KEY,
       apiKeyLength: process.env.ILETI_API_KEY?.trim()?.length || 0,
       hasApiHash: !!process.env.ILETI_API_HASH,
@@ -641,18 +637,16 @@ app.post('/api/phone/send-code', async (req, res) => {
     });
     console.log('========================');
 
-    if (!iletApiName || !iletApiKey || !iletApiHash) {
+    if (!iletApiKey || !iletApiHash) {
       return res.status(400).json({ success: false, error: 'SMS ayarları eksik.' });
     } else {
       const payload = {
         request: {
           authentication: { 
-            username: iletApiName,
             key: iletApiKey, 
             hash: iletApiHash 
           },
           order: {
-            sender: iletSenderTitle,
             message: {
               text: smsMessage,
               receipents: { number: [p] }
@@ -661,26 +655,16 @@ app.post('/api/phone/send-code', async (req, res) => {
         }
       };
 
-      console.log('=== ILETI AUTH SHAPE ===');
+      console.log('=== ILETI FINAL PAYLOAD ===');
       console.log({
-        hasRequest: !!payload?.request,
-        hasAuthentication: !!payload?.request?.authentication,
         authKeys: Object.keys(payload?.request?.authentication || {}),
-        hasOrder: !!payload?.request?.order,
         orderKeys: Object.keys(payload?.request?.order || {}),
+        messageKeys: Object.keys(payload?.request?.order?.message || {}),
+        hasKeyLength: payload?.request?.authentication?.key?.length || 0,
+        hasHashLength: payload?.request?.authentication?.hash?.length || 0,
+        recipientCount: payload?.request?.order?.message?.receipents?.number?.length || 0
       });
-      console.log('========================');
-
-      console.log('=== ILETI PAYLOAD PREVIEW ===');
-      console.log({
-        usernameLength: payload?.request?.authentication?.username?.length || 0,
-        hasKey: !!payload?.request?.authentication?.key,
-        hasHash: !!payload?.request?.authentication?.hash,
-        sender: payload?.request?.order?.sender || null,
-        recipientCount:
-          payload?.request?.order?.message?.receipents?.number?.length || 0
-      });
-      console.log('==============================');
+      console.log('===========================');
 
       const smsResponse = await fetch('https://api.iletimerkezi.com/v1/send-sms/json', {
         method: 'POST',
