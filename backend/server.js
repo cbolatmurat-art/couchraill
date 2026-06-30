@@ -666,12 +666,24 @@ app.post('/api/phone/send-code', async (req, res) => {
       });
       console.log('===========================');
 
-      const smsResponse = await fetch('https://api.iletimerkezi.com/v1/send-sms/json', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+      const endpointUrl = 'https://api.iletimerkezi.com/v1/send-sms/json';
+      const requestMethod = 'POST';
+      const requestHeaders = { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      console.log('=== ILETI REQUEST DETAILS ===');
+      console.log({
+        url: endpointUrl,
+        method: requestMethod,
+        headers: requestHeaders
+      });
+      console.log('=============================');
+
+      const smsResponse = await fetch(endpointUrl, {
+        method: requestMethod,
+        headers: requestHeaders,
         body: JSON.stringify(payload)
       });
       
