@@ -577,7 +577,15 @@ const calculateProfileCompletion = (user) => {
 // ---- PHONE VERIFICATION ENDPOINTS ----
 app.post('/api/phone/send-code', async (req, res) => {
   try {
-    const { phone } = req.body;
+    console.log('SMS phone field check', {
+      hasPhone: !!req.body.phone,
+      hasPhoneNumber: !!req.body.phoneNumber,
+      phoneLength: req.body.phone?.length || 0,
+      phoneNumberLength: req.body.phoneNumber?.length || 0
+    });
+
+    const phone = req.body.phone;
+
     if (!phone) {
       return res.status(400).json({ success: false, error: 'Telefon numarası eksik.', message: 'Telefon numarası eksik.' });
     }
@@ -670,7 +678,7 @@ app.post('/api/phone/send-code', async (req, res) => {
         hasHash: !!payload?.request?.authentication?.hash,
         sender: payload?.request?.order?.sender || null,
         recipientCount:
-          payload?.request?.order?.receipents?.number?.length || 0
+          payload?.request?.order?.message?.receipents?.number?.length || 0
       });
       console.log('==============================');
 
@@ -720,6 +728,13 @@ app.post('/api/phone/send-code', async (req, res) => {
 
 app.post('/api/phone/verify-code', async (req, res) => {
   try {
+    console.log('SMS phone field check', {
+      hasPhone: !!req.body.phone,
+      hasPhoneNumber: !!req.body.phoneNumber,
+      phoneLength: req.body.phone?.length || 0,
+      phoneNumberLength: req.body.phoneNumber?.length || 0
+    });
+
     const { phone, code } = req.body;
     if (!phone || !code) {
       return res.status(400).json({ success: false, error: 'Telefon ve kod zorunludur.', message: 'Telefon ve kod zorunludur.' });
