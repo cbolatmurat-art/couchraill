@@ -574,6 +574,67 @@ const calculateProfileCompletion = (user) => {
   return Math.min(100, profileCompletion);
 };
 
+// ---- DEBUG ILETI MERKEZI SENDERS ----
+app.post('/api/debug/ilet-senders', async (req, res) => {
+  try {
+    const iletApiKey = process.env.ILETI_API_KEY?.trim();
+    const iletApiHash = process.env.ILETI_API_HASH?.trim();
+
+    if (!iletApiKey || !iletApiHash) {
+      return res.status(400).json({ success: false, error: 'SMS ayarları eksik.' });
+    }
+
+    const payload = {
+      request: {
+        authentication: {
+          key: iletApiKey,
+          hash: iletApiHash
+        }
+      }
+    };
+
+    const endpointUrl = 'https://api.iletimerkezi.com/v1/get-sender/json';
+    const requestMethod = 'POST';
+    const requestHeaders = { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+
+    console.log('=== ILETI DEBUG SENDER REQUEST ===');
+    console.log({
+      hasApiKey: !!iletApiKey,
+      hasApiHash: !!iletApiHash,
+      apiKeyLength: iletApiKey.length,
+      apiHashLength: iletApiHash.length
+    });
+
+    const response = await fetch(endpointUrl, {
+      method: requestMethod,
+      headers: requestHeaders,
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+
+    console.log('=== ILETI DEBUG SENDER RESPONSE ===');
+    console.log('Status:', response.status);
+    console.log('Body:', responseText);
+    console.log('===================================');
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch(e) {
+      responseData = { rawText: responseText };
+    }
+
+    res.json({ success: true, status: response.status, data: responseData });
+  } catch (error) {
+    console.error('Debug sender error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ---- PHONE VERIFICATION ENDPOINTS ----
 app.post('/api/phone/send-code', async (req, res) => {
   try {
