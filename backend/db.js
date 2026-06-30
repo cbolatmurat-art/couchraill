@@ -102,6 +102,15 @@ const initDB = async () => {
     }
   };
 
+  const checkConstraint = async (conname) => {
+    try {
+      const res = await client.query('SELECT 1 FROM pg_constraint WHERE conname = $1', [conname]);
+      return res && res.rowCount > 0;
+    } catch (e) {
+      return false;
+    }
+  };
+
   // FORCE CRITICAL ALTERS BEFORE ANYTHING ELSE TO ENSURE THEY RUN
   try {
     await safeQuery(`ALTER TABLE listing_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
@@ -381,7 +390,9 @@ const initDB = async () => {
 
     // Add unique constraint gracefully
     try {
-      await safeQuery('ALTER TABLE event_interactions ADD CONSTRAINT unique_event_user_type UNIQUE ("eventId", "userId", type);');
+      if (!(await checkConstraint('unique_event_user_type'))) {
+        await safeQuery('ALTER TABLE event_interactions ADD CONSTRAINT unique_event_user_type UNIQUE ("eventId", "userId", type);');
+      }
     } catch (err) {
       // Ignore error if constraint already exists or not supported by pg-mem
     }
@@ -573,8 +584,8 @@ const initDB = async () => {
 
     // Safety ALTER TABLE for existing DB moved outside main try-catch
     try { await safeQuery('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT'); console.log('[DB] Altered verifications.code to TEXT'); } catch(e) { console.error('[DB ERROR] ALTER verifications code:', e.message); }
-    try { await safeQuery('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
-    try { await safeQuery('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
+    try { if (!(await checkConstraint('users_email_unique'))) { await safeQuery('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } } catch(e) {}
+    try { if (!(await checkConstraint('users_phone_unique'))) { await safeQuery('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } } catch(e) {}
     
     // Performance Indexes
     const indexes = [
