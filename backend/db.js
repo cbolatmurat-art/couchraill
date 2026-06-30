@@ -91,10 +91,21 @@ const initDB = async () => {
 
 
 
+  const safeQuery = async (queryText, params = []) => {
+    try {
+      return await client.query(queryText, params);
+    } catch (err) {
+      console.error('\n[DB CRITICAL ERROR] Query execution failed!');
+      console.error('[DB ERROR CODE]', err.code);
+      console.error('[DB ERROR MESSAGE]', err.message);
+      console.error('[DB ERROR QUERY]', typeof queryText === 'string' ? queryText.trim().substring(0, 200) : queryText);
+    }
+  };
+
   // FORCE CRITICAL ALTERS BEFORE ANYTHING ELSE TO ENSURE THEY RUN
   try {
-    await client.query(`ALTER TABLE listing_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
-    await client.query(`ALTER TABLE post_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
+    await safeQuery(`ALTER TABLE listing_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
+    await safeQuery(`ALTER TABLE post_comments ADD COLUMN IF NOT EXISTS "parentCommentId" VARCHAR(255)`);
     console.log('[DB] parentCommentId columns ensured.');
   } catch(e) {
     console.warn('[DB WARNING] Force alters failed:', e.message);
@@ -102,7 +113,7 @@ const initDB = async () => {
 
   // CREATE EVENT_LIKES OUTSIDE TRANSACTION TO PREVENT ROLLBACK
   try {
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS event_likes (
         id VARCHAR(255) PRIMARY KEY,
         "eventId" VARCHAR(255),
@@ -111,19 +122,19 @@ const initDB = async () => {
         UNIQUE("eventId", "userId")
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ev_likes_event ON event_likes("eventId")`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ev_likes_user ON event_likes("userId")`);
+    await safeQuery(`CREATE INDEX IF NOT EXISTS idx_ev_likes_event ON event_likes("eventId")`);
+    await safeQuery(`CREATE INDEX IF NOT EXISTS idx_ev_likes_user ON event_likes("userId")`);
     console.log('[DB] event_likes table ensured.');
   } catch(e) {
     console.warn('[DB WARNING] event_likes creation failed:', e.message);
   }
 
   try {
-    await client.query('BEGIN');
+    /* await safeQuery('BEGIN'); */
 
 
     // Users
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(255) PRIMARY KEY,
         email VARCHAR(255) UNIQUE,
@@ -159,15 +170,15 @@ const initDB = async () => {
     `);
 
     try {
-      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(100)');
-      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS "genderChangedOnce" BOOLEAN DEFAULT false');
-      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true');
-      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS "deactivatedAt" TIMESTAMP');
-      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS "birthDate" VARCHAR(50)');
+      await safeQuery('ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(100)');
+      await safeQuery('ALTER TABLE users ADD COLUMN IF NOT EXISTS "genderChangedOnce" BOOLEAN DEFAULT false');
+      await safeQuery('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true');
+      await safeQuery('ALTER TABLE users ADD COLUMN IF NOT EXISTS "deactivatedAt" TIMESTAMP');
+      await safeQuery('ALTER TABLE users ADD COLUMN IF NOT EXISTS "birthDate" VARCHAR(50)');
     } catch(e) {}
     
     // Listings
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS listings (
         id VARCHAR(255) PRIMARY KEY,
         "hostId" VARCHAR(255),
@@ -202,7 +213,7 @@ const initDB = async () => {
     // Removed ALTER TABLE from inside the transaction to avoid aborting it.
 
     // Requests
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS requests (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -223,7 +234,7 @@ const initDB = async () => {
 
 
     // Conversations
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS conversations (
         id VARCHAR(255) PRIMARY KEY,
         "participantIds" JSONB DEFAULT '[]',
@@ -237,7 +248,7 @@ const initDB = async () => {
     `);
 
     // Messages
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS messages (
         id VARCHAR(255) PRIMARY KEY,
         "conversationId" VARCHAR(255),
@@ -255,7 +266,7 @@ const initDB = async () => {
     `);
 
     // Verification Requests
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS verification_requests (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -271,7 +282,7 @@ const initDB = async () => {
     `);
 
     // Event Waitlists
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS event_waitlists (
         id VARCHAR(255) PRIMARY KEY,
         "eventId" VARCHAR(255) NOT NULL,
@@ -283,7 +294,7 @@ const initDB = async () => {
     `);
 
     // Email/Phone Verifications (Verification Codes)
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS verifications (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -298,7 +309,7 @@ const initDB = async () => {
     `);
 
     // Notifications
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS notifications (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -313,7 +324,7 @@ const initDB = async () => {
     `);
 
     // Reviews
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS reviews (
         id VARCHAR(255) PRIMARY KEY,
         "reviewerId" VARCHAR(255),
@@ -325,7 +336,7 @@ const initDB = async () => {
     `);
 
     // Social Tables
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS follows (
         "followerUserId" VARCHAR(255),
         "followingUserId" VARCHAR(255),
@@ -334,7 +345,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS blocked_users (
         "blockerId" VARCHAR(255),
         "blockedId" VARCHAR(255),
@@ -344,7 +355,7 @@ const initDB = async () => {
     `);
 
     // Event Interactions
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS event_interactions (
         id VARCHAR(255) PRIMARY KEY,
         "eventId" VARCHAR(255),
@@ -356,7 +367,7 @@ const initDB = async () => {
 
     // Clean up duplicates gracefully
     try {
-      await client.query(`
+      await safeQuery(`
         DELETE FROM event_interactions
         WHERE id NOT IN (
           SELECT MIN(id)
@@ -370,13 +381,13 @@ const initDB = async () => {
 
     // Add unique constraint gracefully
     try {
-      await client.query('ALTER TABLE event_interactions ADD CONSTRAINT unique_event_user_type UNIQUE ("eventId", "userId", type);');
+      await safeQuery('ALTER TABLE event_interactions ADD CONSTRAINT unique_event_user_type UNIQUE ("eventId", "userId", type);');
     } catch (err) {
       // Ignore error if constraint already exists or not supported by pg-mem
     }
 
     // Reports
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS reports (
         id VARCHAR(255) PRIMARY KEY,
         "reporterUserId" VARCHAR(255),
@@ -392,7 +403,7 @@ const initDB = async () => {
     `);
 
     // Sorun Bildirimleri
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS issue_reports (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -405,7 +416,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS friend_requests (
         id VARCHAR(255) PRIMARY KEY,
         "fromUserId" VARCHAR(255),
@@ -415,7 +426,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS friends (
         "userId1" VARCHAR(255),
         "userId2" VARCHAR(255),
@@ -424,7 +435,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS pokes (
         id VARCHAR(255) PRIMARY KEY,
         "fromUserId" VARCHAR(255),
@@ -433,7 +444,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS posts (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -447,7 +458,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS post_likes (
         id VARCHAR(255) PRIMARY KEY,
         "postId" VARCHAR(255),
@@ -456,7 +467,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS post_comments (
         id VARCHAR(255) PRIMARY KEY,
         "postId" VARCHAR(255),
@@ -466,7 +477,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS listing_likes (
         id VARCHAR(255) PRIMARY KEY,
         "listingId" VARCHAR(255),
@@ -475,7 +486,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS listing_comments (
         id VARCHAR(255) PRIMARY KEY,
         "listingId" VARCHAR(255),
@@ -485,7 +496,7 @@ const initDB = async () => {
       )
     `);
 
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS deleted_users (
         "userId" VARCHAR(255) PRIMARY KEY,
         email VARCHAR(255),
@@ -494,7 +505,7 @@ const initDB = async () => {
     `);
 
     // Device Sessions
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS device_sessions (
         id VARCHAR(255) PRIMARY KEY,
         "userId" VARCHAR(255),
@@ -510,7 +521,7 @@ const initDB = async () => {
     `);
 
     // Pending Notifications
-    await client.query(`
+    await safeQuery(`
       CREATE TABLE IF NOT EXISTS pending_follow_notifications (
         id VARCHAR(255) PRIMARY KEY,
         actor_id VARCHAR(255) NOT NULL,
@@ -523,12 +534,12 @@ const initDB = async () => {
       )
     `);
 
-    await client.query('COMMIT');
+    /* await safeQuery('COMMIT'); */
     console.log('[DB] PostgreSQL tables initialized successfully.');
     
     // Safety creation for new tables (Outside transaction to avoid aborts)
     try {
-      await client.query(`
+      await safeQuery(`
         CREATE TABLE IF NOT EXISTS accommodation_requests (
           id TEXT PRIMARY KEY,
           listing_id TEXT NOT NULL,
@@ -546,7 +557,7 @@ const initDB = async () => {
     }
 
     try {
-      await client.query(`
+      await safeQuery(`
         CREATE TABLE IF NOT EXISTS listing_interests (
           id TEXT PRIMARY KEY,
           listing_id TEXT NOT NULL,
@@ -561,9 +572,9 @@ const initDB = async () => {
     }
 
     // Safety ALTER TABLE for existing DB moved outside main try-catch
-    try { await client.query('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT'); console.log('[DB] Altered verifications.code to TEXT'); } catch(e) { console.error('[DB ERROR] ALTER verifications code:', e.message); }
-    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
-    try { await client.query('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
+    try { await safeQuery('ALTER TABLE verifications ALTER COLUMN code TYPE TEXT'); console.log('[DB] Altered verifications.code to TEXT'); } catch(e) { console.error('[DB ERROR] ALTER verifications code:', e.message); }
+    try { await safeQuery('ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)'); } catch(e) {}
+    try { await safeQuery('ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone)'); } catch(e) {}
     
     // Performance Indexes
     const indexes = [
@@ -582,7 +593,7 @@ const initDB = async () => {
 
     for (const idx of indexes) {
       try {
-        await client.query(idx);
+        await safeQuery(idx);
       } catch (e) {
         // Ignored for pg-mem or if index creation fails non-fatally
       }
@@ -599,7 +610,7 @@ const initDB = async () => {
           console.log(`[DB] Migrating ${localDb.follows.length} follows from db.json to PostgreSQL...`);
           for (const f of localDb.follows) {
             if (f.followerUserId && f.followingUserId) {
-              await client.query(`
+              await safeQuery(`
                 INSERT INTO follows ("followerUserId", "followingUserId", "createdAt")
                 VALUES ($1, $2, $3)
                 ON CONFLICT ("followerUserId", "followingUserId") DO NOTHING
@@ -613,7 +624,7 @@ const initDB = async () => {
       console.warn('[DB WARNING] Follows migration failed:', migErr.message);
     }
   } catch (e) {
-    await client.query('ROLLBACK');
+    /* await safeQuery('ROLLBACK'); */
     console.error('[DB] Error initializing PostgreSQL tables:', e);
   } finally {
     client.release();
@@ -692,7 +703,10 @@ const initDB = async () => {
     try {
       if (pool) await pool.query(alt);
     } catch (e) {
-      console.warn(`[DB WARNING] Could not execute: ${alt}`, e.message);
+      console.error(`\n[DB CRITICAL ERROR] ALTER Query execution failed!`);
+      console.error(`[DB ERROR CODE] ${e.code}`);
+      console.error(`[DB ERROR MESSAGE] ${e.message}`);
+      console.error(`[DB ERROR QUERY] ${alt.trim().substring(0, 200)}...\n`);
     }
   }
 };
