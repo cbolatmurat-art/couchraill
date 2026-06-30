@@ -627,6 +627,7 @@ app.post('/api/phone/send-code', async (req, res) => {
     
     const iletApiKey = process.env.ILETI_API_KEY?.trim();
     const iletApiHash = process.env.ILETI_API_HASH?.trim();
+    const iletSender = process.env.ILETI_SENDER?.trim();
 
     console.log('=== ILETI ENV CHECK ===');
     console.log({
@@ -634,11 +635,15 @@ app.post('/api/phone/send-code', async (req, res) => {
       apiKeyLength: process.env.ILETI_API_KEY?.trim()?.length || 0,
       hasApiHash: !!process.env.ILETI_API_HASH,
       apiHashLength: process.env.ILETI_API_HASH?.trim()?.length || 0,
+      hasSender: !!process.env.ILETI_SENDER,
+      senderLength: process.env.ILETI_SENDER?.trim()?.length || 0,
     });
     console.log('========================');
 
     if (!iletApiKey || !iletApiHash) {
       return res.status(400).json({ success: false, error: 'SMS ayarları eksik.' });
+    } else if (!iletSender) {
+      return res.status(400).json({ success: false, error: 'SMS başlığı eksik.' });
     } else {
       const payload = {
         request: {
@@ -647,6 +652,7 @@ app.post('/api/phone/send-code', async (req, res) => {
             hash: iletApiHash 
           },
           order: {
+            sender: iletSender,
             message: {
               text: smsMessage,
               receipents: { number: [p] }
@@ -662,6 +668,7 @@ app.post('/api/phone/send-code', async (req, res) => {
         messageKeys: Object.keys(payload?.request?.order?.message || {}),
         hasKeyLength: payload?.request?.authentication?.key?.length || 0,
         hasHashLength: payload?.request?.authentication?.hash?.length || 0,
+        senderLength: payload?.request?.order?.sender?.length || 0,
         recipientCount: payload?.request?.order?.message?.receipents?.number?.length || 0
       });
       console.log('===========================');
