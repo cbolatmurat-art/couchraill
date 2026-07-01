@@ -8,6 +8,7 @@ import { Input } from '../../components/Input';
 import { CityPicker } from '../../components/CityPicker';
 import { useAppContext } from '../../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL } from '../../constants/config';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -15,14 +16,96 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
-  const [gender, setGender] = useState('');
-  const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
+  const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  const [isEmailModalVisible, setIsEmailModalVisible] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+  const [emailVerifyError, setEmailVerifyError] = useState('');
+
+  React.useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (emailCooldown > 0) {
+      timer = setInterval(() => setEmailCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [emailCooldown]);
+
+  const handleSendEmailCode = async (overrideEmail?: string) => {
+    setEmailVerifyError('');
+    setIsSendingEmail(true);
+    const targetEmail = (overrideEmail || email).trim();
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/send-register-email-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setEmailCooldown(60);
+      } else if (res.status === 429) {
+        setEmailCooldown(60);
+        setEmailVerifyError(data?.error || 'Lütfen yeni bir kod istemeden önce bekleyin.');
+      } else {
+        setEmailVerifyError(data?.error || data?.message || 'Kod gönderilemedi.');
+      }
+    } catch (err: any) {
+      setEmailVerifyError('Sunucu bağlantı hatası.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleVerifyEmailCode = async () => {
+    setEmailVerifyError('');
+    if (emailCode.length !== 6) {
+      setEmailVerifyError('Lütfen 6 haneli kodu girin.');
+      return;
+    }
+
+    setIsVerifyingEmail(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/verify-register-email-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), code: emailCode })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setIsEmailModalVisible(false);
+        router.push({
+          pathname: '/(auth)/setup',
+          params: {
+            name,
+            username: username.trim(),
+            email: email.trim(),
+            password,
+            phone: '',
+            city: '',
+            gender: '',
+            termsAccepted: termsAccepted ? 'true' : 'false'
+          }
+        });
+      } else {
+        setEmailVerifyError(data?.error || data?.message || 'Kod Hatalı');
+      }
+    } catch (err: any) {
+      setEmailVerifyError('Sunucu bağlantı hatası.');
+    } finally {
+      setIsVerifyingEmail(false);
+    }
+  };
 
   const handleRegister = async () => {
     console.log("KAYDI_TAMAMLA_CLICKED");
@@ -34,13 +117,13 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (!name || !password || !email) {
+    if (!name || !password || !email || !username) {
       setErrorMsg('Lütfen zorunlu alanları doldurun.');
       return;
     }
-    
-    if (!gender) {
-      setErrorMsg('Lütfen cinsiyetinizi seçin.');
+
+    if (username.length < 3 || !/^[a-z0-9._]+$/.test(username.toLowerCase())) {
+      setErrorMsg('Kullanıcı adı en az 3 karakter olmalı ve sadece küçük harf, rakam, nokta, alt çizgi içerebilir.');
       return;
     }
     
@@ -85,18 +168,12 @@ export default function RegisterScreen() {
       return;
     }
 
-    router.push({
-      pathname: '/(auth)/setup',
-      params: {
-        name,
-        email: email.trim(),
-        password,
-        phone: '',
-        city: '',
-        gender,
-        termsAccepted: termsAccepted ? 'true' : 'false'
-      }
-    });
+    setEmailCode('');
+    setEmailVerifyError('');
+    setIsEmailModalVisible(true);
+    if (emailCooldown === 0) {
+      await handleSendEmailCode();
+    }
   };
 
   return (
@@ -144,41 +221,14 @@ export default function RegisterScreen() {
               }}
             />
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Cinsiyet</Text>
-              <Pressable
-                style={[styles.inputBox, { justifyContent: 'space-between' }]}
-                onPress={() => setIsGenderModalVisible(true)}
-              >
-                <Text style={{ fontSize: 16, color: gender ? Colors.text : Colors.textLight }}>
-                  {gender || 'Cinsiyet seçin...'}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color={Colors.textLight} />
-              </Pressable>
-
-              <Modal visible={isGenderModalVisible} transparent animationType="fade">
-                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => setIsGenderModalVisible(false)}>
-                  <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 30 }}>
-                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Cinsiyet Seç</Text>
-                    </View>
-                    {['Erkek', 'Kadın', 'Söylemek istemiyorum'].map(opt => (
-                      <Pressable
-                        key={opt}
-                        style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', flexDirection: 'row', justifyContent: 'space-between' }}
-                        onPress={() => { setGender(opt); setIsGenderModalVisible(false); }}
-                      >
-                        <Text style={{ fontSize: 16, color: Colors.text }}>{opt}</Text>
-                        {gender === opt && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
-                      </Pressable>
-                    ))}
-                    <Pressable style={{ padding: 16, alignItems: 'center' }} onPress={() => setIsGenderModalVisible(false)}>
-                      <Text style={{ fontSize: 16, color: Colors.danger, fontWeight: '600' }}>İptal</Text>
-                    </Pressable>
-                  </View>
-                </Pressable>
-              </Modal>
-            </View>
+            <Input
+              label="Kullanıcı Adı"
+              placeholder="kullanici_adi"
+              value={username}
+              onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
             <Input
               label="E-posta Adresi"
@@ -282,6 +332,66 @@ export default function RegisterScreen() {
                 Üyelik oluşturarak bu şartları ve topluluk kurallarını okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz.
               </Text>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      {/* Email Verification Modal */}
+      <Modal
+        visible={isEmailModalVisible}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.modalOverlayCenter}>
+          <View style={styles.modalCenterBox}>
+            <Text style={styles.modalTitleCenter}>E-posta Adresinizi Doğrulayın</Text>
+            <Text style={[styles.modalText, { textAlign: 'center', marginBottom: 20 }]}>
+              Girdiğiniz e-posta adresine doğrulama kodu gönderdik. Lütfen gelen doğrulama kodunu girin.
+            </Text>
+
+            {emailVerifyError ? (
+              <Text style={{ color: Colors.danger, textAlign: 'center', marginBottom: 10 }}>{emailVerifyError}</Text>
+            ) : null}
+
+            <Input
+              placeholder="6 Haneli Kod"
+              value={emailCode}
+              onChangeText={setEmailCode}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              maxLength={6}
+              textContentType="oneTimeCode"
+              autoFocus={false}
+              textAlign="center"
+              style={{ fontSize: 22, letterSpacing: 4, height: 56 }}
+            />
+
+            <Pressable 
+              style={[styles.submitBtn, { marginTop: 16, width: '100%' }, isVerifyingEmail && styles.submitBtnDisabled]}
+              onPress={handleVerifyEmailCode}
+              disabled={isVerifyingEmail}
+            >
+              <Text style={styles.submitBtnText}>{isVerifyingEmail ? 'Doğrulanıyor...' : 'Onayla'}</Text>
+            </Pressable>
+
+            <Pressable 
+              style={{ alignItems: 'center', paddingVertical: 16, marginTop: 8 }} 
+              onPress={() => {
+                if (emailCooldown === 0 && !isSendingEmail && !isVerifyingEmail) {
+                  handleSendEmailCode();
+                }
+              }}
+            >
+              <Text style={[{ fontSize: 16, fontWeight: 'bold' }, emailCooldown > 0 ? { color: Colors.textLight } : { color: Colors.primary }]}>
+                {emailCooldown > 0 ? `Doğrulama kodu e-posta adresinize gönderildi. (${emailCooldown}sn)` : 'Kodu Tekrar Gönder'}
+              </Text>
+            </Pressable>
+
+            <Pressable 
+              style={{ alignItems: 'center', paddingVertical: 12, marginTop: 4 }} 
+              onPress={() => setIsEmailModalVisible(false)}
+            >
+              <Text style={{ fontSize: 16, color: Colors.text, fontWeight: '600' }}>İptal</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -483,5 +593,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     color: Colors.text,
+  },
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCenterBox: {
+    width: '100%',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitleCenter: {
+    ...Typography.title,
+    fontWeight: 'bold',
+    fontSize: 20,
+    textAlign: 'center',
+    marginBottom: 12,
   }
 });

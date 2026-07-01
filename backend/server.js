@@ -843,12 +843,12 @@ app.post('/api/phone/verify-code', async (req, res) => {
 // ---- AUTH & USERS ----
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name, phone, userType, city, gender, termsAccepted, termsAcceptedAt } = req.body;
+    const { email, password, name, username: reqUsername, phone, userType, city, gender, termsAccepted, termsAcceptedAt } = req.body;
     
     if (termsAccepted !== true) {
       return res.status(400).json({ success: false, error: 'Üyelik oluşturmak için şartları kabul etmelisiniz.', message: 'Üyelik oluşturmak için şartları kabul etmelisiniz.' });
     }
-    if (!password || !name || !email) {
+    if (!password || !name || !email || !reqUsername) {
       return res.status(400).json({ success: false, error: 'Zorunlu alanlar eksik.', message: 'Zorunlu alanlar eksik.' });
     }
 
@@ -946,7 +946,15 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const formattedName = name.split(' ').map((w) => w ? w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR') : '').join(' ');
-    const username = await generateUniqueUsername(formattedName);
+    let username = reqUsername ? String(reqUsername).trim().toLowerCase() : null;
+    if (username) {
+      const { rows: existingUsernames } = await query('SELECT id FROM users WHERE LOWER(username) = $1', [username]);
+      if (existingUsernames.length > 0) {
+         return res.status(400).json({ success: false, error: 'Bu kullanıcı adı zaten alınmış.' });
+      }
+    } else {
+      username = await generateUniqueUsername(formattedName);
+    }
     const newId = `u${Date.now()}`;
     const joinedDate = new Date().toISOString().split('T')[0];
     
@@ -961,7 +969,7 @@ app.post('/api/auth/register', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, false)
     `, [
       newId, normalizedEmail, hashedPassword, formattedName, username, normalizedPhone, userType || 'seeker', city || '',
-      false, joinedDate, null, false, false, 'unverified',
+      false, joinedDate, null, false, true, 'unverified',
       true, false, formattedName, termsAccepted, termsAcceptedAt || new Date().toISOString(), gender || null
     ]);
 
@@ -4286,7 +4294,129 @@ const transporter = nodemailer.createTransport({
 
 // Per-user cooldown map: key = "userId:type:target", value = timestamp of last send
 const verificationCooldowns = new Map();
-const VERIFICATION_COOLDOWN_MS = 60 * 1000; // 60 seconds
+const VERIFICATION_COOLDOWN_MS = 60 * 1000;
+
+app.post('/api/auth/send-register-email-code', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, error: 'E-posta adresi eksik.' });
+
+  const normalizedEmail = String(email).trim().toLowerCase();
+
+  const { query } = require('./backend/db');
+  const { rows: verifiedCheck } = await query(
+    'SELECT id FROM users WHERE LOWER(TRIM(email)) = $1 AND "emailVerified" = true',
+    [normalizedEmail]
+  );
+  if (verifiedCheck.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Bu e-posta adresi kullanılıyor.',
+      message: 'Bu e-posta adresi kullanılıyor.'
+    });
+  }
+
+  const cooldownKey = `reg:email:${normalizedEmail}`;
+  const lastSent = verificationCooldowns.get(cooldownKey);
+  const now = Date.now();
+
+  if (lastSent && (now - lastSent) < VERIFICATION_COOLDOWN_MS) {
+    const remainingSec = Math.ceil((VERIFICATION_COOLDOWN_MS - (now - lastSent)) / 1000);
+    return res.status(429).json({
+      success: false,
+      error: `Lütfen ${remainingSec} saniye bekleyin.`,
+      remainingSeconds: remainingSec
+    });
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = now + 10 * 60 * 1000; // 10 mins
+
+  // Store in DB
+  const { readDB, writeDB } = require('./backend/db');
+  const db = readDB();
+  if (!db.verifications) db.verifications = [];
+  db.verifications = db.verifications.filter(v => !(v.type === 'register_email' && v.target === normalizedEmail && !v.used));
+
+  const verification = {
+    id: `ev${now}_${Math.random().toString(36).slice(2, 6)}`,
+    userId: 'registration',
+    type: 'register_email',
+    target: normalizedEmail,
+    code,
+    expiresAt,
+    used: false,
+    attempts: 0,
+    createdAt: now
+  };
+
+  db.verifications.push(verification);
+  writeDB(db);
+  verificationCooldowns.set(cooldownKey, now);
+
+  const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  if (!apiKey || !apiKey.startsWith("xkeysib-")) {
+    return res.status(500).json({ success: false, error: 'E-posta servisi ayarlanmamış.' });
+  }
+
+  const fromEmail = (process.env.BREVO_FROM_EMAIL || "onay@senindomainin.com").trim().toLowerCase();
+  
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: {
+          name: process.env.BREVO_FROM_NAME || "Misafirim Ol",
+          email: fromEmail
+        },
+        to: [{ email: normalizedEmail }],
+        subject: "E-posta Doğrulama Kodu",
+        htmlContent: `<p>Merhaba,</p><p>Kayıt işlemini tamamlamak için doğrulama kodunuz: <strong>${code}</strong></p><p>Bu kod 10 dakika boyunca geçerlidir.</p>`
+      })
+    });
+
+    if (!response.ok) {
+      const responseData = await response.json().catch(() => null);
+      throw new Error(responseData?.message || 'Email API Error');
+    }
+    return res.json({ success: true, message: 'Doğrulama kodu gönderildi.' });
+  } catch (error) {
+    console.error("BREVO_ERROR:", error);
+    return res.status(500).json({ success: false, error: 'E-posta gönderilemedi.' });
+  }
+});
+
+app.post('/api/auth/verify-register-email-code', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ success: false, error: 'Eksik bilgi.' });
+
+  const normalizedEmail = String(email).trim().toLowerCase();
+  
+  const { readDB, writeDB } = require('./backend/db');
+  const db = readDB();
+  const vIndex = (db.verifications || []).findIndex(v => v.userId === 'registration' && v.type === 'register_email' && v.target === normalizedEmail && !v.used);
+  if (vIndex === -1) return res.status(400).json({ success: false, error: 'Geçerli bir kod bulunamadı. Lütfen yeni kod isteyin.' });
+  
+  const v = db.verifications[vIndex];
+  if (Date.now() > v.expiresAt) return res.status(400).json({ success: false, error: 'Kod süresi dolmuş.' });
+  if (v.code !== String(code).trim()) {
+    v.attempts = (v.attempts || 0) + 1;
+    writeDB(db);
+    return res.status(400).json({ success: false, error: 'Kod hatalı.' });
+  }
+
+  // Mark as used
+  v.used = true;
+  writeDB(db);
+
+  return res.json({ success: true, message: 'E-posta başarıyla doğrulandı.' });
+});
+
+ // 60 seconds
 
 app.post('/api/auth/send-email-verification', async (req, res) => {
   const { userId, email: reqEmail } = req.body;

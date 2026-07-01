@@ -67,6 +67,7 @@ export default function SetupScreen() {
 
       const result = await register({
         name: params.name as string,
+        username: params.username as string,
         email: params.email as string,
         password: params.password as string,
         phone: params.phone as string,
