@@ -168,12 +168,18 @@ export default function RegisterScreen() {
       return;
     }
 
-    setEmailCode('');
-    setEmailVerifyError('');
-    setIsEmailModalVisible(true);
-    if (emailCooldown === 0) {
-      await handleSendEmailCode();
-    }
+    router.push({
+      pathname: '/(auth)/setup',
+      params: {
+        name,
+        email: email.trim(),
+        password,
+        phone: '',
+        city: '',
+        gender,
+        termsAccepted: termsAccepted ? 'true' : 'false'
+      }
+    });
   };
 
   return (

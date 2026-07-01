@@ -202,6 +202,89 @@ export default function SecurityScreen() {
     }
   };
 
+  
+  // Email state
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const [isEmailModalVisible, setIsEmailModalVisible] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+  const [emailVerifyError, setEmailVerifyError] = useState('');
+  const [emailVerifySuccess, setEmailVerifySuccess] = useState('');
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (emailCooldown > 0) {
+      timer = setInterval(() => setEmailCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [emailCooldown]);
+
+  const handleSendEmailCode = async () => {
+    setEmailVerifyError('');
+    setEmailVerifySuccess('');
+
+    if (emailCooldown > 0) {
+      setEmailVerifyError(`Lütfen ${emailCooldown} saniye bekleyin.`);
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/send-email-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser?.id, email: currentUser?.email })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setEmailCooldown(60);
+        setIsEmailModalVisible(true);
+      } else if (res.status === 429) {
+        setEmailCooldown(60);
+        setEmailVerifyError(data?.error || 'Lütfen bekleyin.');
+      } else {
+        setEmailVerifyError(data?.error || 'Kod gönderilemedi.');
+      }
+    } catch (err: any) {
+      setEmailVerifyError('Sunucu bağlantı hatası.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    setEmailVerifyError('');
+    if (emailCode.length !== 6) {
+      setEmailVerifyError('Lütfen 6 haneli kodu girin.');
+      return;
+    }
+
+    setIsVerifyingEmail(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/verify-email-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser?.id, code: emailCode })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        await updateProfile({ emailVerified: true }, '', true);
+        setEmailVerifySuccess('E-posta başarıyla doğrulandı.');
+        setIsEmailModalVisible(false);
+        setEmailCode('');
+      } else {
+        setEmailVerifyError(data?.error || 'Doğrulama başarısız.');
+      }
+    } catch (err: any) {
+      setEmailVerifyError('Sunucu bağlantı hatası.');
+    } finally {
+      setIsVerifyingEmail(false);
+    }
+  };
+
   // Phone state
   const [phoneNumber, setPhoneNumber] = useState(currentUser?.phone || '');
   const [verificationCode, setVerificationCode] = useState('');
@@ -638,94 +721,42 @@ export default function SecurityScreen() {
         </Card>
       )}
 
-      {/* Telefon Numarası Doğrulama Card */}
+            {/* E-posta Doğrulama Card */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
-          <Ionicons name="phone-portrait-outline" size={24} color={Colors.primary} style={styles.icon} />
-          <Text style={styles.cardTitle}>Telefon Numarası Doğrulama</Text>
+          <Ionicons name="mail-outline" size={24} color={Colors.primary} style={styles.icon} />
+          <Text style={styles.cardTitle}>E-posta Doğrulama</Text>
         </View>
 
-        {currentUser?.phoneVerified && !isEditingPhone ? (
+        {currentUser?.emailVerified ? (
           <View style={styles.verifiedContainer}>
             <View style={styles.phoneSuccessBadge}>
               <Ionicons name="checkmark-circle" size={18} color={Colors.success} style={{ marginRight: 6 }} />
-              <Text style={styles.phoneSuccessBadgeText}>Telefon numaranız doğrulandı.</Text>
+              <Text style={styles.phoneSuccessBadgeText}>E-posta adresiniz doğrulandı.</Text>
             </View>
-            <Text style={styles.verifiedNumberText}>Kayıtlı Numara: {currentUser.phone}</Text>
-            <Button title="Numarayı Güncelle" variant="outline" onPress={() => setIsEditingPhone(true)} />
+            <Text style={styles.verifiedNumberText}>Kayıtlı E-posta: {currentUser.email}</Text>
           </View>
         ) : (
           <View>
             <Text style={styles.cardText}>
-              Hesabınızı daha güvenli hale getirmek için telefon numaranızı doğrulayın.
+              Hesabınızı daha güvenli hale getirmek için e-posta adresinizi doğrulayın.
             </Text>
+            <Text style={[styles.verifiedNumberText, { marginBottom: 16 }]}>Mevcut E-posta: {currentUser?.email}</Text>
 
-            <Input
-              label="Telefon Numarası"
-              placeholder="0555 123 45 67"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              editable={!codeSent && !isSendingCode}
+            {emailVerifyError && !isEmailModalVisible ? <Text style={styles.errorText}>{emailVerifyError}</Text> : null}
+            {emailVerifySuccess ? <Text style={styles.successText}>{emailVerifySuccess}</Text> : null}
+
+            <Button 
+              title="Doğrulama Kodu Gönder" 
+              onPress={handleSendEmailCode} 
+              loading={isSendingEmail} 
             />
-
-            {phoneErrorMsg && !codeSent ? <Text style={styles.errorText}>{phoneErrorMsg}</Text> : null}
-            {phoneSuccessMsg && !codeSent ? <Text style={styles.successText}>{phoneSuccessMsg}</Text> : null}
-
-            {!codeSent ? (
-              <View style={styles.buttonRow}>
-                <View style={isEditingPhone ? { flex: 1, marginRight: 8 } : { width: '100%' }}>
-                  <Button 
-                    title="Kod Gönder" 
-                    onPress={handleSendCode} 
-                    loading={isSendingCode} 
-                  />
-                </View>
-                {isEditingPhone && (
-                  <View style={{ flex: 1 }}>
-                    <Button 
-                      title="İptal" 
-                      variant="outline" 
-                      onPress={handleCancelVerification} 
-                    />
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={{ marginTop: 12 }}>
-                <Input
-                  label="Doğrulama Kodu"
-                  placeholder="6 Haneli Kod"
-                  value={verificationCode}
-                  onChangeText={setVerificationCode}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
-
-                {phoneErrorMsg ? <Text style={styles.errorText}>{phoneErrorMsg}</Text> : null}
-                {phoneSuccessMsg ? <Text style={styles.successText}>{phoneSuccessMsg}</Text> : null}
-
-                <View style={styles.buttonRow}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Button 
-                      title="Doğrula" 
-                      onPress={handleVerifyCode} 
-                      loading={isVerifying} 
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Button 
-                      title="İptal" 
-                      variant="outline" 
-                      onPress={handleCancelVerification} 
-                    />
-                  </View>
-                </View>
-              </View>
-            )}
           </View>
         )}
       </Card>
+      
+      {/* Telefon Numarası Doğrulama Gizlendi */}
+
 
       {/* Giriş Yapılan Cihazlar Card */}
       <Pressable onPress={handleOpenDevices} style={({ pressed }) => [styles.passwordRow, pressed && { opacity: 0.7 }]}>
@@ -863,7 +894,35 @@ export default function SecurityScreen() {
                     loading={isChangingPassword}
                   />
                 </View>
-              </ScrollView>
+              
+      {/* Email Verification Modal */}
+      <Modal visible={isEmailModalVisible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', backgroundColor: '#fff', borderRadius: 24, padding: 24 }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>E-posta Adresinizi Doğrulayın</Text>
+            <Text style={{ textAlign: 'center', marginBottom: 20 }}>{currentUser?.email} adresinize gönderilen 6 haneli kodu girin.</Text>
+            
+            {emailVerifyError ? <Text style={{ color: 'red', textAlign: 'center', marginBottom: 10 }}>{emailVerifyError}</Text> : null}
+            
+            <Input
+              placeholder="6 Haneli Kod"
+              value={emailCode}
+              onChangeText={setEmailCode}
+              keyboardType="number-pad"
+              maxLength={6}
+              textAlign="center"
+              style={{ fontSize: 22, letterSpacing: 4 }}
+            />
+
+            <Button title="Doğrula" onPress={handleVerifyEmail} loading={isVerifyingEmail} style={{ marginTop: 16 }} />
+            
+            <Pressable style={{ alignItems: 'center', marginTop: 16 }} onPress={() => setIsEmailModalVisible(false)}>
+              <Text style={{ fontSize: 16, color: '#333' }}>İptal</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+</ScrollView>
             </Animated.View>
           </KeyboardAvoidingView>
         </View>

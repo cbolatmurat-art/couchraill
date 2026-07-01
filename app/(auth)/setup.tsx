@@ -81,7 +81,7 @@ export default function SetupScreen() {
       if (result.success) {
         // We don't alert here for a smoother onboarding experience, just redirect.
         setTimeout(() => {
-          router.replace('/(tabs)');
+          router.replace('/security');
         }, 500);
       } else {
         setSelectedRole(null);
