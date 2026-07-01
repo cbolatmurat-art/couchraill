@@ -14,7 +14,7 @@ export default function RegisterScreen() {
 
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [gender, setGender] = useState('');
   const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -23,87 +23,6 @@ export default function RegisterScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-
-  const [isPhoneModalVisible, setIsPhoneModalVisible] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [phoneCooldown, setPhoneCooldown] = useState(0);
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyErrorMsg, setVerifyErrorMsg] = useState('');
-
-  React.useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (phoneCooldown > 0) {
-      timer = setInterval(() => setPhoneCooldown(prev => prev - 1), 1000);
-    }
-    return () => clearInterval(timer);
-  }, [phoneCooldown]);
-
-  const handleSendCode = async () => {
-    setVerifyErrorMsg('');
-    setIsSendingCode(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/phone/send-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim() })
-      });
-      const data = await res.json().catch(() => null);
-
-      if (res.ok && data?.success) {
-        setPhoneCooldown(60);
-      } else if (res.status === 429) {
-        setPhoneCooldown(60);
-        setVerifyErrorMsg(data?.error || 'Lütfen yeni bir kod istemeden önce 60 saniye bekleyin.');
-      } else {
-        setVerifyErrorMsg(data?.error || data?.message || 'Kod gönderilemedi.');
-      }
-    } catch (err: any) {
-      setVerifyErrorMsg('Sunucu bağlantı hatası.');
-    } finally {
-      setIsSendingCode(false);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    setVerifyErrorMsg('');
-    if (verificationCode.length !== 6) {
-      setVerifyErrorMsg('Lütfen 6 haneli kodu girin.');
-      return;
-    }
-
-    setIsVerifying(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/phone/verify-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), code: verificationCode })
-      });
-      const data = await res.json().catch(() => null);
-
-      if (res.ok && data?.success) {
-        setIsPhoneModalVisible(false);
-        router.push({
-          pathname: '/(auth)/setup',
-          params: {
-            name,
-            email: '',
-            password,
-            phone: `+90${phone}`,
-            city: '',
-            gender,
-            termsAccepted: termsAccepted ? 'true' : 'false'
-          }
-        });
-      } else {
-        setVerifyErrorMsg(data?.error || data?.message || 'Hatalı kod.');
-      }
-    } catch (err: any) {
-      setVerifyErrorMsg('Sunucu bağlantı hatası.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
 
   const handleRegister = async () => {
     console.log("KAYDI_TAMAMLA_CLICKED");
@@ -115,7 +34,7 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (!name || !password || !phone) {
+    if (!name || !password || !email) {
       setErrorMsg('Lütfen zorunlu alanları doldurun.');
       return;
     }
@@ -125,28 +44,9 @@ export default function RegisterScreen() {
       return;
     }
     
-    const p = phone.trim();
-    if (!/^\d+$/.test(p) || p.length !== 10) {
-      setErrorMsg('Telefon numarası 10 haneli olmalıdır.');
-      return;
-    }
-    if (p[0] !== '5') {
-      setErrorMsg('Telefon numarası 5 ile başlamalıdır.');
-      return;
-    }
-    const phoneSeqUp = "01234567890123456789";
-    const phoneSeqDown = "98765432109876543210";
-    let hasPhoneSeq = false;
-    for (let i = 0; i <= p.length - 8; i++) {
-        if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
-        if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
-    }
-    if (hasPhoneSeq) {
-      setErrorMsg('Telefon numarası ardışık sayılardan oluşamaz.');
-      return;
-    }
-    if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
-      setErrorMsg('Telefon numarası geçerli görünmüyor.');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      setErrorMsg('Geçerli bir e-posta adresi giriniz.');
       return;
     }
 
@@ -178,13 +78,18 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Doğrulama modalını aç ve SMS gönder
-    setVerificationCode('');
-    setVerifyErrorMsg('');
-    setIsPhoneModalVisible(true);
-    if (phoneCooldown === 0) {
-      await handleSendCode();
-    }
+    router.push({
+      pathname: '/(auth)/setup',
+      params: {
+        name,
+        email: email.trim(),
+        password,
+        phone: '',
+        city: '',
+        gender,
+        termsAccepted: termsAccepted ? 'true' : 'false'
+      }
+    });
   };
 
   return (
@@ -268,23 +173,15 @@ export default function RegisterScreen() {
               </Modal>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Telefon Numarası</Text>
-              <View style={styles.phoneInputContainer}>
-                <View style={styles.phonePrefix}>
-                  <Text style={styles.phonePrefixText}>+90</Text>
-                </View>
-                <TextInput
-                  style={styles.phoneInput}
-                  placeholder="5xxxxxxxxx"
-                  placeholderTextColor={Colors.textLight}
-                  value={phone}
-                  onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))}
-                  keyboardType="numeric"
-                  maxLength={10}
-                />
-              </View>
-            </View>
+            <Input
+              label="E-posta Adresi"
+              placeholder="ornek@email.com"
+              value={email}
+              onChangeText={(text) => setEmail(text.toLowerCase())}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Şifre</Text>
@@ -381,70 +278,7 @@ export default function RegisterScreen() {
           </View>
         </View>
       </Modal>
-      {/* Phone Verification Modal */}
-      <Modal
-        visible={isPhoneModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsPhoneModalVisible(false)}
-      >
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.bottomSheet, { maxHeight: '90%' }]}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Telefon Doğrulama</Text>
-                <TouchableOpacity onPress={() => setIsPhoneModalVisible(false)} style={styles.closeIcon}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalScroll}>
-                <Text style={[styles.modalText, { textAlign: 'center', marginBottom: 20 }]}>
-                  {phone} numarasına gönderilen 6 haneli kodu girin.
-                </Text>
-
-                {verifyErrorMsg ? (
-                  <Text style={{ color: Colors.danger, textAlign: 'center', marginBottom: 10 }}>{verifyErrorMsg}</Text>
-                ) : null}
-
-                <Input
-                  placeholder="6 Haneli Kod"
-                  value={verificationCode}
-                  onChangeText={setVerificationCode}
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                  maxLength={6}
-                  textContentType="oneTimeCode"
-                  autoComplete="sms-otp"
-                  autoFocus={false}
-                  textAlign="center"
-                  style={{ fontSize: 22, letterSpacing: 4, height: 56 }}
-                />
-
-                <Pressable 
-                  style={[styles.submitBtn, { marginTop: 16 }, isVerifying && styles.submitBtnDisabled]}
-                  onPress={handleVerifyCode}
-                  disabled={isVerifying}
-                >
-                  <Text style={styles.submitBtnText}>{isVerifying ? 'Doğrulanıyor...' : 'Doğrula'}</Text>
-                </Pressable>
-
-                <Pressable 
-                  style={{ alignItems: 'center', paddingVertical: 16, marginTop: 8 }} 
-                  onPress={handleSendCode}
-                  disabled={phoneCooldown > 0 || isSendingCode || isVerifying}
-                >
-                  <Text style={[{ fontSize: 16, fontWeight: 'bold' }, phoneCooldown > 0 ? { color: Colors.textLight } : { color: Colors.primary }]}>
-                    {phoneCooldown > 0 ? `Kodu Tekrar Gönder (${phoneCooldown}sn)` : 'Kodu Tekrar Gönder'}
-                  </Text>
-                </Pressable>
-              </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* Terms Modal is above */}
     </SafeAreaView>
   );
 }
@@ -563,36 +397,7 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 8,
   },
-  phoneInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  phonePrefix: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRightWidth: 1,
-    borderRightColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  phonePrefixText: {
-    ...Typography.body,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  phoneInput: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: Colors.text,
-  },
+
   termsContainer: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -848,16 +848,14 @@ app.post('/api/auth/register', async (req, res) => {
     if (termsAccepted !== true) {
       return res.status(400).json({ success: false, error: 'Üyelik oluşturmak için şartları kabul etmelisiniz.', message: 'Üyelik oluşturmak için şartları kabul etmelisiniz.' });
     }
-    if (!password || !name || !phone) {
+    if (!password || !name || !email) {
       return res.status(400).json({ success: false, error: 'Zorunlu alanlar eksik.', message: 'Zorunlu alanlar eksik.' });
     }
 
-    const trimmedEmail = email ? String(email).trim() : null;
-    if (trimmedEmail) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-      if (!emailRegex.test(trimmedEmail)) {
-        return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
-      }
+    const trimmedEmail = String(email).trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
     }
 
     if (password.length < 6) {
@@ -883,35 +881,37 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Şifre aynı karakterlerin tekrarından oluşamaz.', message: 'Şifre aynı karakterlerin tekrarından oluşamaz.' });
     }
 
-    const p = phone ? phone.replace('+90', '').trim() : '';
-    if (!/^\d+$/.test(p) || p.length !== 10) {
-      return res.status(400).json({ success: false, error: 'Telefon numarası 10 haneli olmalıdır.', message: 'Telefon numarası 10 haneli olmalıdır.' });
-    }
-    if (p[0] !== '5') {
-      return res.status(400).json({ success: false, error: 'Telefon numarası 5 ile başlamalıdır.', message: 'Telefon numarası 5 ile başlamalıdır.' });
-    }
-    const phoneSeqUp = "01234567890123456789";
-    const phoneSeqDown = "98765432109876543210";
-    let hasPhoneSeq = false;
-    for (let i = 0; i <= p.length - 8; i++) {
-        if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
-        if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
-    }
-    if (hasPhoneSeq) {
-      return res.status(400).json({ success: false, error: 'Telefon numarası ardışık sayılardan oluşamaz.', message: 'Telefon numarası ardışık sayılardan oluşamaz.' });
-    }
-    if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
-      return res.status(400).json({ success: false, error: 'Telefon numarası geçerli görünmüyor.', message: 'Telefon numarası geçerli görünmüyor.' });
+    if (phone) {
+      const p = phone.replace('+90', '').trim();
+      if (!/^\d+$/.test(p) || p.length !== 10) {
+        return res.status(400).json({ success: false, error: 'Telefon numarası 10 haneli olmalıdır.', message: 'Telefon numarası 10 haneli olmalıdır.' });
+      }
+      if (p[0] !== '5') {
+        return res.status(400).json({ success: false, error: 'Telefon numarası 5 ile başlamalıdır.', message: 'Telefon numarası 5 ile başlamalıdır.' });
+      }
+      const phoneSeqUp = "01234567890123456789";
+      const phoneSeqDown = "98765432109876543210";
+      let hasPhoneSeq = false;
+      for (let i = 0; i <= p.length - 8; i++) {
+          if (phoneSeqUp.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+          if (phoneSeqDown.includes(p.substring(i, i+8))) hasPhoneSeq = true;
+      }
+      if (hasPhoneSeq) {
+        return res.status(400).json({ success: false, error: 'Telefon numarası ardışık sayılardan oluşamaz.', message: 'Telefon numarası ardışık sayılardan oluşamaz.' });
+      }
+      if (/(.)\1{6}/.test(p) || p.substring(0, 5) === p.substring(5) || /(.{2})\1{3}/.test(p) || /(.{3})\1{2}/.test(p)) {
+        return res.status(400).json({ success: false, error: 'Telefon numarası geçerli görünmüyor.', message: 'Telefon numarası geçerli görünmüyor.' });
+      }
     }
 
-    const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
-    const normalizedPhone = String(phone).trim();
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedPhone = phone ? String(phone).trim() : null;
     
     const { isPgMem } = require('./db');
     console.log(`[REGISTER_HIT] email: ${normalizedEmail}, dbMode: ${isPgMem ? 'pg-mem' : 'PostgreSQL'}`);
 
     let conflict = null;
-    if (normalizedEmail) {
+    if (normalizedPhone) {
       const { rows: existingRows } = await query(
         'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(TRIM(email)) = $1 OR phone = $2', 
         [normalizedEmail, normalizedPhone]
@@ -919,8 +919,8 @@ app.post('/api/auth/register', async (req, res) => {
       if (existingRows.length > 0) conflict = existingRows[0];
     } else {
       const { rows: existingRows } = await query(
-        'SELECT id, email, phone, "emailVerified" FROM users WHERE phone = $1', 
-        [normalizedPhone]
+        'SELECT id, email, phone, "emailVerified" FROM users WHERE LOWER(TRIM(email)) = $1', 
+        [normalizedEmail]
       );
       if (existingRows.length > 0) conflict = existingRows[0];
     }
