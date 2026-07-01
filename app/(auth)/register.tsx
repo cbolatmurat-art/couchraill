@@ -50,6 +50,13 @@ export default function RegisterScreen() {
       return;
     }
 
+    const emailDomain = email.trim().split('@')[1]?.toLowerCase();
+    const allowedProviders = ['gmail.com', 'hotmail.com', 'outlook.com', 'outlook.com.tr', 'windowslive.com', 'icloud.com', 'yahoo.com', 'yandex.com', 'yandex.com.tr'];
+    if (!emailDomain || !allowedProviders.includes(emailDomain)) {
+      setErrorMsg('Lütfen geçerli bir E-Posta sağlayıcısı kullanın!');
+      return;
+    }
+
     if (password.length < 6) {
       setErrorMsg('Şifre en az 6 karakter olmalıdır.');
       return;

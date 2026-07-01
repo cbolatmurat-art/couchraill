@@ -858,6 +858,12 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Geçerli bir e-posta adresi giriniz.', message: 'Geçerli bir e-posta adresi giriniz.' });
     }
 
+    const emailDomain = trimmedEmail.split('@')[1]?.toLowerCase();
+    const allowedProviders = ['gmail.com', 'hotmail.com', 'outlook.com', 'outlook.com.tr', 'windowslive.com', 'icloud.com', 'yahoo.com', 'yandex.com', 'yandex.com.tr'];
+    if (!emailDomain || !allowedProviders.includes(emailDomain)) {
+      return res.status(400).json({ success: false, error: 'Lütfen geçerli bir E-Posta sağlayıcısı kullanın!', message: 'Lütfen geçerli bir E-Posta sağlayıcısı kullanın!' });
+    }
+
     if (password.length < 6) {
       return res.status(400).json({ success: false, error: 'Şifre en az 6 karakter olmalıdır.', message: 'Şifre en az 6 karakter olmalıdır.' });
     }
