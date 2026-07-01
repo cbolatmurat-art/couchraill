@@ -16,7 +16,8 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
+  const [gender, setGender] = useState('');
+  const [isGenderModalVisible, setIsGenderModalVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
@@ -88,12 +89,11 @@ export default function RegisterScreen() {
           pathname: '/(auth)/setup',
           params: {
             name,
-            username: username.trim(),
             email: email.trim(),
             password,
             phone: '',
             city: '',
-            gender: '',
+            gender,
             termsAccepted: termsAccepted ? 'true' : 'false'
           }
         });
@@ -117,13 +117,13 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (!name || !password || !email || !username) {
+    if (!name || !password || !email) {
       setErrorMsg('Lütfen zorunlu alanları doldurun.');
       return;
     }
 
-    if (username.length < 3 || !/^[a-z0-9._]+$/.test(username.toLowerCase())) {
-      setErrorMsg('Kullanıcı adı en az 3 karakter olmalı ve sadece küçük harf, rakam, nokta, alt çizgi içerebilir.');
+    if (!gender) {
+      setErrorMsg('Lütfen cinsiyetinizi seçin.');
       return;
     }
     
@@ -221,14 +221,41 @@ export default function RegisterScreen() {
               }}
             />
 
-            <Input
-              label="Kullanıcı Adı"
-              placeholder="kullanici_adi"
-              value={username}
-              onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Cinsiyet</Text>
+              <Pressable
+                style={[styles.inputBox, { justifyContent: 'space-between' }]}
+                onPress={() => setIsGenderModalVisible(true)}
+              >
+                <Text style={{ fontSize: 16, color: gender ? Colors.text : Colors.textLight }}>
+                  {gender || 'Cinsiyet seçin...'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color={Colors.textLight} />
+              </Pressable>
+
+              <Modal visible={isGenderModalVisible} transparent animationType="fade">
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => setIsGenderModalVisible(false)}>
+                  <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 30 }}>
+                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Cinsiyet Seç</Text>
+                    </View>
+                    {['Erkek', 'Kadın', 'Söylemek istemiyorum'].map(opt => (
+                      <Pressable
+                        key={opt}
+                        style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', flexDirection: 'row', justifyContent: 'space-between' }}
+                        onPress={() => { setGender(opt); setIsGenderModalVisible(false); }}
+                      >
+                        <Text style={{ fontSize: 16, color: Colors.text }}>{opt}</Text>
+                        {gender === opt && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                      </Pressable>
+                    ))}
+                    <Pressable style={{ padding: 16, alignItems: 'center' }} onPress={() => setIsGenderModalVisible(false)}>
+                      <Text style={{ fontSize: 16, color: Colors.danger, fontWeight: '600' }}>İptal</Text>
+                    </Pressable>
+                  </View>
+                </Pressable>
+              </Modal>
+            </View>
 
             <Input
               label="E-posta Adresi"
